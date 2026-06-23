@@ -1,6 +1,6 @@
 # VEIL UX Prototype
 
-Static UX prototype for VEIL, built to run smoothly through WSL with Vite.
+Static UX prototype for VEIL, built to run smoothly through WSL with Vite and Tailwind CSS.
 
 ## Run in WSL
 
@@ -19,6 +19,8 @@ http://localhost:5173
 ```
 
 If Vite picks another port, use the URL shown in the terminal.
+
+After config or Tailwind changes, restart `npm run dev` so Vite reloads the Tailwind plugin.
 
 For this lightweight prototype, running from `/mnt/c/Users/frend/Veilc` is fine. If the app grows larger, copying it into the WSL filesystem, for example `~/Veilc`, will usually make installs and dev server file watching faster.
 
