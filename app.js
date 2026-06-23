@@ -114,6 +114,22 @@ function appendTimeline(type, title, body) {
   refreshIcons();
 }
 
+function appendChatMessage(body) {
+  const list = document.querySelector("#chat-list");
+  const item = document.createElement("div");
+  item.className = "flex justify-end animate-new-entry";
+  item.innerHTML = `
+    <div class="min-w-0">
+      <div class="mb-1 flex items-center justify-end gap-2">
+        <time class="text-xs text-slate-500">Now</time>
+        <strong class="text-sm">You</strong>
+      </div>
+      <p class="max-w-[22rem] rounded-2xl rounded-tr-sm border border-emerald-200/30 bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">${body}</p>
+    </div>
+  `;
+  list.appendChild(item);
+}
+
 function openPaymentModal() {
   const modal = document.querySelector("#payment-modal");
   modal.classList.remove("hidden");
@@ -251,9 +267,10 @@ document.querySelector("#message-form").addEventListener("submit", (event) => {
   const input = event.currentTarget.elements.message;
   const message = input.value.trim();
   if (!message) return;
+  appendChatMessage(message);
   appendTimeline("message", "You", message);
   input.value = "";
-  showToast("Message added to channel timeline.");
+  showToast("Message sent in channel chat.");
 });
 
 document.addEventListener("keydown", (event) => {

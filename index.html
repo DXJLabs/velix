@@ -351,10 +351,57 @@
             <section class="channel-tab-panel rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl animate-slide-up" data-channel-panel="timeline">
               <div class="mb-5 flex items-start justify-between gap-4">
                 <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Timeline</p>
-                  <h2 class="text-lg font-black text-white">Unified activity feed</h2>
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Channel chat</p>
+                  <h2 class="text-lg font-black text-white">Buyer, seller, and deal events</h2>
                 </div>
-                <span class="inline-flex min-h-7 items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 text-xs font-black text-emerald-100 animate-soft-pulse">12 events</span>
+                <span class="inline-flex min-h-7 items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 text-xs font-black text-emerald-100 animate-soft-pulse">Private</span>
+              </div>
+
+              <div class="mb-4 grid gap-3 rounded-lg border border-slate-800 bg-slate-950/45 p-3" id="chat-list" aria-label="Channel messages">
+                <div class="flex items-start gap-3">
+                  <div class="grid size-8 shrink-0 place-items-center rounded-full bg-slate-800 text-xs font-black text-slate-200">S</div>
+                  <div class="min-w-0">
+                    <div class="mb-1 flex items-center gap-2">
+                      <strong class="text-sm">Seller</strong>
+                      <time class="text-xs text-slate-500">09:15</time>
+                    </div>
+                    <p class="max-w-[22rem] rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-900 px-3 py-2 text-sm leading-6 text-slate-200">Digital rights package is listed at 500 STRK. Metadata and transfer conditions are ready.</p>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3">
+                  <div class="grid size-8 shrink-0 place-items-center rounded-full bg-indigo-300/20 text-xs font-black text-indigo-100">B</div>
+                  <div class="min-w-0">
+                    <div class="mb-1 flex items-center gap-2">
+                      <strong class="text-sm">Buyer</strong>
+                      <time class="text-xs text-slate-500">09:42</time>
+                    </div>
+                    <p class="max-w-[22rem] rounded-2xl rounded-tl-sm border border-indigo-300/20 bg-indigo-300/10 px-3 py-2 text-sm leading-6 text-slate-200">I can open at 400 STRK if the proof includes the metadata memo.</p>
+                  </div>
+                </div>
+                <div class="flex justify-end">
+                  <div class="min-w-0">
+                    <div class="mb-1 flex items-center justify-end gap-2">
+                      <time class="text-xs text-slate-500">10:08</time>
+                      <strong class="text-sm">You</strong>
+                    </div>
+                    <p class="max-w-[22rem] rounded-2xl rounded-tr-sm border border-emerald-200/30 bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">Countering at 450 STRK with private settlement and proof attached.</p>
+                  </div>
+                </div>
+              </div>
+
+              <form class="mb-5 grid grid-cols-[minmax(0,1fr)_auto] gap-2" id="message-form">
+                <input class="min-h-11 rounded-lg border border-slate-800 bg-slate-950/80 px-3 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-200/50" type="text" name="message" placeholder="Message buyer or seller in this channel" autocomplete="off" />
+                <button class="grid size-11 place-items-center rounded-lg border border-slate-700 bg-slate-900 text-white transition hover:border-emerald-200/40 active:scale-95" type="submit" aria-label="Send message">
+                  <i data-lucide="send-horizontal" class="size-4"></i>
+                </button>
+              </form>
+
+              <div class="mb-3 flex items-center justify-between gap-3 border-t border-slate-800 pt-4">
+                <div>
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Deal activity</p>
+                  <h3 class="font-black text-white">Offers, escrow, proofs</h3>
+                </div>
+                <span class="rounded-full border border-slate-700 px-3 py-1 text-xs font-black text-slate-300">12 events</span>
               </div>
 
               <div class="timeline-list grid gap-1" id="timeline-list">
@@ -400,12 +447,6 @@
                 </div>
               </div>
 
-              <form class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2" id="message-form">
-                <input class="min-h-11 rounded-lg border border-slate-800 bg-slate-950/80 px-3 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-200/50" type="text" name="message" placeholder="Write a private channel message" autocomplete="off" />
-                <button class="grid size-11 place-items-center rounded-lg border border-slate-700 bg-slate-900 text-white transition hover:border-emerald-200/40 active:scale-95" type="submit" aria-label="Send message">
-                  <i data-lucide="send-horizontal" class="size-4"></i>
-                </button>
-              </form>
             </section>
 
             <section class="channel-tab-panel hidden rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl animate-slide-up lg:block" data-channel-panel="deal">
