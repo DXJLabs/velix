@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VEIL UX Prototype</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand-block">
+          <div class="brand-mark">V</div>
+          <div>
+            <p class="brand-name">VEIL</p>
+            <p class="brand-caption">Private settlement channels</p>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" type="button" data-page="home">
+            <i data-lucide="layout-dashboard"></i>
+            <span>Home</span>
+          </button>
+          <button class="nav-item" type="button" data-page="channels">
+            <i data-lucide="messages-square"></i>
+            <span>Channels</span>
+          </button>
+          <button class="nav-item" type="button" data-page="rewards">
+            <i data-lucide="badge-check"></i>
+            <span>Rewards</span>
+          </button>
+          <button class="nav-item" type="button" data-page="settings">
+            <i data-lucide="settings"></i>
+            <span>Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-status">
+          <div class="status-dot"></div>
+          <div>
+            <p>Assistant online</p>
+            <span>3 deal insights ready</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="page-eyebrow">Command center</p>
+            <h1 id="page-title">Home</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" type="button" aria-label="Search">
+              <i data-lucide="search"></i>
+            </button>
+            <button class="ghost-button" type="button" data-page-trigger="channels">
+              <i data-lucide="plus"></i>
+              <span>New Channel</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="page active" id="home-page" data-page-panel="home">
+          <div class="overview-grid">
+            <article class="metric-card">
+              <span>Active Channels</span>
+              <strong>12</strong>
+              <small>4 with assistant actions</small>
+            </article>
+            <article class="metric-card">
+              <span>Pending Escrows</span>
+              <strong>5</strong>
+              <small>2 need confirmation</small>
+            </article>
+            <article class="metric-card">
+              <span>Open Negotiations</span>
+              <strong>8</strong>
+              <small>82% avg deal probability</small>
+            </article>
+            <article class="metric-card">
+              <span>Reward Points</span>
+              <strong>2,840</strong>
+              <small>+126 this week</small>
+            </article>
+          </div>
+
+          <div class="home-layout">
+            <section class="work-panel assistant-activity">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Assistant activity</p>
+                  <h2>Assistant helped close 3 deals this week.</h2>
+                </div>
+                <span class="live-pill">Live analysis</span>
+              </div>
+              <div class="assistant-insight-list">
+                <div class="insight-row">
+                  <i data-lucide="sparkles"></i>
+                  <div>
+                    <strong>Suggested Deal Available</strong>
+                    <span>Atlas Studio channel is converging at 450 STRK.</span>
+                  </div>
+                  <button class="text-button" type="button" data-open-channel>Open</button>
+                </div>
+                <div class="insight-row">
+                  <i data-lucide="clock-3"></i>
+                  <div>
+                    <strong>Escrow Progress</strong>
+                    <span>Northline buyer deposit completed. Seller deposit pending.</span>
+                  </div>
+                  <button class="text-button" type="button" data-open-channel>Review</button>
+                </div>
+                <div class="insight-row">
+                  <i data-lucide="file-check-2"></i>
+                  <div>
+                    <strong>Proof Generated</strong>
+                    <span>Payment memo and settlement proof are verified.</span>
+                  </div>
+                  <button class="text-button" type="button" data-page-trigger="channels">View</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="work-panel">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Recent transactions</p>
+                  <h2>Settlement movement</h2>
+                </div>
+              </div>
+              <div class="transaction-list">
+                <div class="transaction-row">
+                  <div class="transaction-name">Rights transfer payment</div>
+                  <span>100 STRK</span>
+                  <strong>Shield</strong>
+                </div>
+                <div class="transaction-row">
+                  <div class="transaction-name">Design milestone memo</div>
+                  <span>42 STRK</span>
+                  <strong>Unshield</strong>
+                </div>
+                <div class="transaction-row">
+                  <div class="transaction-name">Escrow release</div>
+                  <span>450 STRK</span>
+                  <strong>Shield</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="work-panel proof-panel">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Recent proofs</p>
+                <h2>Verified channel outcomes</h2>
+              </div>
+            </div>
+            <div class="proof-grid">
+              <div class="proof-row">
+                <span>Offer accepted</span>
+                <strong>Atlas Studio</strong>
+                <small>2 min ago</small>
+              </div>
+              <div class="proof-row">
+                <span>Escrow created</span>
+                <strong>Northline Goods</strong>
+                <small>18 min ago</small>
+              </div>
+              <div class="proof-row">
+                <span>Payment sent</span>
+                <strong>Greylock Ops</strong>
+                <small>44 min ago</small>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="page" id="channels-page" data-page-panel="channels">
+          <div class="toolbar-row">
+            <div>
+              <p class="eyebrow">Channels</p>
+              <h2>Negotiation rooms</h2>
+            </div>
+            <div class="segmented-control" role="group" aria-label="Channel filters">
+              <button class="active" type="button">All</button>
+              <button type="button">Shield</button>
+              <button type="button">Needs action</button>
+            </div>
+          </div>
+
+          <div class="channel-card-grid">
+            <article class="channel-card" tabindex="0" data-open-channel>
+              <div class="channel-card-top">
+                <span class="mode-badge shield">Shield</span>
+                <span class="unread-count">4</span>
+              </div>
+              <h3>Atlas Studio Deal</h3>
+              <p>Seller reduced to 450 STRK. Buyer is reviewing final terms.</p>
+              <div class="channel-meta">
+                <span>Offer: Counter sent</span>
+                <span>Escrow: Draft ready</span>
+              </div>
+              <div class="assistant-status">
+                <i data-lucide="sparkles"></i>
+                <span>Suggested deal available</span>
+              </div>
+              <time>Active 2 min ago</time>
+            </article>
+
+            <article class="channel-card" tabindex="0" data-open-channel>
+              <div class="channel-card-top">
+                <span class="mode-badge unshield">Unshield</span>
+                <span class="unread-count">2</span>
+              </div>
+              <h3>Northline Goods</h3>
+              <p>Buyer deposit completed. Seller deposit pending before release.</p>
+              <div class="channel-meta">
+                <span>Offer: Accepted</span>
+                <span>Escrow: In progress</span>
+              </div>
+              <div class="assistant-status">
+                <i data-lucide="timer"></i>
+                <span>Escrow analysis active</span>
+              </div>
+              <time>Active 18 min ago</time>
+            </article>
+
+            <article class="channel-card" tabindex="0" data-open-channel>
+              <div class="channel-card-top">
+                <span class="mode-badge shield">Shield</span>
+                <span class="unread-count muted">0</span>
+              </div>
+              <h3>Greylock Ops</h3>
+              <p>Settlement complete. Proof package is ready for export.</p>
+              <div class="channel-meta">
+                <span>Offer: Closed</span>
+                <span>Escrow: Released</span>
+              </div>
+              <div class="assistant-status">
+                <i data-lucide="file-check-2"></i>
+                <span>Proof summary ready</span>
+              </div>
+              <time>Active 44 min ago</time>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" id="channel-detail-page" data-page-panel="channel-detail">
+          <div class="channel-header">
+            <button class="back-button" type="button" data-page-trigger="channels">
+              <i data-lucide="arrow-left"></i>
+              <span>Channels</span>
+            </button>
+            <div class="channel-title-block">
+              <div>
+                <p class="eyebrow">Channel</p>
+                <h2>Atlas Studio Deal</h2>
+              </div>
+              <span class="mode-badge shield">Shield</span>
+            </div>
+            <div class="channel-actions">
+              <button class="ghost-button open-payment" type="button">
+                <i data-lucide="send"></i>
+                <span>Send Payment</span>
+              </button>
+              <button class="primary-button" type="button" data-create-counter>
+                <i data-lucide="badge-dollar-sign"></i>
+                <span>Counter Offer</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="mobile-tabs" role="tablist" aria-label="Channel sections">
+            <button class="active" type="button" data-channel-tab="timeline">Timeline</button>
+            <button type="button" data-channel-tab="deal">Deal</button>
+            <button type="button" data-channel-tab="assistant">Assistant</button>
+          </div>
+
+          <div class="channel-workspace">
+            <section class="work-panel channel-tab-panel active" data-channel-panel="timeline">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Timeline</p>
+                  <h2>Unified activity feed</h2>
+                </div>
+                <span class="live-pill">12 events</span>
+              </div>
+
+              <div class="timeline-list" id="timeline-list">
+                <div class="timeline-item message">
+                  <span class="timeline-dot"></span>
+                  <div>
+                    <strong>Seller</strong>
+                    <p>Digital rights package listed for 500 STRK.</p>
+                    <time>09:15</time>
+                  </div>
+                </div>
+                <div class="timeline-item offer">
+                  <span class="timeline-dot"></span>
+                  <div>
+                    <strong>Buyer</strong>
+                    <p>Offer created at 400 STRK.</p>
+                    <time>09:42</time>
+                  </div>
+                </div>
+                <div class="timeline-item offer">
+                  <span class="timeline-dot"></span>
+                  <div>
+                    <strong>Seller</strong>
+                    <p>Counter offer sent at 450 STRK.</p>
+                    <time>10:08</time>
+                  </div>
+                </div>
+                <div class="timeline-item escrow">
+                  <span class="timeline-dot"></span>
+                  <div>
+                    <strong>Escrow</strong>
+                    <p>Draft agreement created with private settlement terms.</p>
+                    <time>10:19</time>
+                  </div>
+                </div>
+                <div class="timeline-item proof">
+                  <span class="timeline-dot"></span>
+                  <div>
+                    <strong>Proof</strong>
+                    <p>Offer action proof generated.</p>
+                    <time>10:20</time>
+                  </div>
+                </div>
+              </div>
+
+              <form class="message-composer" id="message-form">
+                <input type="text" name="message" placeholder="Write a private channel message" autocomplete="off" />
+                <button class="icon-button" type="submit" aria-label="Send message">
+                  <i data-lucide="send-horizontal"></i>
+                </button>
+              </form>
+            </section>
+
+            <section class="work-panel channel-tab-panel" data-channel-panel="deal">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Negotiation</p>
+                  <h2>Deal workspace</h2>
+                </div>
+                <span class="status-chip warning" id="deal-status">Awaiting buyer confirmation</span>
+              </div>
+
+              <div class="deal-metrics">
+                <div>
+                  <span>Current offer</span>
+                  <strong id="current-offer">450 STRK</strong>
+                </div>
+                <div>
+                  <span>Deal probability</span>
+                  <strong>82%</strong>
+                </div>
+                <div>
+                  <span>Settlement readiness</span>
+                  <strong>64%</strong>
+                </div>
+              </div>
+
+              <div class="offer-ladder" aria-label="Offer history">
+                <div class="offer-step">
+                  <span>500 STRK</span>
+                  <small>Initial ask</small>
+                </div>
+                <div class="offer-step">
+                  <span>400 STRK</span>
+                  <small>Buyer offer</small>
+                </div>
+                <div class="offer-step active">
+                  <span>450 STRK</span>
+                  <small>Seller counter</small>
+                </div>
+                <div class="offer-step muted">
+                  <span>Accepted</span>
+                  <small>Next step</small>
+                </div>
+              </div>
+
+              <div class="escrow-progress">
+                <div class="section-heading compact">
+                  <div>
+                    <p class="eyebrow">Escrow</p>
+                    <h2>Settlement path</h2>
+                  </div>
+                </div>
+                <div class="progress-rail" aria-label="Escrow progress">
+                  <div class="progress-line"></div>
+                  <div class="progress-step complete">
+                    <span></span>
+                    <strong>Create Escrow</strong>
+                  </div>
+                  <div class="progress-step complete">
+                    <span></span>
+                    <strong>Buyer Deposit</strong>
+                  </div>
+                  <div class="progress-step current">
+                    <span></span>
+                    <strong>Seller Deposit</strong>
+                  </div>
+                  <div class="progress-step">
+                    <span></span>
+                    <strong>Release</strong>
+                  </div>
+                </div>
+                <p class="helper-copy">Private messages, private negotiations, private payments, and private settlement are enabled for this channel.</p>
+              </div>
+
+              <div class="payment-strip">
+                <div>
+                  <p class="eyebrow">Direct payment</p>
+                  <strong>Send with memo and proof</strong>
+                </div>
+                <button class="ghost-button open-payment" type="button">
+                  <i data-lucide="send"></i>
+                  <span>Start</span>
+                </button>
+              </div>
+            </section>
+
+            <aside class="work-panel assistant-panel channel-tab-panel" data-channel-panel="assistant">
+              <div class="assistant-header">
+                <div class="assistant-orb">
+                  <i data-lucide="sparkles"></i>
+                </div>
+                <div>
+                  <p class="eyebrow">Assistant</p>
+                  <h2>Deal intelligence</h2>
+                </div>
+              </div>
+
+              <div class="assistant-section">
+                <span>Conversation Summary</span>
+                <p>Seller wants 500 STRK. Buyer wants 400 STRK. Gap is now 100 STRK after both sides moved toward the middle.</p>
+              </div>
+
+              <div class="assistant-section highlighted">
+                <span>Suggested Deal</span>
+                <strong>450 STRK</strong>
+                <p>Buyer increased offers twice. Seller reduced price once. Negotiation is converging.</p>
+              </div>
+
+              <div class="assistant-section">
+                <span>Next Best Action</span>
+                <p>Send counter offer at 450 STRK and prepare escrow confirmation once buyer accepts.</p>
+              </div>
+
+              <div class="assistant-section">
+                <span>Escrow Analysis</span>
+                <p>Buyer deposit completed. Seller deposit pending. Estimated settlement readiness is 1 hour.</p>
+              </div>
+
+              <div class="assistant-actions">
+                <button class="primary-button" type="button" data-accept-suggestion>
+                  <i data-lucide="check"></i>
+                  <span>Accept Suggestion</span>
+                </button>
+                <button class="ghost-button" type="button" data-create-counter>
+                  <i data-lucide="badge-dollar-sign"></i>
+                  <span>Create Counter</span>
+                </button>
+                <button class="text-button" type="button" data-dismiss-assistant>Dismiss</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page" id="rewards-page" data-page-panel="rewards">
+          <div class="rewards-layout">
+            <section class="work-panel rewards-hero">
+              <p class="eyebrow">Rewards</p>
+              <h2>Activity points</h2>
+              <strong>2,840</strong>
+              <span>Current points</span>
+            </section>
+            <section class="work-panel">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Lifetime</p>
+                  <h2>8,420 points</h2>
+                </div>
+              </div>
+              <div class="reward-list">
+                <div class="reward-row">
+                  <span>Offer Accepted</span>
+                  <strong>+10</strong>
+                </div>
+                <div class="reward-row">
+                  <span>Escrow Completed</span>
+                  <strong>+20</strong>
+                </div>
+                <div class="reward-row">
+                  <span>Payment Sent</span>
+                  <strong>+5</strong>
+                </div>
+                <div class="reward-row">
+                  <span>Channel Activity</span>
+                  <strong>+2</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="settings-page" data-page-panel="settings">
+          <div class="settings-layout">
+            <section class="work-panel">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Privacy mode</p>
+                  <h2>Channel defaults</h2>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <strong>Default to Shield</strong>
+                  <span>Private messages, negotiations, payments, and settlement.</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" checked />
+                  <span></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <strong>Assistant in every channel</strong>
+                  <span>Always keep deal intelligence accessible.</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" checked />
+                  <span></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <strong>Proof reminders</strong>
+                  <span>Prompt after offer, payment, escrow, and settlement actions.</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" checked />
+                  <span></span>
+                </label>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <button class="mobile-nav-item active" type="button" data-page="home">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Home</span>
+      </button>
+      <button class="mobile-nav-item" type="button" data-page="channels">
+        <i data-lucide="messages-square"></i>
+        <span>Channels</span>
+      </button>
+      <button class="mobile-nav-item" type="button" data-page="rewards">
+        <i data-lucide="badge-check"></i>
+        <span>Rewards</span>
+      </button>
+      <button class="mobile-nav-item" type="button" data-page="settings">
+        <i data-lucide="settings"></i>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <div class="modal-backdrop" id="payment-modal" aria-hidden="true">
+      <section class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">Direct payment</p>
+            <h2 id="payment-title">Send payment</h2>
+          </div>
+          <button class="icon-button" type="button" id="close-payment" aria-label="Close payment flow">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+
+        <div class="payment-steps" aria-label="Payment steps">
+          <span class="active" data-payment-step-label="form">Details</span>
+          <span data-payment-step-label="review">Review</span>
+          <span data-payment-step-label="success">Proof</span>
+        </div>
+
+        <div class="payment-step active" data-payment-step="form">
+          <label>
+            Recipient
+            <input id="payment-recipient" type="text" value="Atlas Studio" />
+          </label>
+          <label>
+            Amount
+            <input id="payment-amount" type="text" value="100 STRK" />
+          </label>
+          <label>
+            Memo
+            <textarea id="payment-memo">Milestone payment for final transfer conditions.</textarea>
+          </label>
+          <div>
+            <span class="field-label">Mode</span>
+            <div class="segmented-control payment-mode" role="group" aria-label="Payment mode">
+              <button class="active" type="button" data-mode="Shield">Shield</button>
+              <button type="button" data-mode="Unshield">Unshield</button>
+            </div>
+          </div>
+          <button class="primary-button full-width" type="button" id="payment-review">Review Payment</button>
+        </div>
+
+        <div class="payment-step" data-payment-step="review">
+          <div class="review-box">
+            <div>
+              <span>Recipient</span>
+              <strong id="review-recipient">Atlas Studio</strong>
+            </div>
+            <div>
+              <span>Amount</span>
+              <strong id="review-amount">100 STRK</strong>
+            </div>
+            <div>
+              <span>Mode</span>
+              <strong id="review-mode">Shield</strong>
+            </div>
+            <div>
+              <span>Memo</span>
+              <strong id="review-memo">Milestone payment for final transfer conditions.</strong>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="ghost-button" type="button" id="payment-back">Back</button>
+            <button class="primary-button" type="button" id="payment-confirm">Confirm Payment</button>
+          </div>
+        </div>
+
+        <div class="payment-step" data-payment-step="success">
+          <div class="success-state">
+            <div class="success-icon">
+              <i data-lucide="check"></i>
+            </div>
+            <h2>Payment Sent</h2>
+            <p>Proof verified and attached to this channel.</p>
+            <div class="review-box">
+              <div>
+                <span>Amount</span>
+                <strong id="success-amount">100 STRK</strong>
+              </div>
+              <div>
+                <span>Mode</span>
+                <strong id="success-mode">Shield</strong>
+              </div>
+              <div>
+                <span>Proof</span>
+                <strong>Verified</strong>
+              </div>
+            </div>
+            <button class="primary-button full-width" type="button" id="payment-done">Done</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
