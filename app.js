@@ -15,9 +15,12 @@ const activeNavClasses = ["bg-emerald-200/10", "text-white"];
 const inactiveNavClasses = ["text-slate-400"];
 const activeTabClasses = ["bg-emerald-200/10", "text-white"];
 const inactiveTabClasses = ["text-slate-400"];
+const activeFeedFilterClasses = ["bg-slate-800", "text-white"];
+const inactiveFeedFilterClasses = ["text-slate-400"];
 const activeStepLabelClasses = ["border-emerald-200/40", "bg-emerald-200/10", "text-emerald-100"];
 const inactiveStepLabelClasses = ["border-slate-800", "text-slate-400"];
 let activePaymentMode = "Shield";
+let activeFeedFilter = "all";
 let toastTimer;
 
 function refreshIcons() {
@@ -92,6 +95,26 @@ function setChannelTab(tab) {
   });
 }
 
+function applyFeedFilter() {
+  document.querySelectorAll("#timeline-list [data-feed-kind]").forEach((item) => {
+    const isVisible = activeFeedFilter === "all" || item.dataset.feedGroup === activeFeedFilter;
+    item.classList.toggle("hidden", !isVisible);
+  });
+}
+
+function setFeedFilter(filter) {
+  activeFeedFilter = filter;
+  document.querySelectorAll("[data-feed-filter]").forEach((button) => {
+    const isActive = button.dataset.feedFilter === filter;
+    if (isActive) {
+      toggleClasses(button, activeFeedFilterClasses, inactiveFeedFilterClasses);
+    } else {
+      toggleClasses(button, inactiveFeedFilterClasses, activeFeedFilterClasses);
+    }
+  });
+  applyFeedFilter();
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
     "&": "&amp;",
@@ -119,86 +142,80 @@ function appendTimeline(type, title, body) {
       ? "bg-indigo-300/20 text-indigo-100"
       : "bg-slate-800 text-slate-200";
 
+    item.dataset.feedGroup = "messages";
     item.className = isSelf ? "flex justify-end animate-new-entry" : "flex items-start gap-3 animate-new-entry";
     item.innerHTML = isSelf
       ? `
         <div class="min-w-0">
-          <div class="mb-1 flex items-center justify-end gap-2">
+          <div class="mb-1 flex items-baseline justify-end gap-2">
             <time class="text-xs text-slate-500">Now</time>
             <strong class="text-sm">${safeTitle}</strong>
           </div>
-          <p class="max-w-[22rem] rounded-2xl rounded-tr-sm border border-emerald-200/30 bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">${safeBody}</p>
+          <p class="max-w-[22rem] rounded-2xl rounded-tr-sm bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">${safeBody}</p>
         </div>
       `
       : `
         <div class="grid size-8 shrink-0 place-items-center rounded-full ${avatarClasses} text-xs font-black">${avatar}</div>
         <div class="min-w-0">
-          <div class="mb-1 flex items-center gap-2">
+          <div class="mb-1 flex items-baseline gap-2">
             <strong class="text-sm">${safeTitle}</strong>
             <time class="text-xs text-slate-500">Now</time>
           </div>
-          <p class="max-w-[22rem] rounded-2xl rounded-tl-sm border border-slate-800 bg-slate-900 px-3 py-2 text-sm leading-6 text-slate-200">${safeBody}</p>
+          <p class="max-w-[22rem] rounded-2xl rounded-tl-sm bg-slate-900/90 px-3 py-2 text-sm leading-6 text-slate-200">${safeBody}</p>
         </div>
       `;
     list.appendChild(item);
+    applyFeedFilter();
     return;
   }
 
   const meta = {
     offer: {
-      label: "Offer",
-      icon: "badge-dollar-sign",
-      card: "border-amber-300/25 bg-amber-300/10",
-      iconBox: "bg-amber-300/15 text-amber-100",
-      pill: "border-amber-300/30 text-amber-100",
+      label: "Offer updated",
+      dot: "bg-amber-300",
+      labelText: "text-amber-100",
+      value: "450 STRK",
     },
     escrow: {
       label: "Escrow",
-      icon: "lock-keyhole",
-      card: "border-indigo-300/25 bg-indigo-300/10",
-      iconBox: "bg-indigo-300/15 text-indigo-100",
-      pill: "border-indigo-300/30 text-indigo-100",
+      dot: "bg-indigo-300",
+      labelText: "text-indigo-100",
+      value: "Settlement ready",
     },
     payment: {
-      label: "Memo",
-      icon: "receipt-text",
-      card: "border-sky-300/25 bg-sky-300/10",
-      iconBox: "bg-sky-300/15 text-sky-100",
-      pill: "border-sky-300/30 text-sky-100",
+      label: "Memo attached",
+      dot: "bg-sky-300",
+      labelText: "text-sky-100",
+      value: "Payment memo",
     },
     proof: {
-      label: "Proof",
-      icon: "file-check-2",
-      card: "border-emerald-200/25 bg-emerald-200/10",
-      iconBox: "bg-emerald-200/15 text-emerald-100",
-      pill: "border-emerald-200/30 text-emerald-100",
+      label: "Proof generated",
+      dot: "bg-emerald-300",
+      labelText: "text-emerald-100",
+      value: "Proof attached",
     },
   }[type] || {
     label: "Event",
-    icon: "activity",
-    card: "border-slate-700 bg-slate-950/55",
-    iconBox: "bg-slate-800 text-slate-200",
-    pill: "border-slate-700 text-slate-300",
+    dot: "bg-slate-400",
+    labelText: "text-slate-300",
+    value: "Channel update",
   };
 
-  item.className = `rounded-lg border p-3 animate-new-entry ${meta.card}`;
+  item.dataset.feedGroup = "events";
+  item.className = "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-new-entry";
   item.innerHTML = `
-    <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-      <div class="grid size-8 place-items-center rounded-lg ${meta.iconBox}">
-        <i data-lucide="${meta.icon}" class="size-4"></i>
+    <span class="mt-2 size-1.5 rounded-full ${meta.dot}"></span>
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <strong class="text-[0.68rem] font-black uppercase tracking-wide ${meta.labelText}">${escapeHtml(meta.label)}</strong>
+        <span class="text-sm font-bold text-white">${escapeHtml(meta.value)}</span>
+        <time class="text-xs text-slate-500">Now</time>
       </div>
-      <div class="min-w-0">
-        <div class="mb-1 flex flex-wrap items-center gap-2">
-          <strong class="text-sm text-white">${safeTitle}</strong>
-          <span class="rounded-full border px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-wide ${meta.pill}">${meta.label}</span>
-          <time class="text-xs text-slate-500">Now</time>
-        </div>
-        <p class="text-sm leading-6 text-slate-300">${safeBody}</p>
-      </div>
+      <p class="truncate text-xs leading-5 text-slate-400">${safeBody}</p>
     </div>
   `;
   list.appendChild(item);
-  refreshIcons();
+  applyFeedFilter();
 }
 
 function openPaymentModal() {
@@ -267,6 +284,10 @@ document.querySelectorAll("[data-channel-tab]").forEach((button) => {
   button.addEventListener("click", () => setChannelTab(button.dataset.channelTab));
 });
 
+document.querySelectorAll("[data-feed-filter]").forEach((button) => {
+  button.addEventListener("click", () => setFeedFilter(button.dataset.feedFilter));
+});
+
 document.querySelectorAll(".open-payment").forEach((button) => {
   button.addEventListener("click", openPaymentModal);
 });
@@ -290,6 +311,7 @@ document.querySelector("#payment-confirm").addEventListener("click", () => {
   setPaymentStep("success");
   const amount = document.querySelector("#success-amount").textContent;
   const mode = document.querySelector("#success-mode").textContent;
+  setFeedFilter("all");
   appendTimeline("payment", "Payment memo event", `${amount} ${mode} memo sent with settlement instructions.`);
   appendTimeline("proof", "Proof event", `${amount} payment proof verified and attached to this channel.`);
   showToast("Payment memo and proof attached to channel.");
@@ -317,6 +339,7 @@ document.querySelectorAll("[data-accept-suggestion]").forEach((button) => {
     status.textContent = "Buyer accepted. Settlement ready";
     toggleClasses(status, ["border-emerald-200/40", "bg-emerald-200/10", "text-emerald-100"], ["border-amber-300/35", "bg-amber-300/10", "text-amber-200"]);
     document.querySelector("#current-offer").textContent = "450 STRK accepted";
+    setFeedFilter("all");
     appendTimeline("offer", "Assistant", "Suggested deal accepted at 450 STRK. Proof generated.");
     appendTimeline("escrow", "Escrow", "Settlement is ready for final confirmation.");
     showToast("Assistant suggestion accepted. Proof generated.");
@@ -325,6 +348,7 @@ document.querySelectorAll("[data-accept-suggestion]").forEach((button) => {
 
 document.querySelectorAll("[data-create-counter]").forEach((button) => {
   button.addEventListener("click", () => {
+    setFeedFilter("all");
     appendTimeline("offer", "Offer event", "Counter offer prepared at 450 STRK with private settlement terms.");
     showToast("Counter offer prepared inside this channel.");
     setPage("channel-detail");
@@ -336,11 +360,16 @@ document.querySelector("[data-dismiss-assistant]").addEventListener("click", () 
   showToast("Assistant suggestion dismissed for now.");
 });
 
+document.querySelector("[data-attach-message]").addEventListener("click", () => {
+  showToast("Attach memo or proof from the channel actions.");
+});
+
 document.querySelector("#message-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const input = event.currentTarget.elements.message;
   const message = input.value.trim();
   if (!message) return;
+  setFeedFilter("all");
   appendTimeline("message", "You", message);
   input.value = "";
   showToast("Message sent in channel chat.");
@@ -355,5 +384,6 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("load", () => {
   setPage("home", { resetScroll: false });
   setChannelTab("timeline");
+  setFeedFilter("all");
   refreshIcons();
 });
