@@ -59,7 +59,7 @@ function setChannelTab(tab) {
 function appendTimeline(type, title, body) {
   const list = document.querySelector("#timeline-list");
   const item = document.createElement("div");
-  item.className = `timeline-item ${type}`;
+  item.className = `timeline-item ${type} new-entry`;
   item.innerHTML = `
     <span class="timeline-dot"></span>
     <div>
@@ -69,6 +69,7 @@ function appendTimeline(type, title, body) {
     </div>
   `;
   list.appendChild(item);
+  refreshIcons();
 }
 
 function openPaymentModal() {
@@ -166,7 +167,10 @@ document.querySelectorAll("[data-mode]").forEach((button) => {
 
 document.querySelectorAll("[data-accept-suggestion]").forEach((button) => {
   button.addEventListener("click", () => {
-    document.querySelector("#deal-status").textContent = "Buyer accepted. Settlement ready";
+    const status = document.querySelector("#deal-status");
+    status.textContent = "Buyer accepted. Settlement ready";
+    status.classList.remove("warning");
+    status.classList.add("success");
     document.querySelector("#current-offer").textContent = "450 STRK accepted";
     appendTimeline("offer", "Assistant", "Suggested deal accepted at 450 STRK. Proof generated.");
     appendTimeline("escrow", "Escrow", "Settlement is ready for final confirmation.");

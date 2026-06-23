@@ -65,23 +65,61 @@
         </header>
 
         <section class="page active" id="home-page" data-page-panel="home">
+          <section class="command-hero">
+            <div class="command-copy">
+              <span class="live-pill">Shield channel active</span>
+              <h2>Negotiate, escrow, pay, and settle inside one channel.</h2>
+              <p>VEIL keeps the deal, the conversation, the payment memo, and the proof in one private workspace.</p>
+            </div>
+            <div class="deal-snapshot">
+              <div class="snapshot-header">
+                <span>Atlas Studio Deal</span>
+                <strong>82%</strong>
+              </div>
+              <div class="snapshot-flow" aria-label="Current deal flow">
+                <div>
+                  <small>Buyer</small>
+                  <strong>400</strong>
+                </div>
+                <span></span>
+                <div class="active">
+                  <small>Suggested</small>
+                  <strong>450</strong>
+                </div>
+                <span></span>
+                <div>
+                  <small>Seller</small>
+                  <strong>500</strong>
+                </div>
+              </div>
+              <button class="primary-button full-width" type="button" data-open-channel>
+                <i data-lucide="sparkles"></i>
+                <span>Open Assistant Brief</span>
+              </button>
+            </div>
+          </section>
+
           <div class="overview-grid">
             <article class="metric-card">
+              <i data-lucide="messages-square"></i>
               <span>Active Channels</span>
               <strong>12</strong>
               <small>4 with assistant actions</small>
             </article>
             <article class="metric-card">
+              <i data-lucide="shield-check"></i>
               <span>Pending Escrows</span>
               <strong>5</strong>
               <small>2 need confirmation</small>
             </article>
             <article class="metric-card">
+              <i data-lucide="handshake"></i>
               <span>Open Negotiations</span>
               <strong>8</strong>
               <small>82% avg deal probability</small>
             </article>
             <article class="metric-card">
+              <i data-lucide="badge-check"></i>
               <span>Reward Points</span>
               <strong>2,840</strong>
               <small>+126 this week</small>
@@ -204,6 +242,9 @@
                 <span>Offer: Counter sent</span>
                 <span>Escrow: Draft ready</span>
               </div>
+              <div class="mini-progress" style="--progress: 68%">
+                <span></span>
+              </div>
               <div class="assistant-status">
                 <i data-lucide="sparkles"></i>
                 <span>Suggested deal available</span>
@@ -222,6 +263,9 @@
                 <span>Offer: Accepted</span>
                 <span>Escrow: In progress</span>
               </div>
+              <div class="mini-progress" style="--progress: 76%">
+                <span></span>
+              </div>
               <div class="assistant-status">
                 <i data-lucide="timer"></i>
                 <span>Escrow analysis active</span>
@@ -239,6 +283,9 @@
               <div class="channel-meta">
                 <span>Offer: Closed</span>
                 <span>Escrow: Released</span>
+              </div>
+              <div class="mini-progress" style="--progress: 100%">
+                <span></span>
               </div>
               <div class="assistant-status">
                 <i data-lucide="file-check-2"></i>
@@ -273,6 +320,27 @@
               </button>
             </div>
           </div>
+
+          <section class="deal-brief" aria-label="Deal summary">
+            <div class="brief-party">
+              <span>Buyer position</span>
+              <strong>400 STRK</strong>
+              <small>Moved up twice</small>
+            </div>
+            <div class="brief-center">
+              <span class="mode-badge shield">Shield</span>
+              <h3>Recommended close: 450 STRK</h3>
+              <p>Next action: send counter offer, then prepare escrow confirmation.</p>
+              <div class="brief-progress" style="--progress: 82%">
+                <span></span>
+              </div>
+            </div>
+            <div class="brief-party">
+              <span>Seller position</span>
+              <strong>500 STRK</strong>
+              <small>Reduced once</small>
+            </div>
+          </section>
 
           <div class="mobile-tabs" role="tablist" aria-label="Channel sections">
             <button class="active" type="button" data-channel-tab="timeline">Timeline</button>
@@ -365,6 +433,27 @@
                 </div>
               </div>
 
+              <div class="deal-map">
+                <div class="deal-map-node">
+                  <small>Buyer</small>
+                  <strong>400 STRK</strong>
+                </div>
+                <div class="deal-map-line">
+                  <span></span>
+                </div>
+                <div class="deal-map-node recommended">
+                  <small>Assistant</small>
+                  <strong>450 STRK</strong>
+                </div>
+                <div class="deal-map-line">
+                  <span></span>
+                </div>
+                <div class="deal-map-node">
+                  <small>Seller</small>
+                  <strong>500 STRK</strong>
+                </div>
+              </div>
+
               <div class="offer-ladder" aria-label="Offer history">
                 <div class="offer-step">
                   <span>500 STRK</span>
@@ -433,6 +522,17 @@
                 <div>
                   <p class="eyebrow">Assistant</p>
                   <h2>Deal intelligence</h2>
+                </div>
+              </div>
+
+              <div class="assistant-score">
+                <div class="score-ring" style="--score: 82">
+                  <strong>82%</strong>
+                  <span>Close chance</span>
+                </div>
+                <div>
+                  <span class="live-pill">Analyzing</span>
+                  <p>Conversation, offers, escrow state, and proof readiness are aligned.</p>
                 </div>
               </div>
 
