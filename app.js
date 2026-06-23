@@ -1,7 +1,7 @@
 const pageTitles = {
   home: { title: "Home", eyebrow: "Command center" },
   channels: { title: "Channels", eyebrow: "Negotiation rooms" },
-  "channel-detail": { title: "Atlas Deal", eyebrow: "Channel workspace" },
+  "channel-detail": { title: "Rights Transfer", eyebrow: "Channel workspace" },
   rewards: { title: "Rewards", eyebrow: "Activity points" },
   settings: { title: "Settings", eyebrow: "Workspace preferences" },
 };
@@ -252,7 +252,7 @@ function setPaymentStep(step) {
 }
 
 function syncReview() {
-  const recipient = document.querySelector("#payment-recipient").value.trim() || "Atlas";
+  const recipient = document.querySelector("#payment-recipient").value.trim() || "Counterparty";
   const amount = document.querySelector("#payment-amount").value.trim() || "100 STRK";
   const memo = document.querySelector("#payment-memo").value.trim() || "Payment memo attached.";
 
