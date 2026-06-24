@@ -9,10 +9,11 @@ This is not the final Privacy Pool path. It is the fast, honest testnet path whi
 ## What Is Real Now
 
 - `VeilChannelHelper` stores timeline events onchain by `channel_id`.
-- `VeilClient.sendMessage()` creates a chat payload, encrypts it through the configured adapter, and builds helper calldata.
+- `VeilClient.sendMessage()` creates a chat payload, encrypts it through the configured adapter, and builds helper calldata with an encrypted payload reference.
 - `DirectHelperTransport` submits a wallet transaction to `VeilChannelHelper.invoke`.
 - The transaction returns a Starknet transaction hash.
 - The frontend can read `get_event_count` and `get_event` from the helper contract.
+- `ChannelEncryptionAdapter` can encrypt payloads with AES-GCM so only channel-key holders can decrypt the ciphertext envelope.
 
 ## What Is Not Claimed Yet
 
@@ -20,6 +21,7 @@ This is not the final Privacy Pool path. It is the fast, honest testnet path whi
 - This mode does not provide sender anonymity.
 - This mode does not implement STRK20 private transfer logic.
 - This mode does not implement official Privacy Pool ECDH because that SDK is not public yet.
+- This mode does not store full ciphertext in the helper contract; the helper stores a felt reference/hash. Production discovery should use an encrypted payload indexer/blob store.
 
 ## Why This Exists
 
@@ -53,6 +55,8 @@ The core app timeline does not need to change.
 - SDK client: `packages/veil-sdk/src/client.ts`
 - Direct testnet transport: `packages/veil-sdk/src/direct_helper_transport.ts`
 - Privacy Pool research adapter: `packages/veil-sdk/src/privacy_pool_adapter.ts`
+- Channel encryption adapter: `packages/veil-sdk/src/channel-encryption.ts`
+- Encrypted payload store: `packages/veil-sdk/src/encrypted-payload-store.ts`
 - Testnet example: `examples/veil-onchain-chat-testnet.ts`
 
 ## Usage

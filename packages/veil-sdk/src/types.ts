@@ -84,9 +84,14 @@ export interface EncryptedPayload {
   payloadHash: string;
 }
 
+export interface EncryptionContext {
+  channelId: string;
+  eventType: number;
+}
+
 export interface EncryptionAdapter {
-  encryptPayload(payload: VeilTimelinePayload): Promise<EncryptedPayload>;
-  decryptPayload(item: TimelineItem): Promise<VeilTimelinePayload | null>;
+  encryptPayload(payload: VeilTimelinePayload, context?: EncryptionContext): Promise<EncryptedPayload>;
+  decryptPayload(item: TimelineItem, context?: EncryptionContext): Promise<VeilTimelinePayload | null>;
 }
 
 export interface VeilClientConfig {

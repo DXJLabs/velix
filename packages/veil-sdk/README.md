@@ -126,6 +126,35 @@ const sent = await veil.sendMessage({
 console.log(sent.transactionHash);
 ```
 
+## Channel Encryption
+
+Use `ChannelEncryptionAdapter` for client-side AES-GCM payload encryption. The helper contract receives only `encryptedPayload` and `payloadHash` felts; the ciphertext envelope is stored through an `EncryptedPayloadStore`.
+
+```ts
+import {
+  BrowserEncryptedPayloadStore,
+  ChannelEncryptionAdapter,
+  VeilClient,
+  generateChannelKey,
+} from "@dxjlabs/veil-sdk";
+
+const channelKey = await generateChannelKey();
+const payloadStore = new BrowserEncryptedPayloadStore();
+
+const veil = new VeilClient({
+  privacyPoolAddress,
+  helperAddress,
+  rpcUrl,
+  encryption: new ChannelEncryptionAdapter({
+    channelKey,
+    payloadStore,
+    keyId: "rights-transfer-channel",
+  }),
+});
+```
+
+In production, the channel key should come from Privacy Pool channel key derivation or the wallet/session layer. The SDK does not fake Privacy Pool ECDH.
+
 ## Privacy Pool adapters
 
 The official STRK20 Privacy Pool SDK is private, so VEIL exposes adapters instead of inventing the SDK behavior.

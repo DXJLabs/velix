@@ -1,5 +1,19 @@
 export { VeilClient } from "./client";
+export {
+  ChannelEncryptionAdapter,
+  exportChannelKey,
+  generateChannelKey,
+  type ChannelEncryptionAdapterConfig,
+  type ChannelKeyMaterial,
+} from "./channel-encryption";
 export { DirectHelperTransport, channelIdToFelt } from "./direct_helper_transport";
+export {
+  BrowserEncryptedPayloadStore,
+  MemoryEncryptedPayloadStore,
+  createDefaultEncryptedPayloadStore,
+  type EncryptedPayloadEnvelope,
+  type EncryptedPayloadStore,
+} from "./encrypted-payload-store";
 export { MockEncryptionAdapter, hashToFelt } from "./encryption";
 export { VeilSessionError, VeilSessionKeyManager } from "./session-key-manager";
 export {
@@ -48,6 +62,7 @@ export {
   type DirectHelperTransportConfig,
   type EncryptedPayload,
   type EncryptionAdapter,
+  type EncryptionContext,
   type EscrowStatusInput,
   type FeltLike,
   type InvokeExternalInput,

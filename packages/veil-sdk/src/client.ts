@@ -218,7 +218,7 @@ export class VeilClient {
     payload: VeilTimelinePayload,
   ): Promise<TimelineItem> {
     const session = await this.#requirePermission(this.#permissionForEvent(eventType), channelId);
-    const encrypted = await this.encryption.encryptPayload(payload);
+    const encrypted = await this.encryption.encryptPayload(payload, { channelId, eventType });
     const item: TimelineItem = {
       eventId: "0",
       channelId,
@@ -243,7 +243,12 @@ export class VeilClient {
   }
 
   async #withDecryptedPayload(item: TimelineItem): Promise<TimelineItem> {
-    const payload = item.payload ?? (await this.encryption.decryptPayload(item));
+    const payload =
+      item.payload ??
+      (await this.encryption.decryptPayload(item, {
+        channelId: item.channelId,
+        eventType: item.eventType,
+      }));
     return payload ? { ...item, payload } : item;
   }
 
