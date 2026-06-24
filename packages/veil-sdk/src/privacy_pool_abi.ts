@@ -220,6 +220,38 @@ export const PRIVACY_POOL_ABI_CAPABILITIES = {
   requiresOfficialSdkForProductionSubmission: true,
 } as const;
 
+export const PRIVACY_POOL_SOURCE_CONSTRAINTS = {
+  isAccountContract: true,
+  helperEntrypoint: "invoke",
+  invokeEntrypointSelectorConstant: "INVOKE_SELECTOR",
+  invokeExternalReturns: "Span<OpenNoteDeposit>",
+  applyActionsRequiresProofFacts: true,
+  clientExecuteCompilesActionsBeforeServerMessage: true,
+  validatesUserSignatureBeforeServerMessage: true,
+  zeroTipAndResourcePriceRequired: true,
+  clientActionPhasesEnforced: true,
+  everyClientActionBatchRequiresReplayProtection: true,
+  replayProtectionSource: "ServerAction::WriteOnce",
+  invokeExternalProvidesReplayProtection: false,
+  standaloneInvokeExternalLikelyReverts: true,
+  writeOnceGeneratingClientActions: [
+    "SetViewingKey",
+    "OpenChannel",
+    "OpenSubchannel",
+    "CreateEncNote",
+    "CreateOpenNote",
+    "UseNote",
+  ],
+  channelKeyComputation:
+    "compute_channel_key(sender_addr, sender_private_key, recipient_addr, recipient_public_key)",
+  openChannelRequiresSenderRegistered: true,
+  openChannelRequiresRecipientRegistered: true,
+  openChannelRequiresSequentialIndex: true,
+  openSubchannelRequiresExistingChannel: true,
+  noteCreationRequiresExistingSubchannel: true,
+  useNoteWritesNullifier: true,
+} as const;
+
 export const PRIVACY_POOL_SERVER_ACTIONS = [
   {
     variant: 0,

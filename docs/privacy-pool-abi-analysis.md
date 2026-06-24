@@ -65,6 +65,7 @@ ABI alone does not give:
 - exact encryption format for `EncPrivateKey`
 - official SDK transaction construction
 - production-safe signing/submission flow
+- the source-derived `WriteOnce` replay-protection constraint
 
 So ABI is enough for research and interface planning, but not enough to honestly claim full Privacy Pool SDK integration.
 
@@ -94,6 +95,7 @@ Current VEIL does not yet claim:
 - real Privacy Pool sender anonymity
 - official ECDH reuse
 - production STRK20 SDK submission
+- standalone metadata-only message submission through Privacy Pool
 
 ## Next Data Needed
 
@@ -107,6 +109,11 @@ To complete production integration, collect:
 - transaction hash for `CreateEncNote`
 - transaction hash for `InvokeExternal`
 - official SDK/source snippet for channel key derivation
+- official replay-protection pattern for message-only `InvokeExternal`
+
+## Source Update
+
+The mainnet source confirms `InvokeExternal` compiles to `ServerAction::Invoke`, but replay protection is only satisfied by `ServerAction::WriteOnce`. See `docs/privacy-pool-source-analysis.md`.
 
 ## Interview Explanation
 

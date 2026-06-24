@@ -2,6 +2,7 @@ import {
   PRIVACY_POOL_CLIENT_ACTIONS,
   PRIVACY_POOL_EVENT_ABI,
   PRIVACY_POOL_SERVER_ACTIONS,
+  PRIVACY_POOL_SOURCE_CONSTRAINTS,
 } from "./privacy_pool_abi";
 import { VeilEventType } from "./types";
 import {
@@ -105,6 +106,10 @@ const HELPER_EVENT_LABELS: Record<string, string> = {
   [String(VeilEventType.ESCROW_CANCELLED)]: "ESCROW_CANCELLED",
   [String(VeilEventType.PROOF_ATTACHED)]: "PROOF_ATTACHED",
 };
+
+const WRITE_ONCE_CLIENT_ACTIONS = new Set<string>(
+  PRIVACY_POOL_SOURCE_CONSTRAINTS.writeOnceGeneratingClientActions,
+);
 
 export class PrivacyPoolTransactionAnalyzer {
   readonly rpcUrl: string | undefined;
@@ -354,6 +359,16 @@ function interpretFlow(
         `InvokeExternal-style call detected for helper event ${action.helperInvoke.eventTypeLabel}.`,
       );
     }
+  }
+
+  const hasInvokeExternal = actions.some((action) => action.name === "InvokeExternal" || action.name === "Invoke");
+  const hasReplayProtection =
+    actions.some((action) => action.name === "WriteOnce") ||
+    actions.some((action) => action.source === "ClientAction" && WRITE_ONCE_CLIENT_ACTIONS.has(action.name));
+  if (hasInvokeExternal && !hasReplayProtection) {
+    interpretations.add(
+      "Source-derived warning: standalone InvokeExternal does not provide WriteOnce replay protection and may fail NO_REPLAY_PROTECTION.",
+    );
   }
 
   for (const event of events) {

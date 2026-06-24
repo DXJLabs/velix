@@ -21,6 +21,7 @@ Use this when explaining the current integration status.
 - No replacement Privacy Pool contract.
 - No claim that SDK integration is complete.
 - No invented ECDH/channel-key derivation from ABI alone.
+- No standalone Privacy Pool `InvokeExternal` message path without replay-protection analysis.
 
 ### Architecture Line
 
@@ -66,7 +67,10 @@ VEIL is not rebuilding Privacy Pool. VEIL is a messaging, negotiation, memo, and
 3. Confirm exact SDK transaction flow in the STRK20 meeting.
 4. Fill `RealPrivacyPoolAdapter` without changing the VEIL app surface.
 
-See also: `docs/privacy-pool-abi-analysis.md`.
+See also:
+
+- `docs/privacy-pool-abi-analysis.md`
+- `docs/privacy-pool-source-analysis.md`
 
 ### One-Sentence Pitch
 

@@ -1,5 +1,5 @@
 import { decodePrivacyPoolEvent, type RawStarknetEvent, type StarknetAbi } from "./event_decoder";
-import { PRIVACY_POOL_EVENT_ABI } from "./privacy_pool_abi";
+import { PRIVACY_POOL_EVENT_ABI, PRIVACY_POOL_SOURCE_CONSTRAINTS } from "./privacy_pool_abi";
 import { sortTimeline } from "./timeline";
 import {
   PrivacyPoolTransactionAnalyzer,
@@ -190,6 +190,9 @@ export class ResearchPrivacyPoolAdapter implements PrivacyPoolAdapter {
         calldata.length >= 4
           ? "Looks like VEIL helper invoke calldata: channel_id, event_type, encrypted_payload, payload_hash."
           : "Not enough felts to identify a VEIL helper invoke payload.",
+        PRIVACY_POOL_SOURCE_CONSTRAINTS.standaloneInvokeExternalLikelyReverts
+          ? "Source-derived warning: InvokeExternal must be paired with a WriteOnce-producing privacy action for replay protection."
+          : "InvokeExternal replay-protection requirement unknown.",
       ],
     };
   }
