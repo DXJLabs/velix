@@ -1,3 +1,5 @@
+import { VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
+
 const pageTitles = {
   home: { title: "Home", eyebrow: "Command center" },
   channels: { title: "Channels", eyebrow: "Negotiation rooms" },
@@ -22,6 +24,12 @@ const inactiveStepLabelClasses = ["border-slate-800", "text-slate-400"];
 let activePaymentMode = "Shield";
 let activeFeedFilter = "all";
 let toastTimer;
+const demoChannelId = "rights-transfer";
+const veilClient = new VeilClient({
+  privacyPoolAddress: import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool",
+  helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "mock-veil-helper",
+  rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc",
+});
 
 function refreshIcons() {
   if (window.lucide) {
@@ -125,97 +133,190 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function appendTimeline(type, title, body) {
-  const list = document.querySelector("#timeline-list");
-  const item = document.createElement(type === "message" ? "article" : "div");
-  const safeTitle = escapeHtml(title);
-  const safeBody = escapeHtml(body);
+function formatTime(timestamp) {
+  return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
+}
 
-  item.dataset.feedKind = type;
+function normalizeSender(sender) {
+  const normalized = String(sender || "system").toLowerCase();
+  if (normalized === "you") return "You";
+  if (normalized === "buyer") return "Buyer";
+  if (normalized === "seller") return "Seller";
+  if (normalized === "assistant") return "Assistant";
+  return "System";
+}
 
-  if (type === "message") {
-    const sender = String(title).toLowerCase();
-    const isSelf = sender === "you";
-    const isBuyer = sender === "buyer";
-    const avatar = escapeHtml(String(title).charAt(0).toUpperCase() || "M");
-    const avatarClasses = isBuyer
-      ? "bg-indigo-300/20 text-indigo-100"
-      : "bg-slate-800 text-slate-200";
+function messageClasses(sender) {
+  if (sender === "Buyer") return "bg-indigo-300/20 text-indigo-100";
+  if (sender === "Assistant") return "bg-emerald-300/15 text-emerald-100";
+  return "bg-slate-800 text-slate-200";
+}
 
-    item.dataset.feedGroup = "messages";
-    item.className = isSelf ? "flex justify-end animate-new-entry" : "flex items-start gap-3 animate-new-entry";
-    item.innerHTML = isSelf
+function eventMeta(item) {
+  const payload = item.payload || {};
+  const currency = payload.currency || "STRK";
+  const amount = payload.amount ? `${payload.amount} ${currency}`.replace(`${currency} ${currency}`, currency) : "";
+
+  switch (item.eventType) {
+    case VeilEventType.OFFER:
+      return {
+        label: "Offer created",
+        value: amount || "Offer",
+        body: payload.terms || "Offer terms attached.",
+        dot: "bg-amber-300",
+        labelText: "text-amber-100",
+      };
+    case VeilEventType.COUNTER_OFFER:
+      return {
+        label: "Counter offer",
+        value: amount || "Counter",
+        body: payload.terms || "Private settlement terms added.",
+        dot: "bg-amber-300",
+        labelText: "text-amber-100",
+      };
+    case VeilEventType.ACCEPT_OFFER:
+      return {
+        label: "Offer accepted",
+        value: payload.offerId || "Accepted",
+        body: payload.reason || "Settlement can move forward.",
+        dot: "bg-emerald-300",
+        labelText: "text-emerald-100",
+      };
+    case VeilEventType.REJECT_OFFER:
+      return {
+        label: "Offer rejected",
+        value: payload.offerId || "Rejected",
+        body: payload.reason || "Offer was rejected.",
+        dot: "bg-rose-300",
+        labelText: "text-rose-100",
+      };
+    case VeilEventType.ESCROW_CREATED:
+      return {
+        label: "Escrow created",
+        value: "Escrow",
+        body: payload.details || "Escrow status updated.",
+        dot: "bg-indigo-300",
+        labelText: "text-indigo-100",
+      };
+    case VeilEventType.ESCROW_DEPOSITED:
+      return {
+        label: "Escrow deposited",
+        value: "Deposit",
+        body: payload.details || "Escrow deposit recorded.",
+        dot: "bg-indigo-300",
+        labelText: "text-indigo-100",
+      };
+    case VeilEventType.ESCROW_SETTLED:
+      return {
+        label: "Escrow settled",
+        value: "Settled",
+        body: payload.details || "Escrow was settled.",
+        dot: "bg-emerald-300",
+        labelText: "text-emerald-100",
+      };
+    case VeilEventType.ESCROW_CANCELLED:
+      return {
+        label: "Escrow cancelled",
+        value: "Cancelled",
+        body: payload.details || "Escrow was cancelled.",
+        dot: "bg-rose-300",
+        labelText: "text-rose-100",
+      };
+    case VeilEventType.PAYMENT_MEMO:
+      return {
+        label: "Memo attached",
+        value: payload.amount || "Payment memo",
+        body: payload.memo || "Payment memo attached.",
+        dot: "bg-sky-300",
+        labelText: "text-sky-100",
+      };
+    case VeilEventType.PROOF_ATTACHED:
+      return {
+        label: "Proof attached",
+        value: payload.label || "Proof",
+        body: payload.proofRef || "Proof reference attached.",
+        dot: "bg-emerald-300",
+        labelText: "text-emerald-100",
+      };
+    default:
+      return {
+        label: "Channel event",
+        value: "Update",
+        body: "Channel updated.",
+        dot: "bg-slate-400",
+        labelText: "text-slate-300",
+      };
+  }
+}
+
+function createTimelineElement(item) {
+  const element = document.createElement(item.eventType === VeilEventType.CHAT ? "article" : "div");
+  const payload = item.payload || {};
+
+  element.dataset.feedKind = item.eventType === VeilEventType.CHAT ? "message" : "event";
+  element.dataset.feedGroup = item.eventType === VeilEventType.CHAT ? "messages" : "events";
+
+  if (item.eventType === VeilEventType.CHAT && payload.kind === "chat") {
+    const sender = normalizeSender(payload.sender);
+    const isSelf = sender === "You";
+    const avatar = escapeHtml(sender.charAt(0));
+    const safeMessage = escapeHtml(payload.message);
+    const safeTime = escapeHtml(formatTime(item.timestamp));
+
+    element.className = isSelf ? "flex justify-end animate-new-entry" : "flex items-start gap-3 animate-new-entry";
+    element.innerHTML = isSelf
       ? `
         <div class="min-w-0">
           <div class="mb-1 flex items-baseline justify-end gap-2">
-            <time class="text-xs text-slate-500">Now</time>
-            <strong class="text-sm">${safeTitle}</strong>
+            <time class="text-xs text-slate-500">${safeTime}</time>
+            <strong class="text-sm">${sender}</strong>
           </div>
-          <p class="max-w-[22rem] rounded-2xl rounded-tr-sm bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">${safeBody}</p>
+          <p class="max-w-[22rem] rounded-2xl rounded-tr-sm bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">${safeMessage}</p>
         </div>
       `
       : `
-        <div class="grid size-8 shrink-0 place-items-center rounded-full ${avatarClasses} text-xs font-black">${avatar}</div>
+        <div class="grid size-8 shrink-0 place-items-center rounded-full ${messageClasses(sender)} text-xs font-black">${avatar}</div>
         <div class="min-w-0">
           <div class="mb-1 flex items-baseline gap-2">
-            <strong class="text-sm">${safeTitle}</strong>
-            <time class="text-xs text-slate-500">Now</time>
+            <strong class="text-sm">${sender}</strong>
+            <time class="text-xs text-slate-500">${safeTime}</time>
           </div>
-          <p class="max-w-[22rem] rounded-2xl rounded-tl-sm bg-slate-900/90 px-3 py-2 text-sm leading-6 text-slate-200">${safeBody}</p>
+          <p class="max-w-[22rem] rounded-2xl rounded-tl-sm bg-slate-900/90 px-3 py-2 text-sm leading-6 text-slate-200">${safeMessage}</p>
         </div>
       `;
-    list.appendChild(item);
-    applyFeedFilter();
-    return;
+    return element;
   }
 
-  const meta = {
-    offer: {
-      label: "Offer updated",
-      dot: "bg-amber-300",
-      labelText: "text-amber-100",
-      value: "450 STRK",
-    },
-    escrow: {
-      label: "Escrow",
-      dot: "bg-indigo-300",
-      labelText: "text-indigo-100",
-      value: "Settlement ready",
-    },
-    payment: {
-      label: "Memo attached",
-      dot: "bg-sky-300",
-      labelText: "text-sky-100",
-      value: "Payment memo",
-    },
-    proof: {
-      label: "Proof generated",
-      dot: "bg-emerald-300",
-      labelText: "text-emerald-100",
-      value: "Proof attached",
-    },
-  }[type] || {
-    label: "Event",
-    dot: "bg-slate-400",
-    labelText: "text-slate-300",
-    value: "Channel update",
-  };
+  const meta = eventMeta(item);
 
-  item.dataset.feedGroup = "events";
-  item.className = "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-new-entry";
-  item.innerHTML = `
+  element.className = "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-new-entry";
+  element.innerHTML = `
     <span class="mt-2 size-1.5 rounded-full ${meta.dot}"></span>
     <div class="min-w-0">
       <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <strong class="text-[0.68rem] font-black uppercase tracking-wide ${meta.labelText}">${escapeHtml(meta.label)}</strong>
         <span class="text-sm font-bold text-white">${escapeHtml(meta.value)}</span>
-        <time class="text-xs text-slate-500">Now</time>
+        <time class="text-xs text-slate-500">${escapeHtml(formatTime(item.timestamp))}</time>
       </div>
-      <p class="truncate text-xs leading-5 text-slate-400">${safeBody}</p>
+      <p class="truncate text-xs leading-5 text-slate-400">${escapeHtml(meta.body)}</p>
     </div>
   `;
-  list.appendChild(item);
+
+  return element;
+}
+
+async function renderTimeline(options = { scrollToBottom: false }) {
+  const list = document.querySelector("#timeline-list");
+  const items = await veilClient.getTimeline({ channelId: demoChannelId, decrypt: true });
+  list.innerHTML = "";
+  items.forEach((timelineItem) => list.appendChild(createTimelineElement(timelineItem)));
   applyFeedFilter();
+
+  if (options.scrollToBottom) {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+    });
+  }
 }
 
 function openPaymentModal() {
@@ -306,14 +407,20 @@ document.querySelector("#payment-review").addEventListener("click", () => {
 
 document.querySelector("#payment-back").addEventListener("click", () => setPaymentStep("form"));
 
-document.querySelector("#payment-confirm").addEventListener("click", () => {
+document.querySelector("#payment-confirm").addEventListener("click", async () => {
   syncReview();
   setPaymentStep("success");
   const amount = document.querySelector("#success-amount").textContent;
   const mode = document.querySelector("#success-mode").textContent;
+  const memo = document.querySelector("#payment-memo").value.trim() || "Payment memo attached.";
   setFeedFilter("all");
-  appendTimeline("payment", "Payment memo event", `${amount} ${mode} memo sent with settlement instructions.`);
-  appendTimeline("proof", "Proof event", `${amount} payment proof verified and attached to this channel.`);
+  await veilClient.sendPaymentMemo({ channelId: demoChannelId, amount, mode, memo, sender: "you" });
+  await veilClient.attachProof({
+    channelId: demoChannelId,
+    proofRef: `proof://rights-transfer/${Date.now()}`,
+    label: "Payment proof",
+  });
+  await renderTimeline({ scrollToBottom: true });
   showToast("Payment memo and proof attached to channel.");
 });
 
@@ -334,22 +441,34 @@ document.querySelectorAll("[data-mode]").forEach((button) => {
 });
 
 document.querySelectorAll("[data-accept-suggestion]").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     const status = document.querySelector("#deal-status");
     status.textContent = "Buyer accepted. Settlement ready";
     toggleClasses(status, ["border-emerald-200/40", "bg-emerald-200/10", "text-emerald-100"], ["border-amber-300/35", "bg-amber-300/10", "text-amber-200"]);
     document.querySelector("#current-offer").textContent = "450 STRK accepted";
     setFeedFilter("all");
-    appendTimeline("offer", "Assistant", "Suggested deal accepted at 450 STRK. Proof generated.");
-    appendTimeline("escrow", "Escrow", "Settlement is ready for final confirmation.");
+    await veilClient.acceptOffer({ channelId: demoChannelId, sender: "buyer" });
+    await veilClient.recordEscrowStatus({
+      channelId: demoChannelId,
+      status: "deposited",
+      details: "Settlement is ready for final confirmation.",
+    });
+    await renderTimeline({ scrollToBottom: true });
     showToast("Assistant suggestion accepted. Proof generated.");
   });
 });
 
 document.querySelectorAll("[data-create-counter]").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     setFeedFilter("all");
-    appendTimeline("offer", "Offer event", "Counter offer prepared at 450 STRK with private settlement terms.");
+    await veilClient.counterOffer({
+      channelId: demoChannelId,
+      amount: "450",
+      currency: "STRK",
+      terms: "Private settlement terms added.",
+      sender: "you",
+    });
+    await renderTimeline({ scrollToBottom: true });
     showToast("Counter offer prepared inside this channel.");
     setPage("channel-detail");
     setChannelTab("timeline");
@@ -364,13 +483,14 @@ document.querySelector("[data-attach-message]").addEventListener("click", () => 
   showToast("Attach memo or proof from the channel actions.");
 });
 
-document.querySelector("#message-form").addEventListener("submit", (event) => {
+document.querySelector("#message-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = event.currentTarget.elements.message;
   const message = input.value.trim();
   if (!message) return;
   setFeedFilter("all");
-  appendTimeline("message", "You", message);
+  await veilClient.sendMessage({ channelId: demoChannelId, message, sender: "you" });
+  await renderTimeline({ scrollToBottom: true });
   input.value = "";
   showToast("Message sent in channel chat.");
 });
@@ -381,9 +501,11 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
   setPage("home", { resetScroll: false });
   setChannelTab("timeline");
   setFeedFilter("all");
+  await veilClient.seedDemoChannel(demoChannelId);
+  await renderTimeline();
   refreshIcons();
 });

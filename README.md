@@ -41,6 +41,17 @@ npm run build
 npm run preview
 ```
 
+## VEIL SDK
+
+The TypeScript SDK lives in `packages/veil-sdk`.
+
+```bash
+npm run typecheck
+npm run build:sdk
+```
+
+The current Channel Workspace demo uses the SDK in mock mode: it creates a channel, renders chat/offer/escrow/memo/proof events, and appends new composer/actions into one unified feed. See `examples/veil-channel-demo.ts` for the end-to-end flow.
+
 ## Deploy to Vercel
 
 If the Vercel CLI is not logged in yet:
