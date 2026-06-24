@@ -11,6 +11,7 @@ Use this when explaining the current integration status.
 - `MockPrivacyPoolAdapter` keeps frontend and SDK development moving without the private STRK20 SDK.
 - `DirectHelperTransport` writes encrypted timeline references directly to `VeilChannelHelper` for Starknet testnet proof.
 - `ResearchPrivacyPoolAdapter` decodes real Privacy Pool transactions, calldata, and events from the known ABI.
+- `PRIVACY_POOL_ABI_CAPABILITIES` records the confirmed ABI integration points from the complete ABI.
 - `Developer -> Privacy Pool Research` lets developers paste a transaction hash and inspect the possible flow.
 
 ### What VEIL Does Not Claim Yet
@@ -19,6 +20,7 @@ Use this when explaining the current integration status.
 - No fake Privacy Pool cryptography.
 - No replacement Privacy Pool contract.
 - No claim that SDK integration is complete.
+- No invented ECDH/channel-key derivation from ABI alone.
 
 ### Architecture Line
 
@@ -63,6 +65,8 @@ VEIL is not rebuilding Privacy Pool. VEIL is a messaging, negotiation, memo, and
 2. Use the research adapter to inspect real Voyager/RPC transactions.
 3. Confirm exact SDK transaction flow in the STRK20 meeting.
 4. Fill `RealPrivacyPoolAdapter` without changing the VEIL app surface.
+
+See also: `docs/privacy-pool-abi-analysis.md`.
 
 ### One-Sentence Pitch
 

@@ -86,6 +86,140 @@ export const PRIVACY_POOL_CLIENT_ACTIONS = [
   },
 ] as const;
 
+export const PRIVACY_POOL_CLIENT_FUNCTIONS = [
+  {
+    name: "__execute__",
+    mutability: "external",
+    inputs: [{ name: "calls", type: "Array<Call>" }],
+    outputs: [],
+  },
+  {
+    name: "compile_and_panic",
+    mutability: "external",
+    inputs: [
+      { name: "user_addr", type: "ContractAddress" },
+      { name: "user_private_key", type: "felt252" },
+      { name: "client_actions", type: "Span<ClientAction>" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "compile_actions",
+    mutability: "view",
+    inputs: [
+      { name: "user_addr", type: "ContractAddress" },
+      { name: "user_private_key", type: "felt252" },
+      { name: "client_actions", type: "Span<ClientAction>" },
+    ],
+    outputs: [{ type: "Span<ServerAction>" }],
+  },
+  {
+    name: "__validate__",
+    mutability: "view",
+    inputs: [{ name: "calls", type: "Array<Call>" }],
+    outputs: [{ type: "felt252" }],
+  },
+] as const;
+
+export const PRIVACY_POOL_SERVER_FUNCTIONS = [
+  {
+    name: "apply_actions",
+    mutability: "external",
+    inputs: [{ name: "actions", type: "Span<ServerAction>" }],
+    outputs: [],
+  },
+] as const;
+
+export const PRIVACY_POOL_VIEW_FUNCTIONS = [
+  {
+    name: "channel_exists",
+    inputs: [{ name: "channel_marker", type: "felt252" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    name: "get_num_of_channels",
+    inputs: [{ name: "recipient_addr", type: "ContractAddress" }],
+    outputs: [{ type: "u64" }],
+  },
+  {
+    name: "get_channel_info",
+    inputs: [
+      { name: "recipient_addr", type: "ContractAddress" },
+      { name: "channel_index", type: "u64" },
+    ],
+    outputs: [{ type: "EncChannelInfo" }],
+  },
+  {
+    name: "subchannel_exists",
+    inputs: [{ name: "subchannel_marker", type: "felt252" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    name: "get_subchannel_info",
+    inputs: [{ name: "subchannel_id", type: "felt252" }],
+    outputs: [{ type: "EncSubchannelInfo" }],
+  },
+  {
+    name: "get_outgoing_channel_info",
+    inputs: [{ name: "outgoing_channel_id", type: "felt252" }],
+    outputs: [{ type: "EncOutgoingChannelInfo" }],
+  },
+  {
+    name: "get_note",
+    inputs: [{ name: "note_id", type: "felt252" }],
+    outputs: [{ type: "Note" }],
+  },
+  {
+    name: "nullifier_exists",
+    inputs: [{ name: "nullifier", type: "felt252" }],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    name: "get_public_key",
+    inputs: [{ name: "user_addr", type: "ContractAddress" }],
+    outputs: [{ type: "felt252" }],
+  },
+  {
+    name: "get_enc_private_key",
+    inputs: [{ name: "user_addr", type: "ContractAddress" }],
+    outputs: [{ type: "EncPrivateKey" }],
+  },
+  {
+    name: "get_auditor_public_key",
+    inputs: [],
+    outputs: [{ type: "felt252" }],
+  },
+  {
+    name: "get_fee_amount",
+    inputs: [],
+    outputs: [{ type: "u128" }],
+  },
+  {
+    name: "get_fee_collector",
+    inputs: [],
+    outputs: [{ type: "ContractAddress" }],
+  },
+  {
+    name: "get_proof_validity_blocks",
+    inputs: [],
+    outputs: [{ type: "u64" }],
+  },
+] as const;
+
+export const PRIVACY_POOL_ABI_CAPABILITIES = {
+  hasClientActionInvokeExternal: true,
+  invokeExternalVariant: 8,
+  hasServerActionInvoke: true,
+  serverInvokeVariant: 10,
+  hasPublicKeyView: true,
+  hasEncryptedPrivateKeyView: true,
+  hasChannelInfoViews: true,
+  hasEncryptedNoteEvents: true,
+  hasOpenNoteDepositEvent: true,
+  requiresImplementationForEcdh: true,
+  requiresOfficialSdkForProductionSubmission: true,
+} as const;
+
 export const PRIVACY_POOL_SERVER_ACTIONS = [
   {
     variant: 0,

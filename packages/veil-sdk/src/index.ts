@@ -27,9 +27,13 @@ export {
   ResearchPrivacyPoolAdapter,
 } from "./privacy_pool_adapter";
 export {
+  PRIVACY_POOL_ABI_CAPABILITIES,
   PRIVACY_POOL_CLIENT_ACTIONS,
+  PRIVACY_POOL_CLIENT_FUNCTIONS,
   PRIVACY_POOL_EVENT_ABI,
+  PRIVACY_POOL_SERVER_FUNCTIONS,
   PRIVACY_POOL_SERVER_ACTIONS,
+  PRIVACY_POOL_VIEW_FUNCTIONS,
 } from "./privacy_pool_abi";
 export {
   decodeChannelEvent,
