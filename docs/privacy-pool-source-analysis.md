@@ -28,6 +28,26 @@ It does not create `WriteOnce`.
 
 So a standalone VEIL message sent only as `InvokeExternal` likely fails `NO_REPLAY_PROTECTION`.
 
+## Client Action Phase Ordering
+
+The README confirms phase ordering:
+
+| Phase | Action |
+| --- | --- |
+| 0 | `SetViewingKey` |
+| 1 | `OpenChannel` |
+| 2 | `OpenSubchannel` |
+| 3 | `Deposit` |
+| 4 | `UseNote` |
+| 5 | `CreateEncNote` |
+| 5 | `CreateOpenNote` |
+| 6 | `Withdraw` |
+| 7 | `InvokeExternal` |
+
+`InvokeExternal` is the last phase and is allowed at most once per transaction.
+
+This matters for VEIL: message metadata can be appended after privacy actions, but it cannot appear before them or multiple times in the same Privacy Pool transaction.
+
 ## Correct Mental Model
 
 VEIL helper invocation must be part of a Privacy Pool action batch that also includes a WriteOnce-producing privacy action.
@@ -74,6 +94,8 @@ invoke(calldata: Span<felt252>) -> Span<OpenNoteDeposit>
 ```
 
 VEIL's `VeilChannelHelper.invoke` matches this shape and returns an empty deposit array for MVP.
+
+The README also mentions `deposit_to_open_note`, which fills a pre-created open note and emits `OpenNoteDeposited`. VEIL does not need this for chat-only metadata, but payment/escrow settlement flows should account for it later.
 
 ## Proof Requirement
 
@@ -132,6 +154,7 @@ What changes for full Privacy Pool mode:
 
 - `RealPrivacyPoolAdapter` must build a full Privacy Pool client action batch.
 - Message-only `InvokeExternal` needs a replay-protection strategy.
+- `InvokeExternal` must be placed at phase 7 and appear at most once.
 - The easiest production-safe path is likely to attach VEIL messages to real privacy actions such as channel/subchannel/note usage until the official SDK clarifies the intended replay-protection pattern for metadata-only messages.
 
 ## Interview Explanation

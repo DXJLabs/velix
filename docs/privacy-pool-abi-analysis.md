@@ -16,6 +16,8 @@ The ABI confirms the high-level integration shape VEIL needs:
 - `apply_actions(actions: Span<ServerAction>)` is the server execution entrypoint.
 - `compile_actions(...)` can compile client actions into server actions.
 - Views expose public keys, encrypted private keys, channel info, subchannel info, notes, and nullifiers.
+- The README confirms client action phase ordering and places `InvokeExternal` at phase `7`.
+- `InvokeExternal` is allowed at most once per transaction.
 
 This means VEIL's helper contract architecture is directionally correct:
 
@@ -32,6 +34,7 @@ flowchart TD
 The SDK now exports:
 
 - `PRIVACY_POOL_CLIENT_ACTIONS`
+- `PRIVACY_POOL_CLIENT_ACTION_PHASES`
 - `PRIVACY_POOL_SERVER_ACTIONS`
 - `PRIVACY_POOL_CLIENT_FUNCTIONS`
 - `PRIVACY_POOL_SERVER_FUNCTIONS`

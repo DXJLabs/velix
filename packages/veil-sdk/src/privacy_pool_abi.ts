@@ -86,6 +86,18 @@ export const PRIVACY_POOL_CLIENT_ACTIONS = [
   },
 ] as const;
 
+export const PRIVACY_POOL_CLIENT_ACTION_PHASES = [
+  { phase: 0, action: "SetViewingKey", description: "Register or replace viewing key" },
+  { phase: 1, action: "OpenChannel", description: "Open channel to recipient" },
+  { phase: 2, action: "OpenSubchannel", description: "Open token-specific subchannel" },
+  { phase: 3, action: "Deposit", description: "Deposit tokens into contract" },
+  { phase: 4, action: "UseNote", description: "Spend a note and create nullifier" },
+  { phase: 5, action: "CreateEncNote", description: "Create encrypted note" },
+  { phase: 5, action: "CreateOpenNote", description: "Create open note" },
+  { phase: 6, action: "Withdraw", description: "Withdraw tokens" },
+  { phase: 7, action: "InvokeExternal", description: "Call external contract" },
+] as const;
+
 export const PRIVACY_POOL_CLIENT_FUNCTIONS = [
   {
     name: "__execute__",
@@ -126,6 +138,15 @@ export const PRIVACY_POOL_SERVER_FUNCTIONS = [
     name: "apply_actions",
     mutability: "external",
     inputs: [{ name: "actions", type: "Span<ServerAction>" }],
+    outputs: [],
+  },
+  {
+    name: "deposit_to_open_note",
+    mutability: "external",
+    inputs: [
+      { name: "depositor", type: "ContractAddress" },
+      { name: "deposit", type: "OpenNoteDeposit" },
+    ],
     outputs: [],
   },
 ] as const;
@@ -230,6 +251,8 @@ export const PRIVACY_POOL_SOURCE_CONSTRAINTS = {
   validatesUserSignatureBeforeServerMessage: true,
   zeroTipAndResourcePriceRequired: true,
   clientActionPhasesEnforced: true,
+  invokeExternalPhase: 7,
+  invokeExternalAtMostOncePerTx: true,
   everyClientActionBatchRequiresReplayProtection: true,
   replayProtectionSource: "ServerAction::WriteOnce",
   invokeExternalProvidesReplayProtection: false,
