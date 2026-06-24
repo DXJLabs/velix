@@ -9,6 +9,7 @@ Use this when explaining the current integration status.
 - `VeilChannelHelper` stores encrypted channel timeline events.
 - `packages/veil-sdk` exposes chat, offer, memo, escrow, and proof timeline methods.
 - `MockPrivacyPoolAdapter` keeps frontend and SDK development moving without the private STRK20 SDK.
+- `DirectHelperTransport` writes encrypted timeline references directly to `VeilChannelHelper` for Starknet testnet proof.
 - `ResearchPrivacyPoolAdapter` decodes real Privacy Pool transactions, calldata, and events from the known ABI.
 - `Developer -> Privacy Pool Research` lets developers paste a transaction hash and inspect the possible flow.
 
@@ -42,6 +43,13 @@ VEIL is not rebuilding Privacy Pool. VEIL is a messaging, negotiation, memo, and
   - note events
   - viewing-key events
   - helper timeline events
+
+`DirectHelperTransport`
+
+- Testnet onchain write path.
+- Calls `VeilChannelHelper.invoke` through a connected Starknet account.
+- Returns a transaction hash for chat, offer, memo, escrow, and proof events.
+- Does not claim Privacy Pool anonymity because it bypasses `InvokeExternal`.
 
 `RealPrivacyPoolAdapter`
 

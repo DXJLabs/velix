@@ -54,7 +54,36 @@ await sendMessage({ message: "Ready to settle.", sender: "you" });
 
 Privy belongs in the frontend wallet/auth layer. Use Privy to connect the wallet and sign the transaction that calls Privacy Pool. The SDK prepares encrypted timeline payloads and the `InvokeExternal` calldata for `VeilChannelHelper`.
 
-Production apps should provide a custom `transport` that submits transactions through Privacy Pool. The built-in transport is an in-memory mock for demos and tests.
+Production apps should provide a custom `transport` that submits transactions through Privacy Pool. The default transport is an in-memory mock for demos and tests.
+
+## Onchain Chat Testnet Mode
+
+VEIL also ships a direct helper transport for testnet demos. This writes encrypted timeline references directly to `VeilChannelHelper.invoke` and returns a Starknet transaction hash.
+
+This proves the channel chat is blockchain-backed, but it is not the final Privacy Pool anonymity path.
+
+```ts
+import { DirectHelperTransport, VeilClient } from "@dxjlabs/veil-sdk";
+
+const veil = new VeilClient({
+  privacyPoolAddress: process.env.VITE_PRIVACY_POOL_ADDRESS!,
+  helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
+  rpcUrl: process.env.VITE_STARKNET_RPC_URL!,
+  transport: new DirectHelperTransport({
+    helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
+    account,
+    provider,
+  }),
+});
+
+const sent = await veil.sendMessage({
+  channelId: "rights-transfer",
+  sender: "you",
+  message: "Ready to settle privately.",
+});
+
+console.log(sent.transactionHash);
+```
 
 ## Privacy Pool adapters
 
@@ -69,6 +98,7 @@ import {
 ```
 
 - `MockPrivacyPoolAdapter`: default local/demo adapter.
+- `DirectHelperTransport`: direct testnet writes to `VeilChannelHelper` for onchain timeline proof.
 - `ResearchPrivacyPoolAdapter`: read-only tx/event/calldata analyzer using the known ABI.
 - `RealPrivacyPoolAdapter`: placeholder that throws `Waiting for official Privacy Pool SDK`.
 

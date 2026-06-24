@@ -1,4 +1,9 @@
-import { ResearchPrivacyPoolAdapter, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
+import {
+  DirectHelperTransport,
+  ResearchPrivacyPoolAdapter,
+  VeilClient,
+  VeilEventType,
+} from "./packages/veil-sdk/src/index.ts";
 
 const pageTitles = {
   home: { title: "Home", eyebrow: "Command center" },
@@ -26,10 +31,21 @@ let activePaymentMode = "Shield";
 let activeFeedFilter = "all";
 let toastTimer;
 const demoChannelId = "rights-transfer";
+const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
+const directHelperWallet = globalThis.window?.veilDemoWallet;
+const directHelperTransport =
+  timelineMode === "direct-helper" && directHelperWallet?.account && directHelperWallet?.provider
+    ? new DirectHelperTransport({
+        helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "mock-veil-helper",
+        account: directHelperWallet.account,
+        provider: directHelperWallet.provider,
+      })
+    : undefined;
 const veilClient = new VeilClient({
   privacyPoolAddress: import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool",
   helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "mock-veil-helper",
   rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc",
+  ...(directHelperTransport ? { transport: directHelperTransport } : {}),
 });
 // VEIL IMPLEMENTATION NOTE:
 // This adapter is read-only. It helps decode the real STRK20 Privacy Pool ABI
@@ -619,10 +635,10 @@ document.querySelector("#message-form").addEventListener("submit", async (event)
   const message = input.value.trim();
   if (!message) return;
   setFeedFilter("all");
-  await veilClient.sendMessage({ channelId: demoChannelId, message, sender: "you" });
+  const sent = await veilClient.sendMessage({ channelId: demoChannelId, message, sender: "you" });
   await renderTimeline({ scrollToBottom: true });
   input.value = "";
-  showToast("Message sent in channel chat.");
+  showToast(sent.transactionHash ? `Onchain message submitted: ${shortFelt(sent.transactionHash)}` : "Message sent in channel chat.");
 });
 
 document.querySelector("#privacy-research-form").addEventListener("submit", async (event) => {
@@ -653,7 +669,12 @@ window.addEventListener("load", async () => {
   setPage("home", { resetScroll: false });
   setChannelTab("timeline");
   setFeedFilter("all");
-  await veilClient.seedDemoChannel(demoChannelId);
-  await renderTimeline();
+  if (directHelperTransport) {
+    await renderTimeline();
+    showToast("Direct helper mode: channel events submit onchain.");
+  } else {
+    await veilClient.seedDemoChannel(demoChannelId);
+    await renderTimeline();
+  }
   refreshIcons();
 });

@@ -1,4 +1,5 @@
 export { VeilClient } from "./client";
+export { DirectHelperTransport, channelIdToFelt } from "./direct_helper_transport";
 export { MockEncryptionAdapter, hashToFelt } from "./encryption";
 export {
   MockPrivacyPoolAdapter,
@@ -38,9 +39,11 @@ export {
   type AttachProofInput,
   type CreateChannelInput,
   type CreateChannelResult,
+  type DirectHelperTransportConfig,
   type EncryptedPayload,
   type EncryptionAdapter,
   type EscrowStatusInput,
+  type FeltLike,
   type InvokeExternalInput,
   type OfferDecisionInput,
   type OfferInput,
@@ -53,6 +56,11 @@ export {
   type PrivacyPoolOpenSubchannelInput,
   type SendMessageInput,
   type SendPaymentMemoInput,
+  type StarknetAccountLike,
+  type StarknetCallResult,
+  type StarknetContractCall,
+  type StarknetExecuteResult,
+  type StarknetProviderLike,
   type TimelineItem,
   type TimelineQuery,
   type UseVeilMutationOptions,

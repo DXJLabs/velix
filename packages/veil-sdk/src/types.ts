@@ -111,6 +111,40 @@ export interface VeilTransport {
   getTimeline(channelId: string): Promise<TimelineItem[]>;
 }
 
+export type FeltLike = string | number | bigint;
+
+export interface StarknetContractCall {
+  contractAddress: string;
+  entrypoint: string;
+  calldata: string[];
+}
+
+export interface StarknetExecuteResult {
+  transaction_hash?: string;
+  transactionHash?: string;
+}
+
+export interface StarknetAccountLike {
+  address?: string;
+  execute(call: StarknetContractCall | StarknetContractCall[]): Promise<StarknetExecuteResult | string>;
+}
+
+export interface StarknetCallResult {
+  result: readonly FeltLike[];
+}
+
+export interface StarknetProviderLike {
+  callContract(call: StarknetContractCall): Promise<readonly FeltLike[] | StarknetCallResult>;
+}
+
+export interface DirectHelperTransportConfig {
+  helperAddress: string;
+  account?: StarknetAccountLike;
+  provider?: StarknetProviderLike;
+  now?: () => number;
+  channelIdEncoder?: (channelId: string) => string;
+}
+
 export type PrivacyPoolAdapterMode = "mock" | "research" | "real";
 
 export interface PrivacyPoolAdapterActionResult {
