@@ -63,6 +63,16 @@ VEIL now has a read-only Privacy Pool research layer for the private STRK20 SDK 
 
 Interview notes are in `docs/privacy-pool-research-adapter.md`.
 
+## VEIL Escrow V1
+
+`VeilEscrow` is an isolated Starknet testnet-ready settlement workflow contract. It uses OpenZeppelin Cairo ReentrancyGuard/SRC5, does not rebuild Privacy Pool, does not assume ERC20/STRK20 transfer behavior, and stores protocol-agnostic references for future adapters.
+
+Docs: `docs/veil-escrow-v1.md`
+
+Core flow:
+
+`Create Escrow -> Buyer Deposit -> Seller Deposit -> Activate -> Settle`
+
 ## Deploy to Vercel
 
 If the Vercel CLI is not logged in yet:
