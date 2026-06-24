@@ -35,6 +35,10 @@
             <i data-lucide="badge-check" class="size-4"></i>
             <span>Rewards</span>
           </button>
+          <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-slate-400 transition hover:bg-white/5 hover:text-white" type="button" data-page="developer">
+            <i data-lucide="code-2" class="size-4"></i>
+            <span>Developer</span>
+          </button>
           <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-slate-400 transition hover:bg-white/5 hover:text-white" type="button" data-page="settings">
             <i data-lucide="settings" class="size-4"></i>
             <span>Settings</span>
@@ -646,6 +650,70 @@
           </div>
         </section>
 
+        <section class="page hidden animate-page-enter" data-page-panel="developer">
+          <div class="grid gap-4 xl:grid-cols-[minmax(20rem,.72fr)_minmax(0,1fr)]">
+            <section class="rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Developer</p>
+                  <h2 class="mt-1 text-xl font-black text-white">Privacy Pool Research</h2>
+                </div>
+                <span class="rounded-full border border-sky-300/30 bg-sky-300/10 px-3 py-1 text-xs font-black text-sky-100">Read only</span>
+              </div>
+              <p class="mt-4 text-sm leading-6 text-slate-400">Decode STRK20 Privacy Pool transactions with the known ABI. This tool does not submit transactions and does not replace the private official SDK.</p>
+
+              <form class="mt-5 grid gap-3" id="privacy-research-form" action="javascript:void(0)">
+                <label class="grid gap-2 text-sm font-bold text-slate-400">
+                  Transaction hash
+                  <input class="min-h-12 rounded-lg border border-slate-800 bg-slate-950 px-3 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-200/50" type="text" name="transactionHash" placeholder="0x..." autocomplete="off" />
+                </label>
+                <button id="research-submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="submit">
+                  <i data-lucide="scan-search" class="size-4"></i>
+                  <span>Analyze transaction</span>
+                </button>
+              </form>
+
+              <div id="research-status" class="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-400">Waiting for a transaction hash. RPC must be configured in <code>VITE_STARKNET_RPC_URL</code>.</div>
+
+              <div class="mt-5 grid gap-3 rounded-lg border border-slate-800 bg-slate-950/45 p-3">
+                <div class="flex gap-3">
+                  <span class="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-emerald-200/10 text-xs font-black text-emerald-100">1</span>
+                  <div>
+                    <strong class="text-sm text-white">ABI-derived decoder</strong>
+                    <p class="mt-1 text-sm leading-6 text-slate-400">Maps OpenChannel, OpenSubchannel, CreateEncNote, and InvokeExternal action shapes from the STRK20 Privacy Pool ABI.</p>
+                  </div>
+                </div>
+                <div class="flex gap-3">
+                  <span class="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-emerald-200/10 text-xs font-black text-emerald-100">2</span>
+                  <div>
+                    <strong class="text-sm text-white">VEIL helper detection</strong>
+                    <p class="mt-1 text-sm leading-6 text-slate-400">Highlights helper payloads shaped as channel id, event type, encrypted payload, and payload hash.</p>
+                  </div>
+                </div>
+                <div class="flex gap-3">
+                  <span class="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-amber-200/10 text-xs font-black text-amber-100">3</span>
+                  <div>
+                    <strong class="text-sm text-white">Real SDK placeholder</strong>
+                    <p class="mt-1 text-sm leading-6 text-slate-400">Transaction submission intentionally throws until the official Privacy Pool SDK is available.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="grid gap-4" id="research-result" aria-live="polite">
+              <article class="rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Implementation marker</p>
+                <h3 class="mt-1 text-lg font-black text-white">What to explain in interview</h3>
+                <div class="mt-4 grid gap-2 text-sm leading-6 text-slate-400">
+                  <p><strong class="text-slate-200">VEIL does not rebuild Privacy Pool.</strong> It calls the existing pool through the InvokeExternal phase.</p>
+                  <p><strong class="text-slate-200">The helper stores encrypted timeline payloads only.</strong> Sender, recipient, and plaintext stay outside this helper contract.</p>
+                  <p><strong class="text-slate-200">The research adapter is a bridge.</strong> It decodes real transactions now, then gets replaced by official SDK calls later.</p>
+                </div>
+              </article>
+            </section>
+          </div>
+        </section>
+
         <section class="page hidden animate-page-enter" data-page-panel="settings">
           <section class="max-w-3xl rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Privacy mode</p>
@@ -669,7 +737,7 @@
       </main>
     </div>
 
-    <nav class="mobile-nav fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 gap-1 rounded-lg border border-slate-800 bg-[#090d12]/95 p-1 shadow-2xl backdrop-blur-xl animate-dock-in lg:hidden" aria-label="Mobile navigation">
+    <nav class="mobile-nav fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-lg border border-slate-800 bg-[#090d12]/95 p-1 shadow-2xl backdrop-blur-xl animate-dock-in lg:hidden" aria-label="Mobile navigation">
       <button class="mobile-nav-item active grid min-h-14 place-items-center rounded-md text-xs text-white transition" type="button" data-page="home">
         <i data-lucide="layout-dashboard" class="size-4"></i>
         <span>Home</span>
@@ -681,6 +749,10 @@
       <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="rewards">
         <i data-lucide="badge-check" class="size-4"></i>
         <span>Rewards</span>
+      </button>
+      <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="developer">
+        <i data-lucide="code-2" class="size-4"></i>
+        <span>Dev</span>
       </button>
       <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="settings">
         <i data-lucide="settings" class="size-4"></i>

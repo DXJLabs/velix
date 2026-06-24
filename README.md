@@ -52,6 +52,17 @@ npm run build:sdk
 
 The current Channel Workspace demo uses the SDK in mock mode: it creates a channel, renders chat/offer/escrow/memo/proof events, and appends new composer/actions into one unified feed. See `examples/veil-channel-demo.ts` for the end-to-end flow.
 
+## Privacy Pool Research Adapter
+
+VEIL now has a read-only Privacy Pool research layer for the private STRK20 SDK gap:
+
+- `MockPrivacyPoolAdapter` keeps local UX and SDK work fast.
+- `ResearchPrivacyPoolAdapter` decodes transactions/events using the known Privacy Pool ABI.
+- `RealPrivacyPoolAdapter` intentionally throws `Waiting for official Privacy Pool SDK`.
+- The app includes `Developer -> Privacy Pool Research` for tx-hash inspection.
+
+Interview notes are in `docs/privacy-pool-research-adapter.md`.
+
 ## Deploy to Vercel
 
 If the Vercel CLI is not logged in yet:

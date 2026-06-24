@@ -1,10 +1,11 @@
-import { VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
+import { ResearchPrivacyPoolAdapter, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
 
 const pageTitles = {
   home: { title: "Home", eyebrow: "Command center" },
   channels: { title: "Channels", eyebrow: "Negotiation rooms" },
   "channel-detail": { title: "Rights Transfer", eyebrow: "Channel workspace" },
   rewards: { title: "Rewards", eyebrow: "Activity points" },
+  developer: { title: "Privacy Pool Research", eyebrow: "Developer tools" },
   settings: { title: "Settings", eyebrow: "Workspace preferences" },
 };
 
@@ -29,6 +30,15 @@ const veilClient = new VeilClient({
   privacyPoolAddress: import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool",
   helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "mock-veil-helper",
   rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc",
+});
+// VEIL IMPLEMENTATION NOTE:
+// This adapter is read-only. It helps decode the real STRK20 Privacy Pool ABI
+// while the official SDK is private, without pretending VEIL can submit real
+// Privacy Pool transactions yet.
+const researchAdapter = new ResearchPrivacyPoolAdapter({
+  rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "",
+  privacyPoolAddress: import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "",
+  helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "",
 });
 
 function refreshIcons() {
@@ -319,6 +329,126 @@ async function renderTimeline(options = { scrollToBottom: false }) {
   }
 }
 
+function shortFelt(value) {
+  if (!value) return "n/a";
+  const text = String(value);
+  if (text.length <= 18) return text;
+  return `${text.slice(0, 10)}...${text.slice(-6)}`;
+}
+
+function renderResearchField(field) {
+  const value = field.values ? field.values.join(", ") : field.value;
+  return `
+    <div class="grid gap-1 rounded-md border border-slate-800 bg-slate-950/60 p-2">
+      <span class="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">${escapeHtml(field.name)}</span>
+      <code class="break-all text-xs text-slate-300">${escapeHtml(value || "n/a")}</code>
+      <span class="text-[0.68rem] text-slate-600">${escapeHtml(field.type || field.source || "felt")}</span>
+    </div>
+  `;
+}
+
+function renderResearchActions(calls) {
+  const actionSets = calls.flatMap((call, callIndex) =>
+    call.decodedActions.flatMap((set) =>
+      set.actions.map((action) => ({ call, callIndex, set, action })),
+    ),
+  );
+
+  if (actionSets.length === 0) {
+    return `<p class="rounded-md border border-slate-800 bg-slate-950/60 p-3 text-sm text-slate-400">No Privacy Pool client/server action could be decoded from calldata shape yet.</p>`;
+  }
+
+  return actionSets.map(({ call, callIndex, set, action }) => `
+    <article class="grid gap-3 rounded-lg border border-slate-800 bg-slate-950/55 p-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <strong class="text-sm text-white">${escapeHtml(action.name)}</strong>
+          <span class="ml-2 rounded-full border border-emerald-200/25 bg-emerald-200/10 px-2 py-0.5 text-[0.68rem] font-black text-emerald-100">${escapeHtml(set.source)}</span>
+        </div>
+        <code class="text-xs text-slate-500">call ${callIndex + 1} / variant ${action.variant}</code>
+      </div>
+      <div class="grid gap-2 sm:grid-cols-2">${action.fields.map(renderResearchField).join("")}</div>
+      ${action.helperInvoke ? `
+        <div class="rounded-md border border-emerald-200/25 bg-emerald-200/10 p-3 text-sm text-emerald-100">
+          <strong class="block">VEIL helper invoke detected</strong>
+          <span class="mt-1 block text-emerald-100/80">Event ${escapeHtml(action.helperInvoke.eventTypeLabel)} on channel ${escapeHtml(shortFelt(action.helperInvoke.channelId))}</span>
+        </div>
+      ` : ""}
+      ${call.to ? `<code class="break-all text-xs text-slate-500">to ${escapeHtml(call.to)}</code>` : ""}
+    </article>
+  `).join("");
+}
+
+function renderResearchEvents(events) {
+  if (events.length === 0) {
+    return `<p class="rounded-md border border-slate-800 bg-slate-950/60 p-3 text-sm text-slate-400">No events found in receipt.</p>`;
+  }
+
+  return events.map((event) => `
+    <article class="grid gap-3 rounded-lg border border-slate-800 bg-slate-950/55 p-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <strong class="text-sm text-white">${escapeHtml(event.name)}</strong>
+          <span class="ml-2 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[0.68rem] font-black uppercase text-slate-300">${escapeHtml(event.category)}</span>
+        </div>
+        <span class="text-xs text-slate-500">${escapeHtml(event.confidence)}</span>
+      </div>
+      <div class="grid gap-2 sm:grid-cols-2">${event.fields.map(renderResearchField).join("")}</div>
+      ${event.contractAddress ? `<code class="break-all text-xs text-slate-500">from ${escapeHtml(event.contractAddress)}</code>` : ""}
+    </article>
+  `).join("");
+}
+
+function setResearchState(state, message) {
+  const status = document.querySelector("#research-status");
+  const button = document.querySelector("#research-submit");
+  status.textContent = message;
+  status.className = "rounded-lg border px-3 py-2 text-sm";
+  if (state === "error") {
+    status.classList.add("border-rose-300/30", "bg-rose-300/10", "text-rose-100");
+  } else if (state === "success") {
+    status.classList.add("border-emerald-200/30", "bg-emerald-200/10", "text-emerald-100");
+  } else {
+    status.classList.add("border-slate-800", "bg-slate-950/60", "text-slate-400");
+  }
+  button.disabled = state === "loading";
+  button.classList.toggle("opacity-60", state === "loading");
+}
+
+function renderResearchAnalysis(analysis) {
+  const result = document.querySelector("#research-result");
+  result.innerHTML = `
+    <div class="grid gap-3 md:grid-cols-3">
+      <article class="rounded-lg border border-slate-800 bg-slate-950/55 p-3">
+        <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Called flow</span>
+        <strong class="mt-2 block text-sm text-white">${escapeHtml(analysis.calledFunction)}</strong>
+      </article>
+      <article class="rounded-lg border border-slate-800 bg-slate-950/55 p-3">
+        <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Contract</span>
+        <code class="mt-2 block break-all text-xs text-slate-300">${escapeHtml(analysis.contractAddress || "unknown")}</code>
+      </article>
+      <article class="rounded-lg border border-slate-800 bg-slate-950/55 p-3">
+        <span class="text-xs font-bold uppercase tracking-wide text-slate-500">Decoded events</span>
+        <strong class="mt-2 block text-sm text-white">${analysis.decodedEvents.length}</strong>
+      </article>
+    </div>
+    <section class="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
+      <h3 class="text-sm font-black text-white">Flow interpretation</h3>
+      <div class="mt-3 grid gap-2">
+        ${analysis.interpretation.map((item) => `<p class="rounded-md bg-slate-950/60 px-3 py-2 text-sm text-slate-300">${escapeHtml(item)}</p>`).join("")}
+      </div>
+    </section>
+    <section class="grid gap-3">
+      <h3 class="text-sm font-black text-white">Decoded calldata</h3>
+      ${renderResearchActions(analysis.decodedCalldata)}
+    </section>
+    <section class="grid gap-3">
+      <h3 class="text-sm font-black text-white">Decoded events</h3>
+      ${renderResearchEvents(analysis.decodedEvents)}
+    </section>
+  `;
+}
+
 function openPaymentModal() {
   const modal = document.querySelector("#payment-modal");
   modal.classList.remove("hidden");
@@ -493,6 +623,24 @@ document.querySelector("#message-form").addEventListener("submit", async (event)
   await renderTimeline({ scrollToBottom: true });
   input.value = "";
   showToast("Message sent in channel chat.");
+});
+
+document.querySelector("#privacy-research-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const hash = event.currentTarget.elements.transactionHash.value.trim();
+  if (!hash) {
+    setResearchState("error", "Paste a Starknet transaction hash first.");
+    return;
+  }
+
+  setResearchState("loading", "Fetching transaction and receipt from Starknet RPC...");
+  try {
+    const analysis = await researchAdapter.analyzeTransaction(hash);
+    renderResearchAnalysis(analysis);
+    setResearchState("success", "Decoded in read-only research mode. No transaction was submitted.");
+  } catch (error) {
+    setResearchState("error", error instanceof Error ? error.message : "Unable to analyze transaction.");
+  }
 });
 
 document.addEventListener("keydown", (event) => {

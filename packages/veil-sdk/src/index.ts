@@ -1,5 +1,25 @@
-export { InMemoryVeilTransport, VeilClient } from "./client";
+export { VeilClient } from "./client";
 export { MockEncryptionAdapter, hashToFelt } from "./encryption";
+export {
+  MockPrivacyPoolAdapter,
+  RealPrivacyPoolAdapter,
+  ResearchPrivacyPoolAdapter,
+} from "./privacy_pool_adapter";
+export {
+  PRIVACY_POOL_CLIENT_ACTIONS,
+  PRIVACY_POOL_EVENT_ABI,
+  PRIVACY_POOL_SERVER_ACTIONS,
+} from "./privacy_pool_abi";
+export {
+  decodeChannelEvent,
+  decodeInvokeExternalEvent,
+  decodeNoteEvent,
+  decodePrivacyPoolEvent,
+} from "./event_decoder";
+export {
+  PrivacyPoolTransactionAnalyzer,
+  decodeTransactionCalldata,
+} from "./transaction_analyzer";
 export {
   createOptimisticTimelineItem,
   encodeInvokeCalldata,
@@ -24,6 +44,13 @@ export {
   type InvokeExternalInput,
   type OfferDecisionInput,
   type OfferInput,
+  type PrivacyPoolAdapter,
+  type PrivacyPoolAdapterActionResult,
+  type PrivacyPoolAdapterMode,
+  type PrivacyPoolCreateEncryptedNoteInput,
+  type PrivacyPoolInvokeExternalCalldataInput,
+  type PrivacyPoolOpenChannelInput,
+  type PrivacyPoolOpenSubchannelInput,
   type SendMessageInput,
   type SendPaymentMemoInput,
   type TimelineItem,
@@ -35,3 +62,25 @@ export {
   type VeilTimelinePayload,
   type VeilTransport,
 } from "./types";
+export type {
+  DecodedEventCategory,
+  DecodedEventField,
+  DecodedPrivacyPoolEvent,
+  DecodeEventOptions,
+  RawStarknetEvent,
+  StarknetAbi,
+  StarknetAbiEntry,
+  StarknetAbiMember,
+} from "./event_decoder";
+export type {
+  AnalyzeTransactionInput,
+  DecodedActionField,
+  DecodedActionSet,
+  DecodedCall,
+  DecodedHelperInvoke,
+  DecodedPrivacyPoolAction,
+  PrivacyPoolTransactionAnalysis,
+  PrivacyPoolTransactionAnalyzerConfig,
+  RawStarknetReceipt,
+  RawStarknetTransaction,
+} from "./transaction_analyzer";

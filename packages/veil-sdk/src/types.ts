@@ -111,6 +111,53 @@ export interface VeilTransport {
   getTimeline(channelId: string): Promise<TimelineItem[]>;
 }
 
+export type PrivacyPoolAdapterMode = "mock" | "research" | "real";
+
+export interface PrivacyPoolAdapterActionResult {
+  adapterMode: PrivacyPoolAdapterMode;
+  action: "OpenChannel" | "OpenSubchannel" | "CreateEncNote" | "InvokeExternal";
+  calldata: readonly string[];
+  notes: readonly string[];
+}
+
+export interface PrivacyPoolOpenChannelInput {
+  recipientAddress: string;
+  index: number;
+  random: string;
+  salt: string;
+}
+
+export interface PrivacyPoolOpenSubchannelInput {
+  recipientAddress: string;
+  recipientPublicKey: string;
+  channelKey: string;
+  index: number;
+  token: string;
+  salt: string;
+}
+
+export interface PrivacyPoolCreateEncryptedNoteInput {
+  recipientAddress: string;
+  recipientPublicKey: string;
+  token: string;
+  amount: string;
+  index: number;
+  salt: string;
+}
+
+export interface PrivacyPoolInvokeExternalCalldataInput {
+  contractAddress: string;
+  calldata: readonly string[];
+}
+
+export interface PrivacyPoolAdapter {
+  readonly mode: PrivacyPoolAdapterMode;
+  openChannel(input: PrivacyPoolOpenChannelInput): Promise<PrivacyPoolAdapterActionResult>;
+  openSubchannel(input: PrivacyPoolOpenSubchannelInput): Promise<PrivacyPoolAdapterActionResult>;
+  createEncryptedNote(input: PrivacyPoolCreateEncryptedNoteInput): Promise<PrivacyPoolAdapterActionResult>;
+  prepareInvokeExternal(input: PrivacyPoolInvokeExternalCalldataInput): Promise<PrivacyPoolAdapterActionResult>;
+}
+
 export interface CreateChannelInput {
   channelId?: string;
   title?: string;

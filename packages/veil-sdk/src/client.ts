@@ -1,5 +1,6 @@
 import { MockEncryptionAdapter } from "./encryption";
-import { encodeInvokeCalldata, sortTimeline } from "./timeline";
+import { MockPrivacyPoolAdapter } from "./privacy_pool_adapter";
+import { encodeInvokeCalldata } from "./timeline";
 import {
   VeilEventType,
   type AttachProofInput,
@@ -21,62 +22,6 @@ import {
 
 const DEFAULT_CHANNEL_ID = "1";
 
-export class InMemoryVeilTransport implements VeilTransport {
-  readonly #channels = new Map<string, CreateChannelResult>();
-  readonly #events = new Map<string, TimelineItem[]>();
-  readonly #now: () => number;
-
-  constructor(now: () => number = () => Date.now()) {
-    this.#now = now;
-  }
-
-  async createChannel(input: CreateChannelInput): Promise<CreateChannelResult> {
-    const channelId = input.channelId ?? `${this.#channels.size + 1}`;
-    const result: CreateChannelResult = {
-      channelId,
-      createdAt: this.#now(),
-      ...(input.title ? { title: input.title } : {}),
-    };
-
-    this.#channels.set(channelId, result);
-    if (!this.#events.has(channelId)) {
-      this.#events.set(channelId, []);
-    }
-
-    return result;
-  }
-
-  async invokeExternal(input: InvokeExternalInput): Promise<TimelineItem> {
-    const items = this.#events.get(input.item.channelId) ?? [];
-    const eventId = `${items.length + 1}`;
-    const storedItem: TimelineItem = {
-      ...input.item,
-      eventId,
-      transactionHash: `mock-${input.item.channelId}-${eventId}`,
-      optimistic: false,
-    };
-
-    this.#events.set(input.item.channelId, [...items, storedItem]);
-    return storedItem;
-  }
-
-  async getEventCount(channelId: string): Promise<number> {
-    return this.#events.get(channelId)?.length ?? 0;
-  }
-
-  async getEvent(channelId: string, index: number): Promise<TimelineItem> {
-    const item = this.#events.get(channelId)?.[index];
-    if (!item) {
-      throw new Error(`Timeline event ${index} not found for channel ${channelId}`);
-    }
-    return item;
-  }
-
-  async getTimeline(channelId: string): Promise<TimelineItem[]> {
-    return sortTimeline(this.#events.get(channelId) ?? []);
-  }
-}
-
 export class VeilClient {
   readonly privacyPoolAddress: string;
   readonly helperAddress: string;
@@ -92,7 +37,7 @@ export class VeilClient {
     this.rpcUrl = config.rpcUrl;
     this.#now = config.now ?? (() => Date.now());
     this.encryption = config.encryption ?? new MockEncryptionAdapter();
-    this.transport = config.transport ?? new InMemoryVeilTransport(this.#now);
+    this.transport = config.transport ?? new MockPrivacyPoolAdapter(this.#now);
     this.cacheKey = `${this.privacyPoolAddress}:${this.helperAddress}:${this.rpcUrl}`;
   }
 
