@@ -96,6 +96,7 @@ export class DirectHelperTransport implements VeilTransport {
   readonly #helperAddress: string;
   readonly #account: StarknetAccountLike | undefined;
   readonly #provider: StarknetProviderLike | undefined;
+  readonly #sessionAccountResolver: DirectHelperTransportConfig["sessionAccountResolver"];
   readonly #now: () => number;
   readonly #channelIdEncoder: (channelId: string) => string;
 
@@ -103,6 +104,7 @@ export class DirectHelperTransport implements VeilTransport {
     this.#helperAddress = config.helperAddress;
     this.#account = config.account;
     this.#provider = config.provider;
+    this.#sessionAccountResolver = config.sessionAccountResolver;
     this.#now = config.now ?? (() => Date.now());
     this.#channelIdEncoder = config.channelIdEncoder ?? channelIdToFelt;
   }
@@ -120,7 +122,8 @@ export class DirectHelperTransport implements VeilTransport {
   }
 
   async invokeExternal(input: InvokeExternalInput): Promise<TimelineItem> {
-    if (!this.#account) {
+    const account = this.#sessionAccountResolver?.(input.session) ?? this.#account;
+    if (!account) {
       throw new Error("DirectHelperTransport needs a Starknet account to submit helper transactions.");
     }
 
@@ -135,7 +138,7 @@ export class DirectHelperTransport implements VeilTransport {
       toFeltString(input.item.payloadHash, "payload_hash"),
     ];
 
-    const result = await this.#account.execute([
+    const result = await account.execute([
       createHelperCall(input.helperAddress || this.#helperAddress, "invoke", calldata),
     ]);
     const transactionHash = extractTransactionHash(result);

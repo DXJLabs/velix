@@ -13,6 +13,10 @@
     "./hooks": {
       "types": "./dist/hooks.d.ts",
       "import": "./dist/hooks.js"
+    },
+    "./session-key-hooks": {
+      "types": "./dist/session-key-hooks.d.ts",
+      "import": "./dist/session-key-hooks.js"
     }
   },
   "scripts": {

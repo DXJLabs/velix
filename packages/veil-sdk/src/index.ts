@@ -1,6 +1,12 @@
 export { VeilClient } from "./client";
 export { DirectHelperTransport, channelIdToFelt } from "./direct_helper_transport";
 export { MockEncryptionAdapter, hashToFelt } from "./encryption";
+export { VeilSessionError, VeilSessionKeyManager } from "./session-key-manager";
+export {
+  BrowserSessionKeyStore,
+  MemorySessionKeyStore,
+  createDefaultSessionKeyStore,
+} from "./session-key-store";
 export {
   MockPrivacyPoolAdapter,
   RealPrivacyPoolAdapter,
@@ -70,6 +76,26 @@ export {
   type VeilTimelinePayload,
   type VeilTransport,
 } from "./types";
+export {
+  VEIL_SESSION_DURATION_MS,
+  VEIL_SESSION_PERMISSIONS,
+  type CreateVeilSessionInput,
+  type RefreshVeilSessionInput,
+  type VeilSession,
+  type VeilSessionAuthorization,
+  type VeilSessionAuthorizationChallenge,
+  type VeilSessionAuthorizationResult,
+  type VeilSessionAuthorizer,
+  type VeilSessionDuration,
+  type VeilSessionErrorCode,
+  type VeilSessionErrorDetails,
+  type VeilSessionKeyManagerConfig,
+  type VeilSessionKeyStore,
+  type VeilSessionManagerLike,
+  type VeilSessionPermission,
+  type VeilSessionPermissionCheck,
+  type VeilSessionRecord,
+} from "./session-key-types";
 export type {
   DecodedEventCategory,
   DecodedEventField,

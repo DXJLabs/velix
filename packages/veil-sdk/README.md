@@ -50,6 +50,47 @@ const sendMessage = useSendMessage(veil, "rights-transfer");
 await sendMessage({ message: "Ready to settle.", sender: "you" });
 ```
 
+## Session Keys
+
+VEIL supports session-key authorization so users do not approve every message, offer, memo, or escrow update with the main wallet.
+
+```ts
+import {
+  BrowserSessionKeyStore,
+  DirectHelperTransport,
+  VeilClient,
+  VeilSessionKeyManager,
+} from "@dxjlabs/veil-sdk";
+
+const sessionManager = new VeilSessionKeyManager({
+  store: new BrowserSessionKeyStore(),
+  authorizer: privySessionAuthorizer,
+});
+
+await sessionManager.createSession({
+  duration: "12h",
+  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "OFFER_ACCEPT", "MEMO_SEND", "TIMELINE_APPEND"],
+  channelIds: ["rights-transfer"],
+  walletAddress: wallet.address,
+  chainId: "SN_SEPOLIA",
+});
+
+const veil = new VeilClient({
+  privacyPoolAddress: process.env.VITE_PRIVACY_POOL_ADDRESS!,
+  helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
+  rpcUrl: process.env.VITE_STARKNET_RPC_URL!,
+  sessionManager,
+  requireSession: true,
+  transport: new DirectHelperTransport({
+    helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
+    provider,
+    sessionAccountResolver: () => privySessionAccount,
+  }),
+});
+```
+
+Session metadata is stored in IndexedDB by `BrowserSessionKeyStore`. The SDK never stores plaintext private keys.
+
 ## Privy Integration
 
 Privy belongs in the frontend wallet/auth layer. Use Privy to connect the wallet and sign the transaction that calls Privacy Pool. The SDK prepares encrypted timeline payloads and the `InvokeExternal` calldata for `VeilChannelHelper`.

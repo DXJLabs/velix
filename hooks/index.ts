@@ -1,9 +1,17 @@
 export {
+  formatSessionExpiresIn,
   getTimelineKey,
+  getVeilSessionKey,
   useChannelTimeline,
+  useCreateVeilSession,
   useCreateOffer,
   usePaymentMemo,
+  useRefreshVeilSession,
+  useRevokeVeilSession,
   useSendMessage,
+  useVeilSession,
   type TimelineKey,
   type UseChannelTimelineOptions,
+  type UseVeilSessionOptions,
+  type VeilSessionKey,
 } from "../packages/veil-sdk/src/hooks";

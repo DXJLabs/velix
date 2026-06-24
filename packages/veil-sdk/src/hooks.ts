@@ -2,6 +2,16 @@ import { useCallback } from "react";
 import useSWR, { mutate } from "swr";
 
 import type { VeilClient } from "./client";
+export {
+  formatSessionExpiresIn,
+  getVeilSessionKey,
+  useCreateVeilSession,
+  useRefreshVeilSession,
+  useRevokeVeilSession,
+  useVeilSession,
+  type UseVeilSessionOptions,
+  type VeilSessionKey,
+} from "./session-key-hooks";
 import { createOptimisticTimelineItem } from "./timeline";
 import {
   VeilEventType,

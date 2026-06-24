@@ -1,3 +1,5 @@
+import type { VeilSession, VeilSessionManagerLike } from "./session-key-types";
+
 export enum VeilEventType {
   CHAT = 1,
   PAYMENT_MEMO = 2,
@@ -93,6 +95,8 @@ export interface VeilClientConfig {
   rpcUrl: string;
   encryption?: EncryptionAdapter;
   transport?: VeilTransport;
+  sessionManager?: VeilSessionManagerLike;
+  requireSession?: boolean;
   now?: () => number;
 }
 
@@ -101,6 +105,7 @@ export interface InvokeExternalInput {
   helperAddress: string;
   calldata: readonly string[];
   item: TimelineItem;
+  session?: VeilSession;
 }
 
 export interface VeilTransport {
@@ -141,6 +146,7 @@ export interface DirectHelperTransportConfig {
   helperAddress: string;
   account?: StarknetAccountLike;
   provider?: StarknetProviderLike;
+  sessionAccountResolver?: (session: VeilSession | undefined) => StarknetAccountLike | undefined;
   now?: () => number;
   channelIdEncoder?: (channelId: string) => string;
 }

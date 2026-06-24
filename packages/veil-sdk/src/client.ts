@@ -1,5 +1,6 @@
 import { MockEncryptionAdapter } from "./encryption";
 import { MockPrivacyPoolAdapter } from "./privacy_pool_adapter";
+import type { VeilSessionPermission } from "./session-key-types";
 import { encodeInvokeCalldata } from "./timeline";
 import {
   VeilEventType,
@@ -30,6 +31,8 @@ export class VeilClient {
   readonly transport: VeilTransport;
   readonly cacheKey: string;
   readonly #now: () => number;
+  readonly #sessionManager: VeilClientConfig["sessionManager"];
+  readonly #requireSession: boolean;
 
   constructor(config: VeilClientConfig) {
     this.privacyPoolAddress = config.privacyPoolAddress;
@@ -38,6 +41,8 @@ export class VeilClient {
     this.#now = config.now ?? (() => Date.now());
     this.encryption = config.encryption ?? new MockEncryptionAdapter();
     this.transport = config.transport ?? new MockPrivacyPoolAdapter(this.#now);
+    this.#sessionManager = config.sessionManager;
+    this.#requireSession = config.requireSession ?? false;
     this.cacheKey = `${this.privacyPoolAddress}:${this.helperAddress}:${this.rpcUrl}`;
   }
 
@@ -212,6 +217,7 @@ export class VeilClient {
     channelId: string,
     payload: VeilTimelinePayload,
   ): Promise<TimelineItem> {
+    const session = await this.#requirePermission(this.#permissionForEvent(eventType), channelId);
     const encrypted = await this.encryption.encryptPayload(payload);
     const item: TimelineItem = {
       eventId: "0",
@@ -223,17 +229,60 @@ export class VeilClient {
       payload,
     };
     const calldata = encodeInvokeCalldata(item);
-
-    return this.transport.invokeExternal({
+    const invokeInput: InvokeExternalInput = {
       privacyPoolAddress: this.privacyPoolAddress,
       helperAddress: this.helperAddress,
       calldata,
       item,
-    });
+    };
+    if (session) {
+      invokeInput.session = session;
+    }
+
+    return this.transport.invokeExternal(invokeInput);
   }
 
   async #withDecryptedPayload(item: TimelineItem): Promise<TimelineItem> {
     const payload = item.payload ?? (await this.encryption.decryptPayload(item));
     return payload ? { ...item, payload } : item;
+  }
+
+  #permissionForEvent(eventType: VeilEventType): VeilSessionPermission {
+    switch (eventType) {
+      case VeilEventType.CHAT:
+        return "MESSAGE_SEND";
+      case VeilEventType.PAYMENT_MEMO:
+        return "MEMO_SEND";
+      case VeilEventType.OFFER:
+      case VeilEventType.COUNTER_OFFER:
+        return "OFFER_CREATE";
+      case VeilEventType.ACCEPT_OFFER:
+      case VeilEventType.REJECT_OFFER:
+        return "OFFER_ACCEPT";
+      case VeilEventType.ESCROW_CREATED:
+        return "ESCROW_CREATE";
+      case VeilEventType.ESCROW_DEPOSITED:
+      case VeilEventType.ESCROW_SETTLED:
+      case VeilEventType.ESCROW_CANCELLED:
+        return "ESCROW_UPDATE";
+      case VeilEventType.PROOF_ATTACHED:
+      default:
+        return "TIMELINE_APPEND";
+    }
+  }
+
+  async #requirePermission(permission: VeilSessionPermission, channelId: string) {
+    if (this.#sessionManager) {
+      return this.#sessionManager.requirePermission(permission, {
+        channelId,
+        action: permission,
+      });
+    }
+
+    if (this.#requireSession) {
+      throw new Error("VEIL session manager is required for this client.");
+    }
+
+    return undefined;
   }
 }
