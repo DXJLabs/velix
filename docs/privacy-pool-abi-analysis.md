@@ -26,7 +26,7 @@ flowchart TD
   A["VEIL SDK encrypted payload"] --> B["ClientAction.InvokeExternal"]
   B --> C["Privacy Pool"]
   C --> D["ServerAction.Invoke"]
-  D --> E["VeilChannelHelper.invoke"]
+  D --> E["VeilChannelHelper.privacy_invoke"]
 ```
 
 ## ABI Markers Added To SDK

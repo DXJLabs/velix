@@ -90,10 +90,10 @@ ClientAction::InvokeExternal(input)
 The external helper must expose:
 
 ```text
-invoke(calldata: Span<felt252>) -> Span<OpenNoteDeposit>
+privacy_invoke(calldata: Span<felt252>) -> Span<OpenNoteDeposit>
 ```
 
-VEIL's `VeilChannelHelper.invoke` matches this shape and returns an empty deposit array for MVP.
+This matches the helper pattern seen in Privacy Pool-compatible examples such as `VesuLendingHelper.privacy_invoke`. VEIL's `VeilChannelHelper.privacy_invoke` matches this shape and returns an empty deposit array for MVP. `VeilChannelHelper.invoke` remains as a legacy/direct-call alias for older local demos.
 
 The README also mentions `deposit_to_open_note`, which fills a pre-created open note and emits `OpenNoteDeposited`. VEIL does not need this for chat-only metadata, but payment/escrow settlement flows should account for it later.
 

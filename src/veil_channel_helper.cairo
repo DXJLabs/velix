@@ -31,6 +31,9 @@ pub struct VeilTimelineEvent {
 
 #[starknet::interface]
 pub trait IVeilChannelHelper<TContractState> {
+    fn privacy_invoke(
+        ref self: TContractState, calldata: Span<felt252>,
+    ) -> Span<OpenNoteDeposit>;
     fn invoke(ref self: TContractState, calldata: Span<felt252>) -> Span<OpenNoteDeposit>;
     fn get_event_count(self: @TContractState, channel_id: felt252) -> u64;
     fn get_event(self: @TContractState, channel_id: felt252, index: u64) -> VeilTimelineEvent;
@@ -73,7 +76,30 @@ pub mod VeilChannelHelper {
 
     #[abi(embed_v0)]
     impl VeilChannelHelperImpl of IVeilChannelHelper<ContractState> {
+        fn privacy_invoke(
+            ref self: ContractState, calldata: Span<felt252>,
+        ) -> Span<OpenNoteDeposit> {
+            self.store_timeline_event(calldata)
+        }
+
         fn invoke(ref self: ContractState, calldata: Span<felt252>) -> Span<OpenNoteDeposit> {
+            self.store_timeline_event(calldata)
+        }
+
+        fn get_event_count(self: @ContractState, channel_id: felt252) -> u64 {
+            self.event_count.read(channel_id)
+        }
+
+        fn get_event(self: @ContractState, channel_id: felt252, index: u64) -> VeilTimelineEvent {
+            self.events.read((channel_id, index))
+        }
+    }
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn store_timeline_event(
+            ref self: ContractState, calldata: Span<felt252>,
+        ) -> Span<OpenNoteDeposit> {
             assert(calldata.len() == 4, 'Invalid calldata');
 
             let channel_id = *calldata.at(0);
@@ -105,14 +131,6 @@ pub mod VeilChannelHelper {
                 );
 
             ArrayTrait::<OpenNoteDeposit>::new().span()
-        }
-
-        fn get_event_count(self: @ContractState, channel_id: felt252) -> u64 {
-            self.event_count.read(channel_id)
-        }
-
-        fn get_event(self: @ContractState, channel_id: felt252, index: u64) -> VeilTimelineEvent {
-            self.events.read((channel_id, index))
         }
     }
 

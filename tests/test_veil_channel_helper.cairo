@@ -35,6 +35,18 @@ fn store_event(
     assert(deposits.len() == 0, 'Expected empty deposits');
 }
 
+fn store_event_privacy(
+    dispatcher: IVeilChannelHelperDispatcher,
+    channel_id: felt252,
+    event_type: felt252,
+    encrypted_payload: felt252,
+    payload_hash: felt252,
+) {
+    let calldata = make_calldata(channel_id, event_type, encrypted_payload, payload_hash);
+    let deposits = dispatcher.privacy_invoke(calldata.span());
+    assert(deposits.len() == 0, 'Expected empty deposits');
+}
+
 fn assert_event_eq(
     event: VeilTimelineEvent,
     event_id: felt252,
@@ -60,6 +72,18 @@ fn store_chat_event() {
     assert(dispatcher.get_event_count(1001) == 1, 'Invalid count');
     let event = dispatcher.get_event(1001, 0);
     assert_event_eq(event, 1, 1001, EVENT_CHAT, 111, 222);
+}
+
+#[test]
+fn store_chat_event_via_privacy_invoke() {
+    let contract_address = deploy_contract();
+    let dispatcher = IVeilChannelHelperDispatcher { contract_address };
+
+    store_event_privacy(dispatcher, 1010, EVENT_CHAT, 112, 223);
+
+    assert(dispatcher.get_event_count(1010) == 1, 'Invalid count');
+    let event = dispatcher.get_event(1010, 0);
+    assert_event_eq(event, 1, 1010, EVENT_CHAT, 112, 223);
 }
 
 #[test]

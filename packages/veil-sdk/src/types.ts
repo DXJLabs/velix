@@ -149,6 +149,7 @@ export interface StarknetProviderLike {
 
 export interface DirectHelperTransportConfig {
   helperAddress: string;
+  entrypoint?: string;
   account?: StarknetAccountLike;
   provider?: StarknetProviderLike;
   sessionAccountResolver?: (session: VeilSession | undefined) => StarknetAccountLike | undefined;

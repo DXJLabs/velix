@@ -99,7 +99,7 @@ Production apps should provide a custom `transport` that submits transactions th
 
 ## Onchain Chat Testnet Mode
 
-VEIL also ships a direct helper transport for testnet demos. This writes encrypted timeline references directly to `VeilChannelHelper.invoke` and returns a Starknet transaction hash.
+VEIL also ships a direct helper transport for testnet demos. This writes encrypted timeline references directly to `VeilChannelHelper.privacy_invoke` and returns a Starknet transaction hash.
 
 This proves the channel chat is blockchain-backed, but it is not the final Privacy Pool anonymity path.
 

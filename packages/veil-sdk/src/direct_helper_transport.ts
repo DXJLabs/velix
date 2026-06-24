@@ -94,6 +94,7 @@ export function channelIdToFelt(channelId: string): string {
 
 export class DirectHelperTransport implements VeilTransport {
   readonly #helperAddress: string;
+  readonly #entrypoint: string;
   readonly #account: StarknetAccountLike | undefined;
   readonly #provider: StarknetProviderLike | undefined;
   readonly #sessionAccountResolver: DirectHelperTransportConfig["sessionAccountResolver"];
@@ -102,6 +103,7 @@ export class DirectHelperTransport implements VeilTransport {
 
   constructor(config: DirectHelperTransportConfig) {
     this.#helperAddress = config.helperAddress;
+    this.#entrypoint = config.entrypoint ?? "privacy_invoke";
     this.#account = config.account;
     this.#provider = config.provider;
     this.#sessionAccountResolver = config.sessionAccountResolver;
@@ -139,7 +141,7 @@ export class DirectHelperTransport implements VeilTransport {
     ];
 
     const result = await account.execute([
-      createHelperCall(input.helperAddress || this.#helperAddress, "invoke", calldata),
+      createHelperCall(input.helperAddress || this.#helperAddress, this.#entrypoint, calldata),
     ]);
     const transactionHash = extractTransactionHash(result);
     const item: TimelineItem = {

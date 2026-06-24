@@ -50,7 +50,7 @@ VEIL is not rebuilding Privacy Pool. VEIL is a messaging, negotiation, memo, and
 `DirectHelperTransport`
 
 - Testnet onchain write path.
-- Calls `VeilChannelHelper.invoke` through a connected Starknet account.
+- Calls `VeilChannelHelper.privacy_invoke` through a connected Starknet account.
 - Returns a transaction hash for chat, offer, memo, escrow, and proof events.
 - Does not claim Privacy Pool anonymity because it bypasses `InvokeExternal`.
 

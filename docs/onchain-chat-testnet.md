@@ -10,7 +10,7 @@ This is not the final Privacy Pool path. It is the fast, honest testnet path whi
 
 - `VeilChannelHelper` stores timeline events onchain by `channel_id`.
 - `VeilClient.sendMessage()` creates a chat payload, encrypts it through the configured adapter, and builds helper calldata with an encrypted payload reference.
-- `DirectHelperTransport` submits a wallet transaction to `VeilChannelHelper.invoke`.
+- `DirectHelperTransport` submits a wallet transaction to `VeilChannelHelper.privacy_invoke`.
 - The transaction returns a Starknet transaction hash.
 - The frontend can read `get_event_count` and `get_event` from the helper contract.
 - `ChannelEncryptionAdapter` can encrypt payloads with AES-GCM so only channel-key holders can decrypt the ciphertext envelope.
@@ -32,7 +32,7 @@ flowchart TD
   A["User sends chat"] --> B["VEIL SDK encrypts payload"]
   B --> C["Build helper calldata"]
   C --> D["Wallet signs transaction"]
-  D --> E["VeilChannelHelper.invoke"]
+  D --> E["VeilChannelHelper.privacy_invoke"]
   E --> F["TimelineEventStored onchain"]
 ```
 
@@ -43,7 +43,7 @@ flowchart TD
   A["User sends chat"] --> B["VEIL SDK encrypts payload"]
   B --> C["Privacy Pool client action"]
   C --> D["InvokeExternal"]
-  D --> E["VeilChannelHelper.invoke"]
+  D --> E["VeilChannelHelper.privacy_invoke"]
   E --> F["TimelineEventStored onchain"]
 ```
 

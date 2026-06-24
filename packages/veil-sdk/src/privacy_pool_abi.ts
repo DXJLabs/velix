@@ -243,7 +243,8 @@ export const PRIVACY_POOL_ABI_CAPABILITIES = {
 
 export const PRIVACY_POOL_SOURCE_CONSTRAINTS = {
   isAccountContract: true,
-  helperEntrypoint: "invoke",
+  helperEntrypoint: "privacy_invoke",
+  legacyHelperEntrypoint: "invoke",
   invokeEntrypointSelectorConstant: "INVOKE_SELECTOR",
   invokeExternalReturns: "Span<OpenNoteDeposit>",
   applyActionsRequiresProofFacts: true,
