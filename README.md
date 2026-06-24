@@ -24,6 +24,16 @@ After config or Tailwind changes, restart `npm run dev` so Vite reloads the Tail
 
 For this lightweight prototype, running from `/mnt/c/Users/frend/Veilc` is fine. If the app grows larger, copying it into the WSL filesystem, for example `~/Veilc`, will usually make installs and dev server file watching faster.
 
+## Environment
+
+Copy `.env.example` to `.env.local` before wiring wallet and contract calls:
+
+```bash
+cp .env.example .env.local
+```
+
+`VITE_PRIVY_APP_ID` is for the Privy frontend SDK. Contract addresses and RPC URL are public frontend config, not secrets.
+
 ## Build
 
 ```bash
