@@ -32,18 +32,22 @@ let activeFeedFilter = "all";
 let toastTimer;
 const demoChannelId = "rights-transfer";
 const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
+const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "";
+const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
+const escrowAddress = import.meta.env.VITE_VEIL_ESCROW_ADDRESS || "";
+const demoCounterpartyAddress = import.meta.env.VITE_DEMO_COUNTERPARTY_ADDRESS || "";
 const directHelperWallet = globalThis.window?.veilDemoWallet;
 const directHelperTransport =
   timelineMode === "direct-helper" && directHelperWallet?.account && directHelperWallet?.provider
     ? new DirectHelperTransport({
-        helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "mock-veil-helper",
+        helperAddress: helperAddress || "mock-veil-helper",
         account: directHelperWallet.account,
         provider: directHelperWallet.provider,
       })
     : undefined;
 const veilClient = new VeilClient({
-  privacyPoolAddress: import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool",
-  helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "mock-veil-helper",
+  privacyPoolAddress: privacyPoolAddress || "mock-privacy-pool",
+  helperAddress: helperAddress || "mock-veil-helper",
   rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc",
   ...(directHelperTransport ? { transport: directHelperTransport } : {}),
 });
@@ -53,8 +57,8 @@ const veilClient = new VeilClient({
 // Privacy Pool transactions yet.
 const researchAdapter = new ResearchPrivacyPoolAdapter({
   rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "",
-  privacyPoolAddress: import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "",
-  helperAddress: import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "",
+  privacyPoolAddress,
+  helperAddress,
 });
 
 function refreshIcons() {
@@ -352,6 +356,244 @@ function shortFelt(value) {
   return `${text.slice(0, 10)}...${text.slice(-6)}`;
 }
 
+function proofModeLabel() {
+  if (directHelperTransport) return "Direct helper testnet";
+  if (timelineMode === "direct-helper") return "Direct helper not connected";
+  return "Mock proof";
+}
+
+function explorerTxUrl(txHash) {
+  return txHash && String(txHash).startsWith("0x")
+    ? `https://sepolia.voyager.online/tx/${txHash}`
+    : "";
+}
+
+function explorerContractUrl(address) {
+  return address && String(address).startsWith("0x")
+    ? `https://sepolia.voyager.online/contract/${address}`
+    : "";
+}
+
+function setText(selector, value) {
+  const element = document.querySelector(selector);
+  if (element) {
+    element.textContent = value;
+  }
+}
+
+function renderProofStatus() {
+  setText("#proof-mode", proofModeLabel());
+  setText("#proof-helper-address", helperAddress || "not configured");
+  setText("#proof-escrow-address", escrowAddress || "optional for timeline proof");
+  setText("#proof-counterparty-address", demoCounterpartyAddress || "seller signer required for escrow contract");
+
+  const helperLink = document.querySelector("#proof-helper-link");
+  if (helperLink) {
+    const url = explorerContractUrl(helperAddress);
+    helperLink.href = url || "#";
+    helperLink.classList.toggle("pointer-events-none", !url);
+    helperLink.classList.toggle("opacity-40", !url);
+  }
+
+  const escrowLink = document.querySelector("#proof-escrow-link");
+  if (escrowLink) {
+    const url = explorerContractUrl(escrowAddress);
+    escrowLink.href = url || "#";
+    escrowLink.classList.toggle("pointer-events-none", !url);
+    escrowLink.classList.toggle("opacity-40", !url);
+  }
+
+  const note = document.querySelector("#proof-mode-note");
+  if (note) {
+    note.textContent = directHelperTransport
+      ? "Events submitted from this UX will call VeilChannelHelper.privacy_invoke on Sepolia."
+      : "This UX runs the same A/B proof locally. Set VITE_VEIL_TIMELINE_MODE=direct-helper and provide a wallet adapter to submit onchain.";
+  }
+}
+
+function renderProofLog(entries) {
+  const log = document.querySelector("#proof-log");
+  if (!log) return;
+  if (entries.length === 0) {
+    log.innerHTML = `<p class="text-sm text-slate-500">Run the A/B proof to collect timeline transaction hashes here.</p>`;
+    return;
+  }
+
+  log.innerHTML = entries.map((entry, index) => {
+    const url = explorerTxUrl(entry.transactionHash);
+    return `
+      <article class="grid gap-1 rounded-md border border-slate-800 bg-slate-950/60 p-2">
+        <div class="flex items-center justify-between gap-2">
+          <strong class="text-xs text-white">${index + 1}. ${escapeHtml(entry.label)}</strong>
+          <span class="rounded-full border border-emerald-200/25 bg-emerald-200/10 px-2 py-0.5 text-[0.68rem] font-black text-emerald-100">${escapeHtml(entry.mode)}</span>
+        </div>
+        ${
+          url
+            ? `<a class="break-all text-xs text-emerald-200" href="${url}" target="_blank" rel="noreferrer">${escapeHtml(entry.transactionHash)}</a>`
+            : `<code class="break-all text-xs text-slate-500">${escapeHtml(entry.transactionHash || "pending")}</code>`
+        }
+      </article>
+    `;
+  }).join("");
+}
+
+function setProofRunning(isRunning) {
+  const button = document.querySelector("#run-proof-flow");
+  if (!button) return;
+  button.disabled = isRunning;
+  button.classList.toggle("opacity-60", isRunning);
+  button.querySelector("span").textContent = isRunning ? "Running proof..." : "Run A/B Proof";
+}
+
+async function runProofStep(label, action, entries) {
+  const item = await action();
+  entries.push({
+    label,
+    transactionHash: item.transactionHash || "",
+    mode: directHelperTransport ? "Sepolia" : "Mock",
+  });
+  renderProofLog(entries);
+  await renderTimeline({ scrollToBottom: true });
+  return item;
+}
+
+async function runAbProofFlow() {
+  const entries = [];
+  setProofRunning(true);
+  renderProofLog(entries);
+  setFeedFilter("all");
+  setPage("channel-detail", { resetScroll: false });
+  setChannelTab("timeline");
+
+  try {
+    await runProofStep(
+      "Alice chat",
+      () => veilClient.sendMessage({
+        channelId: demoChannelId,
+        sender: "you",
+        message: "Hi Bob, can we settle the rights package around 450 STRK with proof attached?",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Bob replies",
+      () => veilClient.sendMessage({
+        channelId: demoChannelId,
+        sender: "seller",
+        message: "I can start at 500 STRK if the metadata memo is included.",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Bob creates offer",
+      () => veilClient.createOffer({
+        channelId: demoChannelId,
+        amount: "500",
+        currency: "STRK",
+        terms: "Digital rights package with metadata memo.",
+        sender: "seller",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Alice counters",
+      () => veilClient.counterOffer({
+        channelId: demoChannelId,
+        amount: "450",
+        currency: "STRK",
+        terms: "Private settlement at 450 STRK with proof reference.",
+        sender: "you",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Bob accepts",
+      () => veilClient.acceptOffer({
+        channelId: demoChannelId,
+        offerId: "450 STRK",
+        reason: "Accepted. Move to escrow.",
+        sender: "seller",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Escrow created",
+      () => veilClient.recordEscrowStatus({
+        channelId: demoChannelId,
+        status: "created",
+        details: escrowAddress
+          ? `Escrow contract ${shortFelt(escrowAddress)} linked to this channel.`
+          : "Escrow created marker appended to channel timeline.",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Buyer deposit confirmed",
+      () => veilClient.recordEscrowStatus({
+        channelId: demoChannelId,
+        status: "deposited",
+        details: "Alice buyer deposit confirmed.",
+        sender: "you",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Seller deposit confirmed",
+      () => veilClient.recordEscrowStatus({
+        channelId: demoChannelId,
+        status: "deposited",
+        details: "Bob seller deposit confirmed.",
+        sender: "seller",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Payment memo attached",
+      () => veilClient.sendPaymentMemo({
+        channelId: demoChannelId,
+        memo: "Settlement memo: rights transfer closed at 450 STRK.",
+        amount: "450 STRK",
+        mode: "Shield",
+        sender: "you",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Escrow settled",
+      () => veilClient.recordEscrowStatus({
+        channelId: demoChannelId,
+        status: "settled",
+        details: "Escrow settled after both confirmations.",
+        sender: "system",
+      }),
+      entries,
+    );
+    await runProofStep(
+      "Proof attached",
+      () => veilClient.attachProof({
+        channelId: demoChannelId,
+        proofRef: `proof://rights-transfer/testnet-${Date.now()}`,
+        label: "A/B channel proof",
+        sender: "system",
+      }),
+      entries,
+    );
+
+    document.querySelector("#deal-status").textContent = "Settled";
+    toggleClasses(
+      document.querySelector("#deal-status"),
+      ["border-emerald-200/40", "bg-emerald-200/10", "text-emerald-100"],
+      ["border-amber-300/35", "bg-amber-300/10", "text-amber-200"],
+    );
+    document.querySelector("#current-offer").textContent = "450 STRK settled";
+    showToast(directHelperTransport ? "A/B proof submitted to Sepolia helper." : "A/B proof replayed in local UX mode.");
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "Unable to run A/B proof.");
+  } finally {
+    setProofRunning(false);
+  }
+}
+
 function renderResearchField(field) {
   const value = field.values ? field.values.join(", ") : field.value;
   return `
@@ -629,6 +871,8 @@ document.querySelector("[data-attach-message]").addEventListener("click", () => 
   showToast("Attach memo or proof from the channel actions.");
 });
 
+document.querySelector("#run-proof-flow").addEventListener("click", runAbProofFlow);
+
 document.querySelector("#message-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = event.currentTarget.elements.message;
@@ -669,6 +913,7 @@ window.addEventListener("load", async () => {
   setPage("home", { resetScroll: false });
   setChannelTab("timeline");
   setFeedFilter("all");
+  renderProofStatus();
   if (directHelperTransport) {
     await renderTimeline();
     showToast("Direct helper mode: channel events submit onchain.");
