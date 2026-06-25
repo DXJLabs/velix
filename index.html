@@ -2,865 +2,312 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>VEIL</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     <script type="module" src="/app.js"></script>
   </head>
-  <body class="min-w-0 overflow-x-hidden bg-[#06080b] font-sans text-slate-100 antialiased">
-    <div class="pointer-events-none fixed inset-0 -z-10 bg-[linear-gradient(180deg,rgba(184,231,209,.06),transparent_22rem),linear-gradient(135deg,#06080b_0%,#0a0d12_52%,#07090d_100%)]"></div>
-    <div class="bg-grid pointer-events-none fixed inset-0 -z-10"></div>
-
-    <div class="min-h-screen min-w-0 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside class="sticky top-0 hidden h-screen flex-col border-r border-slate-800/90 bg-black/30 p-4 backdrop-blur-xl lg:flex">
-        <div class="flex min-w-0 items-center gap-3">
-          <div class="grid size-10 place-items-center rounded-lg border border-emerald-200/35 bg-emerald-200/10 font-black text-emerald-200">V</div>
-          <div class="min-w-0">
-            <p class="font-black leading-tight">VEIL</p>
-            <p class="text-sm leading-snug text-slate-400">Private settlement channels</p>
-          </div>
-        </div>
-
-        <nav class="mt-8 grid gap-2" aria-label="Primary navigation">
-          <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-white transition active" type="button" data-page="home">
-            <i data-lucide="layout-dashboard" class="size-4"></i>
-            <span>Home</span>
-          </button>
-          <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-slate-400 transition hover:bg-white/5 hover:text-white" type="button" data-page="channels">
-            <i data-lucide="messages-square" class="size-4"></i>
-            <span>Channels</span>
-          </button>
-          <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-slate-400 transition hover:bg-white/5 hover:text-white" type="button" data-page="rewards">
-            <i data-lucide="badge-check" class="size-4"></i>
-            <span>Rewards</span>
-          </button>
-          <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-slate-400 transition hover:bg-white/5 hover:text-white" type="button" data-page="developer">
-            <i data-lucide="code-2" class="size-4"></i>
-            <span>Developer</span>
-          </button>
-          <button class="nav-item flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-slate-400 transition hover:bg-white/5 hover:text-white" type="button" data-page="settings">
-            <i data-lucide="settings" class="size-4"></i>
-            <span>Settings</span>
-          </button>
-        </nav>
-
-        <div class="mt-auto flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-          <span class="size-2.5 rounded-full bg-emerald-300 shadow-[0_0_0_.35rem_rgba(110,231,183,.12)]"></span>
-          <div>
-            <p class="text-sm font-bold">Assistant online</p>
-            <p class="text-xs text-slate-400">3 deal insights ready</p>
-          </div>
-        </div>
-      </aside>
-
-      <main class="min-w-0 px-3 pb-40 sm:px-5 lg:px-6 lg:pb-6">
-        <header class="sticky top-0 z-30 -mx-3 mb-4 flex min-h-[4.5rem] items-center justify-between gap-4 border-b border-slate-800/90 bg-[#06080b]/85 px-3 backdrop-blur-xl sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
-          <div class="min-w-0">
-            <p id="page-eyebrow" class="text-xs font-bold uppercase tracking-wide text-slate-400">Command center</p>
-            <h1 id="page-title" class="truncate text-xl font-black text-white">Home</h1>
-          </div>
-          <div class="flex items-center gap-2">
-            <button class="grid size-10 place-items-center rounded-lg border border-slate-700 bg-slate-900/70 text-white transition hover:border-emerald-200/40 hover:bg-white/5 active:scale-95" type="button" aria-label="Search">
-              <i data-lucide="search" class="size-4"></i>
-            </button>
-            <button class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 font-bold text-white transition hover:border-emerald-200/40 hover:bg-white/5 active:scale-95" type="button" data-page-trigger="channels">
-              <i data-lucide="plus" class="size-4"></i>
-              <span class="hidden sm:inline">New Channel</span>
-            </button>
-          </div>
-        </header>
-
-        <section class="page animate-page-enter" data-page-panel="home">
-          <section class="hero-sheen mb-4 grid min-w-0 gap-4 overflow-hidden rounded-lg border border-emerald-200/25 bg-slate-900/80 p-4 shadow-2xl sm:p-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,.75fr)] lg:items-center">
-            <div class="relative z-10 min-w-0">
-              <span class="inline-flex min-h-7 w-max items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 text-xs font-black text-emerald-100 animate-soft-pulse">Shield channel active</span>
-              <h2 class="mt-5 max-w-4xl text-3xl font-black leading-[1.05] text-white sm:text-5xl">Negotiate, escrow, pay, and settle inside one channel.</h2>
-              <p class="mt-4 max-w-2xl text-base leading-7 text-slate-300">VEIL keeps the deal, the conversation, the payment memo, and the proof in one private workspace.</p>
-              <button class="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 shadow-[0_14px_40px_rgba(110,231,183,.16)] transition hover:-translate-y-0.5 hover:bg-emerald-100 active:scale-95 sm:hidden" type="button" data-open-channel>
-                <i data-lucide="sparkles" class="size-4"></i>
-                <span>Open Assistant Brief</span>
+  <body class="bg-[#eef1f4] font-sans text-slate-950 antialiased">
+    <div class="mx-auto min-h-dvh w-full max-w-[44rem] bg-[#f8fafc] shadow-[0_0_0_1px_rgba(15,23,42,.06),0_24px_80px_rgba(15,23,42,.08)]">
+      <main class="relative min-h-dvh">
+        <section class="screen" data-screen="home">
+          <header class="sticky top-0 z-30 border-b border-slate-200 bg-[#f8fafc]/95 px-4 pb-3 pt-[calc(.75rem+env(safe-area-inset-top))] backdrop-blur">
+            <div class="flex items-center justify-between gap-3">
+              <button class="flex min-w-0 items-center gap-3 text-left" type="button" data-nav="home" aria-label="VEIL home">
+                <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white">V</span>
+                <span class="min-w-0">
+                  <span class="block text-base font-black leading-tight">VEIL</span>
+                  <span class="block text-xs font-semibold text-slate-500">Private deals</span>
+                </span>
               </button>
+              <div class="flex items-center gap-2">
+                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">Private Mode</span>
+                <button class="connect-button grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition active:scale-95" type="button" aria-label="Connect">
+                  <i data-lucide="wallet-cards" class="size-4"></i>
+                </button>
+              </div>
             </div>
-            <div class="relative z-10 grid gap-3 rounded-lg border border-emerald-200/25 bg-black/35 p-4">
-              <div class="flex items-center justify-between gap-3">
-                <span class="text-slate-400">Rights Transfer</span>
-                <strong class="text-3xl text-emerald-200">82%</strong>
+          </header>
+
+          <div class="space-y-5 px-4 pb-28 pt-5">
+            <section>
+              <p class="text-xs font-black uppercase tracking-wide text-slate-500">Today</p>
+              <h1 class="mt-1 text-2xl font-black tracking-tight text-slate-950">What needs attention?</h1>
+            </section>
+
+            <section class="space-y-2" aria-labelledby="continue-title">
+              <div class="flex items-center justify-between">
+                <h2 id="continue-title" class="text-sm font-black text-slate-700">Continue Conversation</h2>
+                <button class="text-sm font-black text-slate-950" type="button" data-open-channel="20260625">Open</button>
               </div>
-              <div class="grid gap-2 max-[560px]:grid-cols-1 min-[561px]:grid-cols-[1fr_1.8rem_1fr_1.8rem_1fr] min-[561px]:items-center">
-                <div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-                  <small class="text-slate-400">Buyer</small>
-                  <strong class="mt-1 block text-white">400</strong>
+              <button class="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition active:scale-[.99]" type="button" data-open-channel="20260625">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <strong class="truncate text-base">Rights Transfer</strong>
+                      <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[.68rem] font-black text-emerald-700">Private</span>
+                    </div>
+                    <p class="mt-1 truncate text-sm text-slate-500">Bob accepted 450 STRK. Escrow is ready.</p>
+                  </div>
+                  <div class="shrink-0 text-right">
+                    <time class="block text-xs font-bold text-slate-400">now</time>
+                    <span class="mt-2 inline-grid min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black text-white">2</span>
+                  </div>
                 </div>
-                <span class="flow-line"></span>
-                <div class="rounded-lg border border-emerald-200/40 bg-emerald-200/10 p-3">
-                  <small class="text-slate-400">Suggested</small>
-                  <strong class="mt-1 block text-white">450</strong>
-                </div>
-                <span class="flow-line"></span>
-                <div class="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-                  <small class="text-slate-400">Seller</small>
-                  <strong class="mt-1 block text-white">500</strong>
-                </div>
-              </div>
-              <button class="hidden min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 shadow-[0_14px_40px_rgba(110,231,183,.16)] transition hover:-translate-y-0.5 hover:bg-emerald-100 active:scale-95 sm:inline-flex" type="button" data-open-channel>
-                <i data-lucide="sparkles" class="size-4"></i>
-                <span>Open Assistant Brief</span>
               </button>
-            </div>
-          </section>
+            </section>
 
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article class="rounded-lg border border-slate-800 bg-slate-900/70 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/30">
-              <i data-lucide="messages-square" class="size-5 text-emerald-200"></i>
-              <span class="mt-5 block text-sm text-slate-400">Active Channels</span>
-              <strong class="mt-1 block text-3xl text-white">12</strong>
-              <small class="text-slate-400">4 with assistant actions</small>
-            </article>
-            <article class="rounded-lg border border-slate-800 bg-slate-900/70 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/30">
-              <i data-lucide="shield-check" class="size-5 text-emerald-200"></i>
-              <span class="mt-5 block text-sm text-slate-400">Pending Escrows</span>
-              <strong class="mt-1 block text-3xl text-white">5</strong>
-              <small class="text-slate-400">2 need confirmation</small>
-            </article>
-            <article class="rounded-lg border border-slate-800 bg-slate-900/70 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/30">
-              <i data-lucide="handshake" class="size-5 text-emerald-200"></i>
-              <span class="mt-5 block text-sm text-slate-400">Open Negotiations</span>
-              <strong class="mt-1 block text-3xl text-white">8</strong>
-              <small class="text-slate-400">82% avg deal probability</small>
-            </article>
-            <article class="rounded-lg border border-slate-800 bg-slate-900/70 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/30">
-              <i data-lucide="badge-check" class="size-5 text-emerald-200"></i>
-              <span class="mt-5 block text-sm text-slate-400">Reward Points</span>
-              <strong class="mt-1 block text-3xl text-white">2,840</strong>
-              <small class="text-slate-400">+126 this week</small>
-            </article>
-          </div>
-
-          <div class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,.65fr)]">
-            <section class="rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl">
-              <div class="mb-5 flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Assistant activity</p>
-                  <h2 class="mt-1 text-xl font-black text-white">Assistant helped close 3 deals this week.</h2>
-                </div>
-                <span class="inline-flex min-h-7 w-max items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 px-3 text-xs font-black text-emerald-100 animate-soft-pulse">Live analysis</span>
-              </div>
-              <div class="grid gap-1">
-                <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-800 py-3">
-                  <i data-lucide="sparkles" class="size-4 text-emerald-200"></i>
-                  <div class="min-w-0">
-                    <strong class="block text-white">Suggested Deal Available</strong>
-                    <span class="text-sm text-slate-400">Rights transfer channel is converging at 450 STRK.</span>
-                  </div>
-                  <button class="font-black text-emerald-200" type="button" data-open-channel>Open</button>
-                </div>
-                <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-800 py-3">
-                  <i data-lucide="clock-3" class="size-4 text-emerald-200"></i>
-                  <div class="min-w-0">
-                    <strong class="block text-white">Escrow Progress</strong>
-                    <span class="text-sm text-slate-400">Northline buyer deposit completed. Seller deposit pending.</span>
-                  </div>
-                  <button class="font-black text-emerald-200" type="button" data-open-channel>Review</button>
-                </div>
-                <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-3">
-                  <i data-lucide="file-check-2" class="size-4 text-emerald-200"></i>
-                  <div class="min-w-0">
-                    <strong class="block text-white">Proof Generated</strong>
-                    <span class="text-sm text-slate-400">Payment memo and settlement proof are verified.</span>
-                  </div>
-                  <button class="font-black text-emerald-200" type="button" data-page-trigger="channels">View</button>
-                </div>
+            <section class="space-y-2" aria-labelledby="pending-deals-title">
+              <h2 id="pending-deals-title" class="text-sm font-black text-slate-700">Pending Deals</h2>
+              <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <button class="attention-row" type="button" data-open-channel="20260625">
+                  <span class="min-w-0">
+                    <strong>Reply to counter offer</strong>
+                    <span>Rights Transfer</span>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-4 text-slate-400"></i>
+                </button>
+                <button class="attention-row border-t border-slate-100" type="button" data-open-channel="11209">
+                  <span class="min-w-0">
+                    <strong>Review offer</strong>
+                    <span>Design Milestone</span>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-4 text-slate-400"></i>
+                </button>
               </div>
             </section>
 
-            <section class="rounded-lg border border-slate-800 bg-slate-900/70 p-4 shadow-xl">
-              <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Recent transactions</p>
-              <h2 class="mt-1 text-lg font-black text-white">Settlement movement</h2>
-              <div class="mt-5 grid gap-1">
-                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-b border-slate-800 py-3">
-                  <span class="truncate">Rights transfer payment</span>
-                  <span>100 STRK</span>
-                  <strong>Shield</strong>
+            <section class="space-y-2" aria-labelledby="pending-escrows-title">
+              <h2 id="pending-escrows-title" class="text-sm font-black text-slate-700">Pending Escrows</h2>
+              <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <button class="attention-row" type="button" data-open-channel="20260625" data-tab-target="deal">
+                  <span class="min-w-0">
+                    <strong>Complete escrow</strong>
+                    <span>Buyer and seller confirmed</span>
+                  </span>
+                  <i data-lucide="shield-check" class="size-4 text-emerald-600"></i>
+                </button>
+              </div>
+            </section>
+
+            <section class="grid gap-3 sm:grid-cols-2">
+              <div class="space-y-2" aria-labelledby="payments-title">
+                <h2 id="payments-title" class="text-sm font-black text-slate-700">Recent Payments</h2>
+                <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="min-w-0 truncate text-sm font-bold">450 STRK</span>
+                    <span class="text-xs font-bold text-slate-400">pending</span>
+                  </div>
+                  <p class="mt-1 truncate text-sm text-slate-500">Rights Transfer settlement</p>
                 </div>
-                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-b border-slate-800 py-3">
-                  <span class="truncate">Design milestone memo</span>
-                  <span>42 STRK</span>
-                  <strong>Unshield</strong>
-                </div>
-                <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 py-3">
-                  <span class="truncate">Escrow release</span>
-                  <span>450 STRK</span>
-                  <strong>Shield</strong>
-                </div>
+              </div>
+              <div class="space-y-2" aria-labelledby="assistant-title">
+                <h2 id="assistant-title" class="text-sm font-black text-slate-700">Assistant Suggestions</h2>
+                <button class="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition active:scale-[.99]" type="button" data-open-channel="20260625" data-tab-target="assistant">
+                  <strong class="block text-sm">Send memo before release</strong>
+                  <span class="mt-1 block truncate text-sm text-slate-500">Keeps settlement context clear.</span>
+                </button>
               </div>
             </section>
           </div>
+        </section>
 
-          <section class="mt-3 rounded-lg border border-slate-800 bg-slate-900/70 p-4 shadow-xl">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Recent proofs</p>
-            <h2 class="mt-1 text-lg font-black text-white">Verified channel outcomes</h2>
-            <div class="mt-5 grid gap-3 md:grid-cols-3">
-              <div class="border-b border-slate-800 pb-4 md:border-b-0">
-                <span>Offer accepted</span>
-                <strong class="mt-3 block">Rights Transfer</strong>
-                <small class="mt-2 block text-slate-500">2 min ago</small>
-              </div>
-              <div class="border-b border-slate-800 pb-4 md:border-b-0">
-                <span>Escrow created</span>
-                <strong class="mt-3 block">Northline Goods</strong>
-                <small class="mt-2 block text-slate-500">18 min ago</small>
-              </div>
+        <section class="screen hidden" data-screen="channels">
+          <header class="sticky top-0 z-30 border-b border-slate-200 bg-[#f8fafc]/95 px-4 pb-3 pt-[calc(.75rem+env(safe-area-inset-top))] backdrop-blur">
+            <div class="flex items-center justify-between gap-3">
               <div>
-                <span>Payment sent</span>
-                <strong class="mt-3 block">Greylock Ops</strong>
-                <small class="mt-2 block text-slate-500">44 min ago</small>
+                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Channels</p>
+                <h1 class="text-2xl font-black tracking-tight">Conversations</h1>
               </div>
+              <button class="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition active:scale-95" type="button" aria-label="Create private deal" data-create-channel>
+                <i data-lucide="plus" class="size-4"></i>
+              </button>
             </div>
-          </section>
-        </section>
+            <label class="mt-3 flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-500 shadow-sm">
+              <i data-lucide="search" class="size-4"></i>
+              <input id="channel-search" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400" type="search" placeholder="Search conversations" autocomplete="off" />
+            </label>
+          </header>
 
-        <section class="page hidden animate-page-enter" data-page-panel="channels">
-          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Channels</p>
-              <h2 class="text-xl font-black text-white">Negotiation rooms</h2>
-            </div>
-            <div class="inline-flex w-full min-w-0 gap-1 overflow-x-auto rounded-lg border border-slate-800 bg-black/30 p-1 sm:w-auto">
-              <button class="rounded-md bg-emerald-200/10 px-3 py-2 text-sm font-bold text-white" type="button">All</button>
-              <button class="rounded-md px-3 py-2 text-sm font-bold text-slate-400" type="button">Shield</button>
-              <button class="rounded-md px-3 py-2 text-sm font-bold text-slate-400" type="button">Needs action</button>
-            </div>
-          </div>
-
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <article class="channel-card grid cursor-pointer gap-3 rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/40" tabindex="0" data-open-channel>
-              <div class="flex items-center justify-between gap-3">
-                <span class="rounded-full border border-emerald-200/35 bg-emerald-200/10 px-3 py-1 text-xs font-black text-emerald-100">Shield</span>
-                <span class="grid min-w-7 place-items-center rounded-full bg-emerald-200 px-2 py-1 text-xs font-black text-slate-950">4</span>
-              </div>
-              <h3 class="text-lg font-black text-white">Rights Transfer</h3>
-              <p class="text-sm leading-6 text-slate-400">Seller reduced to 450 STRK. Buyer is reviewing final terms.</p>
-              <div class="grid gap-1 text-sm text-slate-400">
-                <span>Offer: Counter sent</span>
-                <span>Escrow: Draft ready</span>
-              </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <span class="block h-full w-[68%] rounded-full bg-gradient-to-r from-emerald-300 to-indigo-300 animate-grow-bar"></span>
-              </div>
-              <div class="flex items-center gap-2 text-sm text-emerald-200">
-                <i data-lucide="sparkles" class="size-4"></i>
-                <span>Suggested deal available</span>
-              </div>
-              <time class="text-xs text-slate-500">Active 2 min ago</time>
-            </article>
-
-            <article class="channel-card grid cursor-pointer gap-3 rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/40" tabindex="0" data-open-channel>
-              <div class="flex items-center justify-between gap-3">
-                <span class="rounded-full border border-indigo-300/35 bg-indigo-300/10 px-3 py-1 text-xs font-black text-indigo-200">Unshield</span>
-                <span class="grid min-w-7 place-items-center rounded-full bg-emerald-200 px-2 py-1 text-xs font-black text-slate-950">2</span>
-              </div>
-              <h3 class="text-lg font-black text-white">Northline Goods</h3>
-              <p class="text-sm leading-6 text-slate-400">Buyer deposit completed. Seller deposit pending before release.</p>
-              <div class="grid gap-1 text-sm text-slate-400">
-                <span>Offer: Accepted</span>
-                <span>Escrow: In progress</span>
-              </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <span class="block h-full w-[76%] rounded-full bg-gradient-to-r from-emerald-300 to-indigo-300 animate-grow-bar"></span>
-              </div>
-              <div class="flex items-center gap-2 text-sm text-emerald-200">
-                <i data-lucide="timer" class="size-4"></i>
-                <span>Escrow analysis active</span>
-              </div>
-              <time class="text-xs text-slate-500">Active 18 min ago</time>
-            </article>
-
-            <article class="channel-card grid cursor-pointer gap-3 rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-200/40" tabindex="0" data-open-channel>
-              <div class="flex items-center justify-between gap-3">
-                <span class="rounded-full border border-emerald-200/35 bg-emerald-200/10 px-3 py-1 text-xs font-black text-emerald-100">Shield</span>
-                <span class="grid min-w-7 place-items-center rounded-full bg-slate-700/60 px-2 py-1 text-xs font-black text-slate-300">0</span>
-              </div>
-              <h3 class="text-lg font-black text-white">Greylock Ops</h3>
-              <p class="text-sm leading-6 text-slate-400">Settlement complete. Proof package is ready for export.</p>
-              <div class="grid gap-1 text-sm text-slate-400">
-                <span>Offer: Closed</span>
-                <span>Escrow: Released</span>
-              </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                <span class="block h-full w-full rounded-full bg-gradient-to-r from-emerald-300 to-indigo-300 animate-grow-bar"></span>
-              </div>
-              <div class="flex items-center gap-2 text-sm text-emerald-200">
-                <i data-lucide="file-check-2" class="size-4"></i>
-                <span>Proof summary ready</span>
-              </div>
-              <time class="text-xs text-slate-500">Active 44 min ago</time>
-            </article>
+          <div class="pb-24">
+            <div id="channel-list" class="divide-y divide-slate-100 bg-white"></div>
           </div>
         </section>
 
-        <section class="page hidden animate-page-enter" data-page-panel="channel-detail">
-          <div class="mb-4 grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
-            <button class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 font-bold text-white transition hover:border-emerald-200/40 active:scale-95" type="button" data-page-trigger="channels">
-              <i data-lucide="arrow-left" class="size-4"></i>
-              <span>Channels</span>
-            </button>
-            <div class="min-w-0">
-              <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Channel</p>
-              <div class="flex flex-wrap items-center gap-3">
-                <h2 class="text-lg font-black text-white">Rights Transfer</h2>
-                <span class="rounded-full border border-emerald-200/35 bg-emerald-200/10 px-3 py-1 text-xs font-black text-emerald-100">Shield</span>
-              </div>
-            </div>
-            <div class="flex min-w-0 gap-2 overflow-x-auto md:justify-end">
-              <button class="open-payment inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 text-sm font-bold text-slate-200 transition hover:border-emerald-200/35 hover:text-white active:scale-95" type="button">
-                <i data-lucide="send" class="size-4"></i>
-                <span>Send Payment</span>
+        <section class="screen hidden min-h-dvh bg-white" data-screen="channel">
+          <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+            <div class="flex min-h-[4.25rem] items-center gap-2 px-2">
+              <button class="grid size-10 shrink-0 place-items-center rounded-lg text-slate-700 transition active:scale-95" type="button" data-nav="channels" aria-label="Back to channels">
+                <i data-lucide="chevron-left" class="size-5"></i>
               </button>
-              <button class="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-emerald-200/35 bg-emerald-200/10 px-3 text-sm font-black text-emerald-100 transition hover:border-emerald-200/60 hover:bg-emerald-200/15 active:scale-95" type="button" data-create-counter>
-                <i data-lucide="badge-dollar-sign" class="size-4"></i>
-                <span>Counter Offer</span>
+              <button class="min-w-0 flex-1 text-left" type="button" data-tab="conversation">
+                <div class="flex min-w-0 items-center gap-2">
+                  <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
+                  <span id="channel-mode" class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[.68rem] font-black text-emerald-700">Private</span>
+                </div>
+                <p id="channel-counterparty" class="truncate text-xs font-semibold text-slate-500">Bob</p>
+              </button>
+              <button class="connect-button grid size-10 shrink-0 place-items-center rounded-lg text-slate-700 transition active:scale-95" type="button" aria-label="Connect">
+                <i data-lucide="wallet-cards" class="size-4"></i>
               </button>
             </div>
-          </div>
 
-          <section class="mb-4 grid gap-3 rounded-lg border border-emerald-200/25 bg-slate-900/75 p-3 shadow-xl sm:p-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,.72fr)]" aria-label="Sepolia proof flow">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="rounded-full border border-emerald-200/35 bg-emerald-200/10 px-3 py-1 text-xs font-black text-emerald-100" id="proof-mode">Mock proof</span>
-                <span class="rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-bold text-slate-300">A/B channel flow</span>
-              </div>
-              <h3 class="mt-3 text-lg font-black text-white">Testnet proof: chat, negotiate, escrow, settle.</h3>
-              <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-400" id="proof-mode-note">This UX runs the same A/B proof locally. Set direct-helper mode to submit onchain.</p>
-              <div class="mt-4 grid gap-2 md:grid-cols-3">
-                <div class="min-w-0 rounded-md border border-slate-800 bg-slate-950/60 p-2">
-                  <span class="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">Helper</span>
-                  <code class="mt-1 block truncate text-xs text-slate-300" id="proof-helper-address">not configured</code>
-                  <a class="mt-1 inline-block text-xs font-bold text-emerald-200" id="proof-helper-link" href="#" target="_blank" rel="noreferrer">Voyager</a>
-                </div>
-                <div class="min-w-0 rounded-md border border-slate-800 bg-slate-950/60 p-2">
-                  <span class="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">Escrow</span>
-                  <code class="mt-1 block truncate text-xs text-slate-300" id="proof-escrow-address">optional for timeline proof</code>
-                  <a class="mt-1 inline-block text-xs font-bold text-emerald-200" id="proof-escrow-link" href="#" target="_blank" rel="noreferrer">Voyager</a>
-                </div>
-                <div class="min-w-0 rounded-md border border-slate-800 bg-slate-950/60 p-2">
-                  <span class="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">Counterparty</span>
-                  <code class="mt-1 block truncate text-xs text-slate-300" id="proof-counterparty-address">seller signer required</code>
-                </div>
-              </div>
-            </div>
-            <div class="grid min-w-0 content-start gap-3">
-              <button class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950/80 px-4 font-black text-white transition hover:border-emerald-200/45 hover:bg-white/5 active:scale-95" type="button" id="connect-direct-wallet">
-                <i data-lucide="wallet" class="size-4"></i>
-                <span>Connect Wallet</span>
-              </button>
-              <button class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 shadow-[0_14px_40px_rgba(110,231,183,.14)] transition hover:-translate-y-0.5 hover:bg-emerald-100 active:scale-95 disabled:pointer-events-none" type="button" id="run-proof-flow">
-                <i data-lucide="play" class="size-4"></i>
-                <span>Run A/B Proof</span>
-              </button>
-              <div class="grid max-h-56 gap-2 overflow-y-auto rounded-lg border border-slate-800 bg-black/25 p-2" id="proof-log" aria-live="polite">
-                <p class="text-sm text-slate-500">Run the A/B proof to collect timeline transaction hashes here.</p>
-              </div>
-            </div>
-          </section>
+            <nav class="grid grid-cols-3 gap-1 px-3 pb-2" aria-label="Channel tabs">
+              <button class="channel-tab active" type="button" data-tab="conversation">Conversation</button>
+              <button class="channel-tab" type="button" data-tab="deal">Deal</button>
+              <button class="channel-tab" type="button" data-tab="assistant">Assistant</button>
+            </nav>
+          </header>
 
-          <div class="mobile-tabs mb-4 grid grid-cols-3 gap-1 rounded-lg border border-slate-800 bg-black/30 p-1 lg:hidden" role="tablist" aria-label="Channel sections">
-            <button class="channel-tab scroll-mb-28 active rounded-md bg-emerald-200/10 px-3 py-3 font-black text-white" type="button" data-channel-tab="timeline">Conversation</button>
-            <button class="channel-tab scroll-mb-28 rounded-md px-3 py-3 font-black text-slate-400" type="button" data-channel-tab="deal">Deal</button>
-            <button class="channel-tab scroll-mb-28 rounded-md px-3 py-3 font-black text-slate-400" type="button" data-channel-tab="assistant">Assistant</button>
-          </div>
-
-          <div class="grid min-w-0 gap-3 xl:grid-cols-[minmax(17rem,.9fr)_minmax(22rem,1.2fr)_minmax(18rem,.9fr)]">
-            <section class="channel-tab-panel rounded-lg border border-slate-800/80 bg-slate-900/60 p-3 shadow-xl animate-slide-up sm:p-4" data-channel-panel="timeline">
-              <div class="mb-4 flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Conversation</p>
-                  <h2 class="text-lg font-black text-white">Rights Transfer</h2>
-                </div>
-                <div class="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-400">
-                  <span class="size-2 rounded-full bg-emerald-300 shadow-[0_0_0_.3rem_rgba(110,231,183,.12)]"></span>
-                  <span>Private</span>
-                </div>
-              </div>
-
-              <div class="mb-4 inline-flex rounded-full border border-slate-800 bg-slate-950/60 p-1 text-xs font-black text-slate-400" aria-label="Conversation filter">
-                <button class="rounded-full bg-slate-800 px-3 py-1.5 text-white transition" type="button" data-feed-filter="all">All</button>
-                <button class="rounded-full px-3 py-1.5 transition hover:text-white" type="button" data-feed-filter="messages">Messages</button>
-                <button class="rounded-full px-3 py-1.5 transition hover:text-white" type="button" data-feed-filter="events">Events</button>
-              </div>
-
-              <div class="grid gap-3 pb-[calc(9.5rem+env(safe-area-inset-bottom))] lg:pb-0" id="timeline-list" aria-label="Unified channel conversation feed">
-                <article class="flex items-start gap-3 animate-timeline-in" data-feed-kind="message" data-feed-group="messages">
-                  <div class="grid size-8 shrink-0 place-items-center rounded-full bg-slate-800 text-xs font-black text-slate-200">S</div>
-                  <div class="min-w-0">
-                    <div class="mb-1 flex items-baseline gap-2">
-                      <strong class="text-sm">Seller</strong>
-                      <time class="text-xs text-slate-500">09:15</time>
-                    </div>
-                    <p class="max-w-[22rem] rounded-2xl rounded-tl-sm bg-slate-900/90 px-3 py-2 text-sm leading-6 text-slate-200">Digital rights package is listed at 500 STRK. Metadata and transfer conditions are ready.</p>
-                  </div>
-                </article>
-
-                <article class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-timeline-in" data-feed-kind="offer" data-feed-group="events">
-                  <span class="mt-2 size-1.5 rounded-full bg-amber-300"></span>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <strong class="text-[0.68rem] font-black uppercase tracking-wide text-amber-100">Offer created</strong>
-                      <span class="text-sm font-bold text-white">500 STRK</span>
-                      <time class="text-xs text-slate-500">09:18</time>
-                    </div>
-                    <p class="truncate text-xs leading-5 text-slate-400">Seller opened with transfer conditions.</p>
-                  </div>
-                </article>
-
-                <article class="flex items-start gap-3 animate-timeline-in" data-feed-kind="message" data-feed-group="messages">
-                  <div class="grid size-8 shrink-0 place-items-center rounded-full bg-indigo-300/20 text-xs font-black text-indigo-100">B</div>
-                  <div class="min-w-0">
-                    <div class="mb-1 flex items-baseline gap-2">
-                      <strong class="text-sm">Buyer</strong>
-                      <time class="text-xs text-slate-500">09:42</time>
-                    </div>
-                    <p class="max-w-[22rem] rounded-2xl rounded-tl-sm bg-indigo-300/10 px-3 py-2 text-sm leading-6 text-slate-200">I can open at 400 STRK if the proof includes the metadata memo.</p>
-                  </div>
-                </article>
-
-                <article class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-timeline-in" data-feed-kind="offer" data-feed-group="events">
-                  <span class="mt-2 size-1.5 rounded-full bg-amber-300"></span>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <strong class="text-[0.68rem] font-black uppercase tracking-wide text-amber-100">Counter offer</strong>
-                      <span class="text-sm font-bold text-white">450 STRK</span>
-                      <time class="text-xs text-slate-500">10:08</time>
-                    </div>
-                    <p class="truncate text-xs leading-5 text-slate-400">Private settlement terms added.</p>
-                  </div>
-                </article>
-
-                <article class="flex justify-end animate-timeline-in" data-feed-kind="message" data-feed-group="messages">
-                  <div class="min-w-0">
-                    <div class="mb-1 flex items-baseline justify-end gap-2">
-                      <time class="text-xs text-slate-500">10:08</time>
-                      <strong class="text-sm">You</strong>
-                    </div>
-                    <p class="max-w-[22rem] rounded-2xl rounded-tr-sm bg-emerald-200/15 px-3 py-2 text-sm leading-6 text-slate-100">Countering at 450 STRK with private settlement and proof attached.</p>
-                  </div>
-                </article>
-
-                <article class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-timeline-in" data-feed-kind="escrow" data-feed-group="events">
-                  <span class="mt-2 size-1.5 rounded-full bg-indigo-300"></span>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <strong class="text-[0.68rem] font-black uppercase tracking-wide text-indigo-100">Escrow</strong>
-                      <span class="text-sm font-bold text-white">Buyer deposit completed</span>
-                      <time class="text-xs text-slate-500">10:19</time>
-                    </div>
-                    <p class="truncate text-xs leading-5 text-slate-400">Seller deposit pending before release.</p>
-                  </div>
-                </article>
-
-                <article class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-timeline-in" data-feed-kind="payment" data-feed-group="events">
-                  <span class="mt-2 size-1.5 rounded-full bg-sky-300"></span>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <strong class="text-[0.68rem] font-black uppercase tracking-wide text-sky-100">Memo attached</strong>
-                      <span class="text-sm font-bold text-white">Metadata added</span>
-                      <time class="text-xs text-slate-500">10:21</time>
-                    </div>
-                    <p class="truncate text-xs leading-5 text-slate-400">Shielded settlement instructions saved.</p>
-                  </div>
-                </article>
-
-                <article class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-md bg-white/[0.035] px-3 py-2 animate-timeline-in" data-feed-kind="proof" data-feed-group="events">
-                  <span class="mt-2 size-1.5 rounded-full bg-emerald-300"></span>
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <strong class="text-[0.68rem] font-black uppercase tracking-wide text-emerald-100">Proof generated</strong>
-                      <span class="text-sm font-bold text-white">Proof attached</span>
-                      <time class="text-xs text-slate-500">10:22</time>
-                    </div>
-                    <p class="truncate text-xs leading-5 text-slate-400">Offer action proof is available.</p>
-                  </div>
-                </article>
-              </div>
-
-              <form class="fixed inset-x-3 bottom-[calc(5.35rem+env(safe-area-inset-bottom))] z-[38] rounded-2xl border border-slate-800/90 bg-[#090d12]/95 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl lg:static lg:mt-5 lg:rounded-lg lg:bg-slate-950/70" id="message-form" action="javascript:void(0)">
-                <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
-                  <button class="grid size-11 place-items-center rounded-xl text-slate-400 transition hover:bg-white/5 hover:text-white active:scale-95" type="button" data-attach-message aria-label="Attach memo or proof" title="Attach memo or proof">
-                    <i data-lucide="paperclip" class="size-4"></i>
-                  </button>
-                  <input class="min-h-11 rounded-xl border border-slate-800 bg-slate-900/80 px-3 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-200/50" type="text" name="message" placeholder="Message counterparty..." autocomplete="off" />
-                  <button class="grid size-11 place-items-center rounded-xl bg-emerald-200 text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="submit" aria-label="Send message">
-                    <i data-lucide="send-horizontal" class="size-4"></i>
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section class="channel-tab-panel hidden rounded-lg border border-slate-800 bg-slate-900/75 p-4 shadow-xl animate-slide-up lg:block" data-channel-panel="deal">
-              <div class="mb-5 flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Negotiation</p>
-                  <h2 class="text-lg font-black text-white">Deal workspace</h2>
-                </div>
-                <span id="deal-status" class="status-chip rounded-full border border-amber-300/35 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-200">Awaiting buyer confirmation</span>
-              </div>
-
-              <div class="mb-4 grid gap-3 rounded-lg border border-emerald-200/25 bg-slate-950/45 p-3 md:grid-cols-[minmax(8rem,.75fr)_minmax(0,1.2fr)_minmax(8rem,.75fr)] md:items-stretch">
-                <div class="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-                  <span class="text-xs text-slate-400">Buyer position</span>
-                  <strong class="mt-2 block text-xl text-white">400 STRK</strong>
-                  <small class="mt-2 block text-slate-400">Moved up twice</small>
-                </div>
-                <div class="grid content-center gap-3">
-                  <span class="w-max rounded-full border border-emerald-200/35 bg-emerald-200/10 px-3 py-1 text-xs font-black text-emerald-100">Shield</span>
-                  <h3 class="text-xl font-black leading-tight text-white">Recommended close: 450 STRK</h3>
-                  <p class="text-sm leading-6 text-slate-400">Next action: send counter offer, then prepare escrow confirmation.</p>
-                  <div class="h-1.5 overflow-hidden rounded-full bg-slate-800">
-                    <span class="block h-full w-[82%] rounded-full bg-gradient-to-r from-emerald-300 to-indigo-300 animate-grow-bar"></span>
-                  </div>
-                </div>
-                <div class="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-                  <span class="text-xs text-slate-400">Seller position</span>
-                  <strong class="mt-2 block text-xl text-white">500 STRK</strong>
-                  <small class="mt-2 block text-slate-400">Reduced once</small>
-                </div>
-              </div>
-
-              <div class="mb-4 grid grid-cols-3 gap-2 max-[390px]:grid-cols-1">
-                <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-                  <span class="text-xs text-slate-400">Current offer</span>
-                  <strong id="current-offer" class="mt-2 block text-white">450 STRK</strong>
-                </div>
-                <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-                  <span class="text-xs text-slate-400">Deal probability</span>
-                  <strong class="mt-2 block text-white">82%</strong>
-                </div>
-                <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-                  <span class="text-xs text-slate-400">Settlement readiness</span>
-                  <strong class="mt-2 block text-white">64%</strong>
-                </div>
-              </div>
-
-              <div class="mb-4 grid items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 max-[560px]:grid-cols-1 min-[561px]:grid-cols-[1fr_2rem_1fr_2rem_1fr]">
-                <div class="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-                  <small class="text-slate-400">Buyer</small>
-                  <strong class="mt-1 block">400 STRK</strong>
-                </div>
-                <span class="flow-line"></span>
-                <div class="rounded-lg border border-emerald-200/40 bg-emerald-200/10 p-3">
-                  <small class="text-slate-400">Assistant</small>
-                  <strong class="mt-1 block text-emerald-200">450 STRK</strong>
-                </div>
-                <span class="flow-line"></span>
-                <div class="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-                  <small class="text-slate-400">Seller</small>
-                  <strong class="mt-1 block">500 STRK</strong>
-                </div>
-              </div>
-
-              <div class="grid gap-1">
-                <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-slate-800 py-3">
-                  <span class="font-black">500 STRK</span>
-                  <small class="text-slate-400">Initial ask</small>
-                </div>
-                <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-slate-800 py-3">
-                  <span class="font-black">400 STRK</span>
-                  <small class="text-slate-400">Buyer offer</small>
-                </div>
-                <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-slate-800 py-3">
-                  <span class="font-black text-emerald-200">450 STRK</span>
-                  <small class="text-slate-400">Seller counter</small>
-                </div>
-                <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-slate-800 py-3 text-slate-400">
-                  <span class="font-black">Accepted</span>
-                  <small>Next step</small>
-                </div>
-              </div>
-
-              <div class="mt-5 border-t border-slate-800 pt-5">
-                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Escrow</p>
-                <h2 class="text-lg font-black text-white">Settlement path</h2>
-                <div class="relative mt-4 grid grid-cols-4 gap-2">
-                  <div class="absolute left-3 right-3 top-2 h-0.5 bg-gradient-to-r from-emerald-300 from-50% to-slate-800 to-50%"></div>
-                  <div class="relative grid gap-2">
-                    <span class="z-10 size-4 rounded-full bg-emerald-300"></span>
-                    <strong class="text-xs">Create Escrow</strong>
-                  </div>
-                  <div class="relative grid gap-2">
-                    <span class="z-10 size-4 rounded-full bg-emerald-300"></span>
-                    <strong class="text-xs">Buyer Deposit</strong>
-                  </div>
-                  <div class="relative grid gap-2">
-                    <span class="z-10 size-4 rounded-full bg-emerald-300 animate-soft-pulse"></span>
-                    <strong class="text-xs">Seller Deposit</strong>
-                  </div>
-                  <div class="relative grid gap-2">
-                    <span class="z-10 size-4 rounded-full border-2 border-slate-700 bg-slate-900"></span>
-                    <strong class="text-xs text-slate-400">Release</strong>
-                  </div>
-                </div>
-                <p class="mt-4 text-sm leading-6 text-slate-400">Private messages, private negotiations, private payments, and private settlement are enabled for this channel.</p>
-              </div>
-
-              <div class="mt-5 flex items-center justify-between gap-3 border-t border-slate-800 pt-4">
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Direct payment</p>
-                  <strong>Send with memo and proof</strong>
-                </div>
-                <button class="open-payment inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3 font-bold text-white transition hover:border-emerald-200/40 active:scale-95" type="button">
-                  <i data-lucide="send" class="size-4"></i>
-                  <span>Start</span>
+          <section class="channel-panel" data-panel="conversation">
+            <div id="conversation-feed" class="conversation-feed space-y-4 px-4 pt-4"></div>
+            <form id="message-form" class="conversation-composer border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-18px_40px_rgba(15,23,42,.08)] backdrop-blur">
+              <div class="mx-auto flex max-w-[44rem] items-end gap-2">
+                <button class="grid size-11 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 transition active:scale-95" type="button" aria-label="Attach file" data-attach>
+                  <i data-lucide="paperclip" class="size-4"></i>
                 </button>
-              </div>
-            </section>
-
-            <aside class="channel-tab-panel hidden rounded-lg border border-emerald-200/30 bg-slate-900/80 p-4 shadow-xl animate-slide-up lg:block xl:sticky xl:top-24" data-channel-panel="assistant">
-              <div class="mb-4 flex items-center gap-3">
-                <div class="grid size-11 place-items-center rounded-lg border border-emerald-200/35 bg-emerald-200/10 text-emerald-200 animate-soft-pulse">
-                  <i data-lucide="sparkles" class="size-5"></i>
-                </div>
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Assistant</p>
-                  <h2 class="text-lg font-black text-white">Deal intelligence</h2>
-                </div>
-              </div>
-
-              <div class="mb-4 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg border border-emerald-200/25 bg-slate-950/45 p-3 max-[560px]:grid-cols-1 max-[560px]:justify-items-center max-[560px]:text-center">
-                <div class="score-ring">
-                  <strong>82%</strong>
-                  <span>Close chance</span>
-                </div>
-                <div>
-                  <span class="inline-flex rounded-full border border-emerald-200/35 bg-emerald-200/10 px-3 py-1 text-xs font-black text-emerald-100 animate-soft-pulse">Analyzing</span>
-                  <p class="mt-3 text-sm leading-6 text-slate-400">Conversation, offers, escrow state, and proof readiness are aligned.</p>
-                </div>
-              </div>
-
-              <div class="border-b border-slate-800 py-3">
-                <span class="text-xs text-slate-400">Conversation Summary</span>
-                <p class="mt-2 text-sm leading-6 text-slate-400">Seller wants 500 STRK. Buyer wants 400 STRK. Gap is now 100 STRK after both sides moved toward the middle.</p>
-              </div>
-              <div class="my-3 rounded-lg border border-emerald-200/25 bg-emerald-200/10 p-4">
-                <span class="text-xs text-slate-400">Suggested Deal</span>
-                <strong class="mt-1 block text-3xl text-emerald-200">450 STRK</strong>
-                <p class="mt-2 text-sm leading-6 text-slate-400">Buyer increased offers twice. Seller reduced price once. Negotiation is converging.</p>
-              </div>
-              <div class="border-b border-slate-800 py-3">
-                <span class="text-xs text-slate-400">Next Best Action</span>
-                <p class="mt-2 text-sm leading-6 text-slate-400">Send counter offer at 450 STRK and prepare escrow confirmation once buyer accepts.</p>
-              </div>
-              <div class="border-b border-slate-800 py-3">
-                <span class="text-xs text-slate-400">Escrow Analysis</span>
-                <p class="mt-2 text-sm leading-6 text-slate-400">Buyer deposit completed. Seller deposit pending. Estimated settlement readiness is 1 hour.</p>
-              </div>
-
-              <div class="mt-4 grid gap-2">
-                <button class="scroll-mb-28 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="button" data-accept-suggestion>
-                  <i data-lucide="check" class="size-4"></i>
-                  <span>Accept Suggestion</span>
-                </button>
-                <button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-4 font-bold text-white transition hover:border-emerald-200/40 active:scale-95" type="button" data-create-counter>
-                  <i data-lucide="badge-dollar-sign" class="size-4"></i>
-                  <span>Create Counter</span>
-                </button>
-                <button class="min-h-10 font-black text-emerald-200" type="button" data-dismiss-assistant>Dismiss</button>
-              </div>
-            </aside>
-          </div>
-        </section>
-
-        <section class="page hidden animate-page-enter" data-page-panel="rewards">
-          <div class="grid gap-3 md:grid-cols-[minmax(17rem,.7fr)_minmax(0,1fr)]">
-            <section class="rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
-              <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Rewards</p>
-              <h2 class="mt-1 text-xl font-black text-white">Activity points</h2>
-              <strong class="mt-8 block text-5xl text-amber-200">2,840</strong>
-              <span class="text-slate-400">Current points</span>
-            </section>
-            <section class="rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
-              <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Lifetime</p>
-              <h2 class="mt-1 text-xl font-black text-white">8,420 points</h2>
-              <div class="mt-5 grid gap-1">
-                <div class="flex justify-between border-b border-slate-800 py-3"><span>Offer Accepted</span><strong>+10</strong></div>
-                <div class="flex justify-between border-b border-slate-800 py-3"><span>Escrow Completed</span><strong>+20</strong></div>
-                <div class="flex justify-between border-b border-slate-800 py-3"><span>Payment Sent</span><strong>+5</strong></div>
-                <div class="flex justify-between py-3"><span>Channel Activity</span><strong>+2</strong></div>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <section class="page hidden animate-page-enter" data-page-panel="developer">
-          <div class="grid gap-4 xl:grid-cols-[minmax(20rem,.72fr)_minmax(0,1fr)]">
-            <section class="rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Developer</p>
-                  <h2 class="mt-1 text-xl font-black text-white">Privacy Pool Research</h2>
-                </div>
-                <span class="rounded-full border border-sky-300/30 bg-sky-300/10 px-3 py-1 text-xs font-black text-sky-100">Read only</span>
-              </div>
-              <p class="mt-4 text-sm leading-6 text-slate-400">Decode STRK20 Privacy Pool transactions with the known ABI. This tool does not submit transactions and does not replace the private official SDK.</p>
-
-              <form class="mt-5 grid gap-3" id="privacy-research-form" action="javascript:void(0)">
-                <label class="grid gap-2 text-sm font-bold text-slate-400">
-                  Transaction hash
-                  <input class="min-h-12 rounded-lg border border-slate-800 bg-slate-950 px-3 text-white outline-none transition placeholder:text-slate-500 focus:border-emerald-200/50" type="text" name="transactionHash" placeholder="0x..." autocomplete="off" />
+                <label class="min-w-0 flex-1">
+                  <span class="sr-only">Message</span>
+                  <textarea id="message-input" class="max-h-32 min-h-11 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[16px] leading-5 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-400" rows="1" placeholder="Message"></textarea>
                 </label>
-                <button id="research-submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="submit">
-                  <i data-lucide="scan-search" class="size-4"></i>
-                  <span>Analyze transaction</span>
+                <button class="grid size-11 shrink-0 place-items-center rounded-lg bg-slate-950 text-white shadow-sm transition active:scale-95" type="submit" aria-label="Send message">
+                  <i data-lucide="send" class="size-4"></i>
                 </button>
-              </form>
+              </div>
+            </form>
+          </section>
 
-              <div id="research-status" class="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-400">Waiting for a transaction hash. RPC must be configured in <code>VITE_STARKNET_RPC_URL</code>.</div>
-
-              <div class="mt-5 grid gap-3 rounded-lg border border-slate-800 bg-slate-950/45 p-3">
-                <div class="flex gap-3">
-                  <span class="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-emerald-200/10 text-xs font-black text-emerald-100">1</span>
+          <section class="channel-panel hidden px-4 pb-28 pt-4" data-panel="deal">
+            <div class="space-y-3">
+              <section class="deal-section">
+                <div class="deal-section-head">
+                  <span>Offer</span>
+                  <strong id="offer-status">Accepted</strong>
+                </div>
+                <div class="deal-grid">
                   <div>
-                    <strong class="text-sm text-white">ABI-derived decoder</strong>
-                    <p class="mt-1 text-sm leading-6 text-slate-400">Maps OpenChannel, OpenSubchannel, CreateEncNote, and InvokeExternal action shapes from the STRK20 Privacy Pool ABI.</p>
+                    <span>Seller</span>
+                    <strong id="seller-offer">500 STRK</strong>
+                  </div>
+                  <div>
+                    <span>Counter</span>
+                    <strong id="buyer-counter">450 STRK</strong>
                   </div>
                 </div>
-                <div class="flex gap-3">
-                  <span class="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-emerald-200/10 text-xs font-black text-emerald-100">2</span>
-                  <div>
-                    <strong class="text-sm text-white">VEIL helper detection</strong>
-                    <p class="mt-1 text-sm leading-6 text-slate-400">Highlights helper payloads shaped as channel id, event type, encrypted payload, and payload hash.</p>
+                <div class="grid grid-cols-2 gap-2">
+                  <button class="secondary-action" type="button" data-deal-action="counter">
+                    <i data-lucide="reply" class="size-4"></i>
+                    <span>Counter</span>
+                  </button>
+                  <button class="primary-action" type="button" data-deal-action="accept">
+                    <i data-lucide="check" class="size-4"></i>
+                    <span>Accept</span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="deal-section">
+                <div class="deal-section-head">
+                  <span>Escrow</span>
+                  <strong id="escrow-status">Ready</strong>
+                </div>
+                <div class="deal-progress">
+                  <span class="done">Buyer confirmed</span>
+                  <span class="done">Seller confirmed</span>
+                  <span id="settlement-chip">Waiting release</span>
+                </div>
+                <button class="primary-action w-full" type="button" data-deal-action="complete-escrow">
+                  <i data-lucide="shield-check" class="size-4"></i>
+                  <span>Complete Escrow</span>
+                </button>
+              </section>
+
+              <section class="deal-section">
+                <div class="deal-section-head">
+                  <span>Payment</span>
+                  <strong id="payment-state">Ready</strong>
+                </div>
+                <label class="field">
+                  <span>Amount</span>
+                  <input id="payment-amount" type="text" value="450 STRK" />
+                </label>
+                <label class="field">
+                  <span>Recipient</span>
+                  <input id="payment-recipient" type="text" value="Bob" />
+                </label>
+                <div>
+                  <span class="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">Mode</span>
+                  <div class="grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+                    <button class="payment-mode active" type="button" data-payment-mode="Private">Private</button>
+                    <button class="payment-mode" type="button" data-payment-mode="Public">Public</button>
                   </div>
                 </div>
-                <div class="flex gap-3">
-                  <span class="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-amber-200/10 text-xs font-black text-amber-100">3</span>
-                  <div>
-                    <strong class="text-sm text-white">Real SDK placeholder</strong>
-                    <p class="mt-1 text-sm leading-6 text-slate-400">Transaction submission intentionally throws until the official Privacy Pool SDK is available.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
+                <label class="field">
+                  <span>Memo</span>
+                  <textarea id="payment-memo" rows="3">Final settlement for rights transfer.</textarea>
+                </label>
+                <button class="primary-action w-full" type="button" data-deal-action="send-payment">
+                  <i data-lucide="send" class="size-4"></i>
+                  <span>Send Payment</span>
+                </button>
+              </section>
 
-            <section class="grid gap-4" id="research-result" aria-live="polite">
-              <article class="rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
-                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Implementation marker</p>
-                <h3 class="mt-1 text-lg font-black text-white">What to explain in interview</h3>
-                <div class="mt-4 grid gap-2 text-sm leading-6 text-slate-400">
-                  <p><strong class="text-slate-200">VEIL does not rebuild Privacy Pool.</strong> It calls the existing pool through the InvokeExternal phase.</p>
-                  <p><strong class="text-slate-200">The helper stores encrypted timeline payloads only.</strong> Sender, recipient, and plaintext stay outside this helper contract.</p>
-                  <p><strong class="text-slate-200">The research adapter is a bridge.</strong> It decodes real transactions now, then gets replaced by official SDK calls later.</p>
+              <section class="deal-section">
+                <div class="deal-section-head">
+                  <span>Settlement</span>
+                  <strong id="settlement-status">Pending</strong>
                 </div>
-              </article>
-            </section>
-          </div>
-        </section>
+                <div class="deal-row">
+                  <span>Proof</span>
+                  <strong id="proof-status">Not attached</strong>
+                </div>
+                <button class="secondary-action w-full" type="button" data-deal-action="attach-proof">
+                  <i data-lucide="file-check-2" class="size-4"></i>
+                  <span>Attach Proof</span>
+                </button>
+              </section>
+            </div>
+          </section>
 
-        <section class="page hidden animate-page-enter" data-page-panel="settings">
-          <section class="max-w-3xl rounded-lg border border-slate-800 bg-slate-900/75 p-5 shadow-xl">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Privacy mode</p>
-            <h2 class="mt-1 text-xl font-black text-white">Channel defaults</h2>
-            <div class="mt-5 grid gap-1">
-              <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-800 py-4">
-                <div><strong>Default to Shield</strong><span class="mt-1 block text-sm text-slate-400">Private messages, negotiations, payments, and settlement.</span></div>
-                <label class="relative inline-flex h-7 w-12 items-center rounded-full border border-emerald-200/40 bg-emerald-200/15"><input class="peer sr-only" type="checkbox" checked /><span class="absolute left-6 size-5 rounded-full bg-emerald-200 transition peer-not-checked:left-1 peer-not-checked:bg-slate-500"></span></label>
-              </div>
-              <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-slate-800 py-4">
-                <div><strong>Assistant in every channel</strong><span class="mt-1 block text-sm text-slate-400">Always keep deal intelligence accessible.</span></div>
-                <label class="relative inline-flex h-7 w-12 items-center rounded-full border border-emerald-200/40 bg-emerald-200/15"><input class="peer sr-only" type="checkbox" checked /><span class="absolute left-6 size-5 rounded-full bg-emerald-200 transition peer-not-checked:left-1 peer-not-checked:bg-slate-500"></span></label>
-              </div>
-              <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-4">
-                <div><strong>Proof reminders</strong><span class="mt-1 block text-sm text-slate-400">Prompt after offer, payment, escrow, and settlement actions.</span></div>
-                <label class="relative inline-flex h-7 w-12 items-center rounded-full border border-emerald-200/40 bg-emerald-200/15"><input class="peer sr-only" type="checkbox" checked /><span class="absolute left-6 size-5 rounded-full bg-emerald-200 transition peer-not-checked:left-1 peer-not-checked:bg-slate-500"></span></label>
-              </div>
+          <section class="channel-panel hidden px-4 pb-28 pt-4" data-panel="assistant">
+            <div class="space-y-3">
+              <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Suggestion</p>
+                <h2 class="mt-1 text-lg font-black">Send memo before release.</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">This keeps the payment context clear before escrow completion.</p>
+                <button class="primary-action mt-4 w-full" type="button" data-deal-action="send-payment">
+                  <i data-lucide="send" class="size-4"></i>
+                  <span>Send Memo</span>
+                </button>
+              </section>
+              <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Risk</p>
+                <h2 class="mt-1 text-lg font-black">Confirm proof after settlement.</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Attach proof once payment is sent and escrow is completed.</p>
+              </section>
+              <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Recommendation</p>
+                <h2 class="mt-1 text-lg font-black">450 STRK is ready to close.</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-600">Both sides have converged. Move through payment, escrow, then proof.</p>
+              </section>
             </div>
           </section>
         </section>
       </main>
+
+      <nav class="bottom-nav fixed inset-x-0 bottom-0 z-50 mx-auto grid max-w-[44rem] grid-cols-2 gap-1 border-t border-slate-200 bg-white/95 px-3 pb-[calc(.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_40px_rgba(15,23,42,.08)] backdrop-blur" aria-label="Primary navigation">
+        <button class="bottom-nav-item active" type="button" data-nav="home">
+          <i data-lucide="inbox" class="size-4"></i>
+          <span>Home</span>
+        </button>
+        <button class="bottom-nav-item" type="button" data-nav="channels">
+          <i data-lucide="messages-square" class="size-4"></i>
+          <span>Channels</span>
+        </button>
+      </nav>
+
+      <div id="toast" class="pointer-events-none fixed inset-x-3 bottom-24 z-[70] mx-auto max-w-[40rem] translate-y-3 rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white opacity-0 shadow-2xl transition" role="status" aria-live="polite"></div>
     </div>
-
-    <nav class="mobile-nav fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-lg border border-slate-800 bg-[#090d12]/95 p-1 shadow-2xl backdrop-blur-xl animate-dock-in lg:hidden" aria-label="Mobile navigation">
-      <button class="mobile-nav-item active grid min-h-14 place-items-center rounded-md text-xs text-white transition" type="button" data-page="home">
-        <i data-lucide="layout-dashboard" class="size-4"></i>
-        <span>Home</span>
-      </button>
-      <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="channels">
-        <i data-lucide="messages-square" class="size-4"></i>
-        <span>Channels</span>
-      </button>
-      <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="rewards">
-        <i data-lucide="badge-check" class="size-4"></i>
-        <span>Rewards</span>
-      </button>
-      <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="developer">
-        <i data-lucide="code-2" class="size-4"></i>
-        <span>Dev</span>
-      </button>
-      <button class="mobile-nav-item grid min-h-14 place-items-center rounded-md text-xs text-slate-400 transition hover:text-white" type="button" data-page="settings">
-        <i data-lucide="settings" class="size-4"></i>
-        <span>Settings</span>
-      </button>
-    </nav>
-
-    <div class="modal-backdrop fixed inset-0 z-50 hidden place-items-end bg-black/60 p-3 md:place-items-center" id="payment-modal" aria-hidden="true">
-      <section class="payment-modal max-h-[90vh] w-full max-w-lg overflow-auto rounded-lg border border-slate-800 bg-slate-900 p-4 shadow-2xl animate-modal-in" role="dialog" aria-modal="true" aria-labelledby="payment-title">
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Direct payment</p>
-            <h2 id="payment-title" class="text-xl font-black text-white">Send payment</h2>
-          </div>
-          <button class="grid size-10 place-items-center rounded-lg border border-slate-700 bg-slate-950 text-white transition hover:border-emerald-200/40 active:scale-95" type="button" id="close-payment" aria-label="Close payment flow">
-            <i data-lucide="x" class="size-4"></i>
-          </button>
-        </div>
-
-        <div class="my-4 grid grid-cols-3 gap-2">
-          <span class="payment-step-label rounded-lg border border-emerald-200/40 bg-emerald-200/10 px-2 py-2 text-center text-xs font-black text-emerald-100" data-payment-step-label="form">Details</span>
-          <span class="payment-step-label rounded-lg border border-slate-800 px-2 py-2 text-center text-xs font-black text-slate-400" data-payment-step-label="review">Review</span>
-          <span class="payment-step-label rounded-lg border border-slate-800 px-2 py-2 text-center text-xs font-black text-slate-400" data-payment-step-label="success">Proof</span>
-        </div>
-
-        <div class="payment-step grid gap-3" data-payment-step="form">
-          <label class="grid gap-2 text-sm font-bold text-slate-400">Recipient<input id="payment-recipient" class="min-h-11 rounded-lg border border-slate-800 bg-slate-950 px-3 text-white outline-none focus:border-emerald-200/50" type="text" value="Counterparty" /></label>
-          <label class="grid gap-2 text-sm font-bold text-slate-400">Amount<input id="payment-amount" class="min-h-11 rounded-lg border border-slate-800 bg-slate-950 px-3 text-white outline-none focus:border-emerald-200/50" type="text" value="100 STRK" /></label>
-          <label class="grid gap-2 text-sm font-bold text-slate-400">Memo<textarea id="payment-memo" class="min-h-24 resize-y rounded-lg border border-slate-800 bg-slate-950 p-3 text-white outline-none focus:border-emerald-200/50">Milestone payment for final transfer conditions.</textarea></label>
-          <div>
-            <span class="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">Mode</span>
-            <div class="grid grid-cols-2 gap-1 rounded-lg border border-slate-800 bg-black/30 p-1" role="group" aria-label="Payment mode">
-              <button class="payment-mode-button rounded-md bg-emerald-200/10 px-3 py-2 font-black text-white" type="button" data-mode="Shield">Shield</button>
-              <button class="payment-mode-button rounded-md px-3 py-2 font-black text-slate-400" type="button" data-mode="Unshield">Unshield</button>
-            </div>
-          </div>
-          <button class="min-h-11 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="button" id="payment-review">Review Payment</button>
-        </div>
-
-        <div class="payment-step hidden gap-3" data-payment-step="review">
-          <div class="grid gap-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
-            <div><span class="text-xs text-slate-400">Recipient</span><strong id="review-recipient" class="block">Counterparty</strong></div>
-            <div><span class="text-xs text-slate-400">Amount</span><strong id="review-amount" class="block">100 STRK</strong></div>
-            <div><span class="text-xs text-slate-400">Mode</span><strong id="review-mode" class="block">Shield</strong></div>
-            <div><span class="text-xs text-slate-400">Memo</span><strong id="review-memo" class="block">Milestone payment for final transfer conditions.</strong></div>
-          </div>
-          <div class="flex justify-end gap-2">
-            <button class="min-h-10 rounded-lg border border-slate-700 bg-slate-950 px-4 font-bold text-white transition active:scale-95" type="button" id="payment-back">Back</button>
-            <button class="min-h-10 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="button" id="payment-confirm">Confirm Payment</button>
-          </div>
-        </div>
-
-        <div class="payment-step hidden gap-3 text-center" data-payment-step="success">
-          <div class="mx-auto grid size-12 place-items-center rounded-lg border border-emerald-200/35 bg-emerald-200/10 text-emerald-200">
-            <i data-lucide="check" class="size-5"></i>
-          </div>
-          <h2 class="text-xl font-black text-white">Payment Sent</h2>
-          <p class="text-slate-400">Proof verified and attached to this channel.</p>
-          <div class="grid gap-3 rounded-lg border border-slate-800 bg-slate-950/60 p-4 text-left">
-            <div><span class="text-xs text-slate-400">Amount</span><strong id="success-amount" class="block">100 STRK</strong></div>
-            <div><span class="text-xs text-slate-400">Mode</span><strong id="success-mode" class="block">Shield</strong></div>
-            <div><span class="text-xs text-slate-400">Proof</span><strong class="block">Verified</strong></div>
-          </div>
-          <button class="min-h-11 rounded-lg border border-emerald-200/60 bg-emerald-200 px-4 font-black text-slate-950 transition hover:bg-emerald-100 active:scale-95" type="button" id="payment-done">Done</button>
-        </div>
-      </section>
-    </div>
-
-    <div class="toast pointer-events-none fixed bottom-24 right-3 z-[70] max-w-[min(22rem,calc(100vw-1.5rem))] translate-y-4 rounded-lg border border-emerald-200/35 bg-slate-900 px-4 py-3 text-white opacity-0 shadow-2xl transition md:bottom-5" id="toast" role="status" aria-live="polite"></div>
   </body>
 </html>
