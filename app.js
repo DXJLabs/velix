@@ -137,7 +137,7 @@ const messages = {
 };
 
 const state = {
-  screen: "conversations",
+  screen: "unlock",
   channelId: activeDealId,
   paymentMode: "Private",
   walletConnected: false,
@@ -186,10 +186,13 @@ function getWallet() {
     || null;
 }
 
-async function connectWallet() {
+async function connectWallet(options = {}) {
+  const goToInbox = options.goToInbox ?? state.screen === "unlock";
+
   if (timelineMode !== "direct-helper") {
     state.walletConnected = true;
     showToast("Wallet ready.");
+    if (goToInbox) showScreen("conversations");
     return true;
   }
 
@@ -223,6 +226,7 @@ async function connectWallet() {
   veilClient = createClient(directTransport);
   state.walletConnected = true;
   showToast("Wallet connected.");
+  if (goToInbox) showScreen("conversations");
   return true;
 }
 
@@ -552,7 +556,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-connect-wallet]")) {
-      connectWallet();
+      connectWallet({ goToInbox: state.screen === "unlock" });
       return;
     }
 
@@ -617,7 +621,7 @@ function bindEvents() {
 function init() {
   renderConversationList();
   bindEvents();
-  showScreen("conversations", { keepScroll: true });
+  showScreen("unlock", { keepScroll: true });
   iconRefresh();
   setTimeout(iconRefresh, 250);
 }

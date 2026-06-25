@@ -11,7 +11,20 @@
   <body class="bg-[#e8ebef] font-sans text-slate-950 antialiased">
     <div class="app-shell mx-auto min-h-dvh w-full bg-[#f7f8fa]">
       <main class="relative min-h-dvh">
-        <section class="screen" data-screen="conversations">
+        <section class="screen unlock-screen" data-screen="unlock">
+          <div class="unlock-content">
+            <div class="brand-mark">V</div>
+            <p class="eyebrow">VEIL</p>
+            <h1>Private negotiation and escrow.</h1>
+            <p>Unlock your private channels. Messages decrypt on this device.</p>
+            <button class="primary-action w-full" type="button" data-connect-wallet>
+              <i data-lucide="wallet-cards" class="size-5"></i>
+              <span>Connect Wallet</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="screen hidden" data-screen="conversations">
           <header class="surface-header">
             <div class="flex items-center justify-between gap-3">
               <div class="min-w-0">
