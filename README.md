@@ -67,6 +67,8 @@ Interview notes are in `docs/privacy-pool-research-adapter.md`.
 
 `VeilEscrow` is an isolated Starknet testnet-ready settlement workflow contract. It uses OpenZeppelin Cairo ReentrancyGuard/SRC5, does not rebuild Privacy Pool, does not assume ERC20/STRK20 transfer behavior, and stores protocol-agnostic references for future adapters.
 
+Smart contract README: `src/README.md`
+
 Docs: `docs/veil-escrow-v1.md`
 
 Core flow:
