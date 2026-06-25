@@ -104,6 +104,8 @@ Timeline modes:
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke`. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
+For `direct-helper`, open the channel workspace, press `Connect Wallet`, then run `Run A/B Proof`. The app looks for `window.veilDemoWallet`, `window.starknet`, `window.starknet_argentX`, or `window.starknet_braavos`.
+
 ## Build And Test
 
 Frontend:

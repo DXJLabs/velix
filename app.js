@@ -36,21 +36,8 @@ const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "";
 const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
 const escrowAddress = import.meta.env.VITE_VEIL_ESCROW_ADDRESS || "";
 const demoCounterpartyAddress = import.meta.env.VITE_DEMO_COUNTERPARTY_ADDRESS || "";
-const directHelperWallet = globalThis.window?.veilDemoWallet;
-const directHelperTransport =
-  timelineMode === "direct-helper" && directHelperWallet?.account && directHelperWallet?.provider
-    ? new DirectHelperTransport({
-        helperAddress: helperAddress || "mock-veil-helper",
-        account: directHelperWallet.account,
-        provider: directHelperWallet.provider,
-      })
-    : undefined;
-const veilClient = new VeilClient({
-  privacyPoolAddress: privacyPoolAddress || "mock-privacy-pool",
-  helperAddress: helperAddress || "mock-veil-helper",
-  rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc",
-  ...(directHelperTransport ? { transport: directHelperTransport } : {}),
-});
+let directHelperTransport;
+let veilClient = createVeilClient();
 // VEIL IMPLEMENTATION NOTE:
 // This adapter is read-only. It helps decode the real STRK20 Privacy Pool ABI
 // while the official SDK is private, without pretending VEIL can submit real
@@ -60,6 +47,72 @@ const researchAdapter = new ResearchPrivacyPoolAdapter({
   privacyPoolAddress,
   helperAddress,
 });
+
+function createVeilClient(transport) {
+  return new VeilClient({
+    privacyPoolAddress: privacyPoolAddress || "mock-privacy-pool",
+    helperAddress: helperAddress || "mock-veil-helper",
+    rpcUrl: import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc",
+    ...(transport ? { transport } : {}),
+  });
+}
+
+function getInjectedWallet() {
+  const appWindow = globalThis.window;
+  return appWindow?.veilDemoWallet
+    || appWindow?.starknet
+    || appWindow?.starknet_argentX
+    || appWindow?.starknet_braavos
+    || null;
+}
+
+async function connectDirectHelperWallet(options = {}) {
+  const prompt = options.prompt ?? false;
+  const silent = options.silent ?? false;
+
+  if (timelineMode !== "direct-helper") {
+    if (!silent) showToast("Set VITE_VEIL_TIMELINE_MODE=direct-helper first.");
+    return false;
+  }
+
+  if (!helperAddress) {
+    if (!silent) showToast("Set VITE_VEIL_CHANNEL_HELPER_ADDRESS in .env.local first.");
+    return false;
+  }
+
+  const wallet = getInjectedWallet();
+  if (!wallet) {
+    if (!silent) showToast("No Starknet wallet found. Open with Argent/Braavos or provide window.veilDemoWallet.");
+    return false;
+  }
+
+  if (!wallet.account && prompt && typeof wallet.enable === "function") {
+    await wallet.enable();
+  }
+
+  const account = wallet.account || wallet;
+  const provider = wallet.provider || wallet.account?.provider;
+
+  if (!account?.execute) {
+    if (!silent) showToast("Connected wallet does not expose account.execute.");
+    return false;
+  }
+
+  if (!provider?.callContract) {
+    if (!silent) showToast("Connected wallet does not expose provider.callContract.");
+    return false;
+  }
+
+  directHelperTransport = new DirectHelperTransport({
+    helperAddress,
+    account,
+    provider,
+  });
+  veilClient = createVeilClient(directHelperTransport);
+  renderProofStatus();
+  if (!silent) showToast("Wallet connected. Direct helper mode is ready.");
+  return true;
+}
 
 function refreshIcons() {
   if (window.lucide) {
@@ -386,6 +439,7 @@ function renderProofStatus() {
   setText("#proof-helper-address", helperAddress || "not configured");
   setText("#proof-escrow-address", escrowAddress || "optional for timeline proof");
   setText("#proof-counterparty-address", demoCounterpartyAddress || "seller signer required for escrow contract");
+  setText("#connect-direct-wallet span", directHelperTransport ? "Wallet Connected" : "Connect Wallet");
 
   const helperLink = document.querySelector("#proof-helper-link");
   if (helperLink) {
@@ -458,6 +512,11 @@ async function runProofStep(label, action, entries) {
 }
 
 async function runAbProofFlow() {
+  if (timelineMode === "direct-helper" && !directHelperTransport) {
+    const connected = await connectDirectHelperWallet({ prompt: true });
+    if (!connected) return;
+  }
+
   const entries = [];
   setProofRunning(true);
   renderProofLog(entries);
@@ -871,6 +930,13 @@ document.querySelector("[data-attach-message]").addEventListener("click", () => 
   showToast("Attach memo or proof from the channel actions.");
 });
 
+document.querySelector("#connect-direct-wallet").addEventListener("click", async () => {
+  const connected = await connectDirectHelperWallet({ prompt: true });
+  if (connected) {
+    await renderTimeline();
+  }
+});
+
 document.querySelector("#run-proof-flow").addEventListener("click", runAbProofFlow);
 
 document.querySelector("#message-form").addEventListener("submit", async (event) => {
@@ -913,6 +979,9 @@ window.addEventListener("load", async () => {
   setPage("home", { resetScroll: false });
   setChannelTab("timeline");
   setFeedFilter("all");
+  if (timelineMode === "direct-helper") {
+    await connectDirectHelperWallet({ silent: true });
+  }
   renderProofStatus();
   if (directHelperTransport) {
     await renderTimeline();
