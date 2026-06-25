@@ -55,7 +55,40 @@ Alice and Bob chat
 
 `VeilEscrow` emits settlement workflow events that can be reconstructed into the same channel timeline.
 
-Full smart contract demo commands are documented in [src/README.md](src/README.md).
+### Sepolia Onchain Evidence
+
+Explorer: [Voyager Sepolia](https://sepolia.voyager.online/). If a direct explorer URL does not open, paste the raw transaction hash into Voyager Sepolia search.
+
+| Item | Value |
+| --- | --- |
+| Network | Starknet Sepolia |
+| Channel id | `20260625` |
+| Escrow id | `1` |
+| Buyer / Alice | `0x289f797b9c2dc6c661fd058968d9ba39d01c7547f8259f01b7bce55696d0ff0` |
+| Seller / Bob | `0x494f2bc712960a2d5cd651c8264ae6dc165482444efa091da34b6417e661060` |
+| `VeilChannelHelper` | `0x0333e805547d0e91cec741045bf7305e8ff58e8b7d1e9f70ecb3ca559712ef6c` |
+| `VeilEscrow` | `0x01354470e87067cf6e4956de43e89554c8b51267f359b3fc1b6be86104014abb` |
+| Final escrow status | `Completed` |
+
+Core proof transactions:
+
+| Step | Contract | Tx hash |
+| --- | --- | --- |
+| Deploy `VeilChannelHelper` | Helper | `0x5dfe5cab14fccc82cd1febe3433be969a23ca9ec722410699bbc358d9428d13` |
+| Deploy `VeilEscrow` | Escrow | `0x7ac23ec9403b87b4d5cadae6e000aaf82ea72cd648a9c942621c81486fbcc95` |
+| Alice chat message | Helper | `0x4c31bfdde4fa4dba833427f812801e2fa0df23aa559e267199597cf69272669` |
+| Bob chat message | Helper | `0x747d59b38537da66d05d39617105c3e1c2345e0110847b6ba75fba6081e7316` |
+| Offer created | Helper | `0x1b3b436e576d2223ee88729c18d010344dcb32861b3f9d584b1aa1ff65a067` |
+| Counter offer | Helper | `0xb40e5739ee80e2d201b73da5d882209750c6e00a3527163d0588f05138e4c0` |
+| Offer accepted | Helper | `0x5622cb82551de474117caee80c0257472522e7efcd60378a018688483feeabd` |
+| Create escrow | Escrow | `0x6d77da4b28221888fa89f10d35c9ca83cbfbc7213d5e38ad04c20a0931b01f9` |
+| Buyer deposit confirmed | Escrow | `0x7cf3987c0160e838dd8107fbc8c049d9810c90122fab6a6b49df2cb3925d84e` |
+| Seller deposit confirmed | Escrow | `0x5ce49f04deaea912204075a2b49c7a7d9b02182e9107b60233ee994225f6ac3` |
+| Escrow activated | Escrow | `0x729a1091d044fe009b5e82188aeb02f3d5091b4986f035d3e8d3fe003ad4b3c` |
+| Escrow settled | Escrow | `0x285784074b762414afdfe04f24aae296f6c0722b9360995a47d894bc25421f8` |
+| Proof attached | Helper | `0x6cdd37d63627e233af9251cc3350f423f2337b0661894683ca95b1e9524e207` |
+
+Full smart contract demo commands and the complete transaction ledger are documented in [src/README.md](src/README.md).
 
 ## Local Development
 
