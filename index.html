@@ -8,306 +8,365 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     <script type="module" src="/app.js"></script>
   </head>
-  <body class="bg-[#eef1f4] font-sans text-slate-950 antialiased">
-    <div class="mx-auto min-h-dvh w-full max-w-[44rem] bg-[#f8fafc] shadow-[0_0_0_1px_rgba(15,23,42,.06),0_24px_80px_rgba(15,23,42,.08)]">
+  <body class="bg-[#e8ebef] font-sans text-slate-950 antialiased">
+    <div class="app-shell mx-auto min-h-dvh w-full bg-[#f7f8fa]">
       <main class="relative min-h-dvh">
-        <section class="screen" data-screen="home">
-          <header class="sticky top-0 z-30 border-b border-slate-200 bg-[#f8fafc]/95 px-4 pb-3 pt-[calc(.75rem+env(safe-area-inset-top))] backdrop-blur">
+        <section class="screen" data-screen="conversations">
+          <header class="surface-header">
             <div class="flex items-center justify-between gap-3">
-              <button class="flex min-w-0 items-center gap-3 text-left" type="button" data-nav="home" aria-label="VEIL home">
-                <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white">V</span>
-                <span class="min-w-0">
-                  <span class="block text-base font-black leading-tight">VEIL</span>
-                  <span class="block text-xs font-semibold text-slate-500">Private deals</span>
-                </span>
-              </button>
-              <div class="flex items-center gap-2">
-                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">Private Mode</span>
-                <button class="connect-button grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition active:scale-95" type="button" aria-label="Connect">
-                  <i data-lucide="wallet-cards" class="size-4"></i>
-                </button>
+              <div class="min-w-0">
+                <p class="eyebrow">VEIL</p>
+                <h1 class="page-title">Conversations</h1>
               </div>
-            </div>
-          </header>
-
-          <div class="space-y-5 px-4 pb-28 pt-5">
-            <section>
-              <p class="text-xs font-black uppercase tracking-wide text-slate-500">Today</p>
-              <h1 class="mt-1 text-2xl font-black tracking-tight text-slate-950">What needs attention?</h1>
-            </section>
-
-            <section class="space-y-2" aria-labelledby="continue-title">
-              <div class="flex items-center justify-between">
-                <h2 id="continue-title" class="text-sm font-black text-slate-700">Continue Conversation</h2>
-                <button class="text-sm font-black text-slate-950" type="button" data-open-channel="20260625">Open</button>
-              </div>
-              <button class="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition active:scale-[.99]" type="button" data-open-channel="20260625">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2">
-                      <strong class="truncate text-base">Rights Transfer</strong>
-                      <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[.68rem] font-black text-emerald-700">Private</span>
-                    </div>
-                    <p class="mt-1 truncate text-sm text-slate-500">Bob accepted 450 STRK. Escrow is ready.</p>
-                  </div>
-                  <div class="shrink-0 text-right">
-                    <time class="block text-xs font-bold text-slate-400">now</time>
-                    <span class="mt-2 inline-grid min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black text-white">2</span>
-                  </div>
-                </div>
-              </button>
-            </section>
-
-            <section class="space-y-2" aria-labelledby="pending-deals-title">
-              <h2 id="pending-deals-title" class="text-sm font-black text-slate-700">Pending Deals</h2>
-              <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                <button class="attention-row" type="button" data-open-channel="20260625">
-                  <span class="min-w-0">
-                    <strong>Reply to counter offer</strong>
-                    <span>Rights Transfer</span>
-                  </span>
-                  <i data-lucide="chevron-right" class="size-4 text-slate-400"></i>
-                </button>
-                <button class="attention-row border-t border-slate-100" type="button" data-open-channel="11209">
-                  <span class="min-w-0">
-                    <strong>Review offer</strong>
-                    <span>Design Milestone</span>
-                  </span>
-                  <i data-lucide="chevron-right" class="size-4 text-slate-400"></i>
-                </button>
-              </div>
-            </section>
-
-            <section class="space-y-2" aria-labelledby="pending-escrows-title">
-              <h2 id="pending-escrows-title" class="text-sm font-black text-slate-700">Pending Escrows</h2>
-              <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                <button class="attention-row" type="button" data-open-channel="20260625" data-tab-target="deal">
-                  <span class="min-w-0">
-                    <strong>Complete escrow</strong>
-                    <span>Buyer and seller confirmed</span>
-                  </span>
-                  <i data-lucide="shield-check" class="size-4 text-emerald-600"></i>
-                </button>
-              </div>
-            </section>
-
-            <section class="grid gap-3 sm:grid-cols-2">
-              <div class="space-y-2" aria-labelledby="payments-title">
-                <h2 id="payments-title" class="text-sm font-black text-slate-700">Recent Payments</h2>
-                <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                  <div class="flex items-center justify-between gap-3">
-                    <span class="min-w-0 truncate text-sm font-bold">450 STRK</span>
-                    <span class="text-xs font-bold text-slate-400">pending</span>
-                  </div>
-                  <p class="mt-1 truncate text-sm text-slate-500">Rights Transfer settlement</p>
-                </div>
-              </div>
-              <div class="space-y-2" aria-labelledby="assistant-title">
-                <h2 id="assistant-title" class="text-sm font-black text-slate-700">Assistant Suggestions</h2>
-                <button class="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition active:scale-[.99]" type="button" data-open-channel="20260625" data-tab-target="assistant">
-                  <strong class="block text-sm">Send memo before release</strong>
-                  <span class="mt-1 block truncate text-sm text-slate-500">Keeps settlement context clear.</span>
-                </button>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <section class="screen hidden" data-screen="channels">
-          <header class="sticky top-0 z-30 border-b border-slate-200 bg-[#f8fafc]/95 px-4 pb-3 pt-[calc(.75rem+env(safe-area-inset-top))] backdrop-blur">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Channels</p>
-                <h1 class="text-2xl font-black tracking-tight">Conversations</h1>
-              </div>
-              <button class="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition active:scale-95" type="button" aria-label="Create private deal" data-create-channel>
-                <i data-lucide="plus" class="size-4"></i>
+              <button class="icon-button" type="button" data-new-conversation aria-label="New conversation">
+                <i data-lucide="square-pen" class="size-5"></i>
               </button>
             </div>
-            <label class="mt-3 flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-500 shadow-sm">
+            <label class="search-field">
               <i data-lucide="search" class="size-4"></i>
-              <input id="channel-search" class="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400" type="search" placeholder="Search conversations" autocomplete="off" />
+              <input id="conversation-search" type="search" placeholder="Search private deals" autocomplete="off" />
             </label>
           </header>
 
-          <div class="pb-24">
-            <div id="channel-list" class="divide-y divide-slate-100 bg-white"></div>
+          <div class="content-with-nav">
+            <div id="conversation-list" class="conversation-list"></div>
           </div>
         </section>
 
-        <section class="screen hidden min-h-dvh bg-white" data-screen="channel">
-          <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur">
-            <div class="flex min-h-[4.25rem] items-center gap-2 px-2">
-              <button class="grid size-10 shrink-0 place-items-center rounded-lg text-slate-700 transition active:scale-95" type="button" data-nav="channels" aria-label="Back to channels">
-                <i data-lucide="chevron-left" class="size-5"></i>
+        <section class="screen hidden" data-screen="activity">
+          <header class="surface-header">
+            <p class="eyebrow">Today</p>
+            <h1 class="page-title">What requires attention?</h1>
+          </header>
+          <div class="content-with-nav space-y-5 px-4 pt-4">
+            <section class="focus-list" aria-labelledby="continue-heading">
+              <h2 id="continue-heading">Continue conversation</h2>
+              <button class="task-row primary" type="button" data-open-channel="20260625">
+                <span>
+                  <strong>Rights Transfer</strong>
+                  <small>Bob accepted 450 STRK. Send memo next.</small>
+                </span>
+                <i data-lucide="message-circle" class="size-5"></i>
               </button>
-              <button class="min-w-0 flex-1 text-left" type="button" data-tab="conversation">
-                <div class="flex min-w-0 items-center gap-2">
-                  <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
-                  <span id="channel-mode" class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[.68rem] font-black text-emerald-700">Private</span>
-                </div>
-                <p id="channel-counterparty" class="truncate text-xs font-semibold text-slate-500">Bob</p>
-              </button>
-              <button class="connect-button grid size-10 shrink-0 place-items-center rounded-lg text-slate-700 transition active:scale-95" type="button" aria-label="Connect">
-                <i data-lucide="wallet-cards" class="size-4"></i>
-              </button>
-            </div>
+            </section>
 
-            <nav class="grid grid-cols-3 gap-1 px-3 pb-2" aria-label="Channel tabs">
-              <button class="channel-tab active" type="button" data-tab="conversation">Conversation</button>
-              <button class="channel-tab" type="button" data-tab="deal">Deal</button>
-              <button class="channel-tab" type="button" data-tab="assistant">Assistant</button>
-            </nav>
+            <section class="focus-list" aria-labelledby="offer-heading">
+              <h2 id="offer-heading">Pending offers</h2>
+              <button class="task-row" type="button" data-open-route="deal">
+                <span>
+                  <strong>Review counter offer</strong>
+                  <small>450 STRK awaiting final action</small>
+                </span>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+            </section>
+
+            <section class="focus-list" aria-labelledby="escrow-heading">
+              <h2 id="escrow-heading">Pending escrows</h2>
+              <button class="task-row" type="button" data-open-route="escrow">
+                <span>
+                  <strong>Release escrow</strong>
+                  <small>Buyer and seller deposits confirmed</small>
+                </span>
+                <i data-lucide="shield-check" class="size-5 text-emerald-700"></i>
+              </button>
+            </section>
+
+            <section class="focus-list" aria-labelledby="payment-heading">
+              <h2 id="payment-heading">Pending payments</h2>
+              <button class="task-row" type="button" data-open-route="payment">
+                <span>
+                  <strong>Send settlement payment</strong>
+                  <small>450 STRK to Bob</small>
+                </span>
+                <i data-lucide="send" class="size-5"></i>
+              </button>
+            </section>
+
+            <section class="focus-list" aria-labelledby="proof-heading">
+              <h2 id="proof-heading">Waiting proof</h2>
+              <button class="task-row" type="button" data-open-route="proof">
+                <span>
+                  <strong>Export proof</strong>
+                  <small>Settlement complete, proof generated</small>
+                </span>
+                <i data-lucide="file-check-2" class="size-5"></i>
+              </button>
+            </section>
+          </div>
+        </section>
+
+        <section class="screen hidden" data-screen="wallet">
+          <header class="surface-header">
+            <p class="eyebrow">Wallet</p>
+            <h1 class="page-title">Payment readiness</h1>
+          </header>
+          <div class="content-with-nav px-4 pt-4">
+            <section class="plain-panel">
+              <div class="flex items-center justify-between gap-4">
+                <span>
+                  <strong class="block text-lg">Private Mode</strong>
+                  <small class="mt-1 block text-sm font-semibold text-slate-500">Ready for settlement</small>
+                </span>
+                <span class="status-pill private">Ready</span>
+              </div>
+              <button class="primary-action mt-5 w-full" type="button" data-connect-wallet>
+                <i data-lucide="wallet-cards" class="size-5"></i>
+                <span>Connect Wallet</span>
+              </button>
+            </section>
+
+            <section class="plain-list mt-5">
+              <div>
+                <span>Available asset</span>
+                <strong>STRK</strong>
+              </div>
+              <div>
+                <span>Next payment</span>
+                <strong>450 STRK</strong>
+              </div>
+              <div>
+                <span>Recipient</span>
+                <strong>Bob</strong>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="screen hidden" data-screen="settings">
+          <header class="surface-header">
+            <p class="eyebrow">Settings</p>
+            <h1 class="page-title">Preferences</h1>
+          </header>
+          <div class="content-with-nav px-4 pt-4">
+            <section class="plain-list">
+              <label class="setting-row">
+                <span>
+                  <strong>Default privacy</strong>
+                  <small>Start new deals in Private Mode</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+              <label class="setting-row">
+                <span>
+                  <strong>Payment memo</strong>
+                  <small>Ask for memo before sending</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+              <label class="setting-row">
+                <span>
+                  <strong>Proof reminder</strong>
+                  <small>Show proof after settlement</small>
+                </span>
+                <input type="checkbox" checked />
+              </label>
+            </section>
+          </div>
+        </section>
+
+        <section class="screen hidden bg-white" data-screen="channel">
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="conversations" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <button class="min-w-0 flex-1 text-left" type="button" data-open-route="deal">
+              <div class="flex min-w-0 items-center gap-2">
+                <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
+                <span id="channel-mode" class="status-pill private">Private</span>
+              </div>
+              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob · Offer accepted</p>
+            </button>
+            <button class="icon-button ghost" type="button" data-open-route="deal" aria-label="Deal menu">
+              <i data-lucide="more-horizontal" class="size-5"></i>
+            </button>
           </header>
 
-          <section class="channel-panel" data-panel="conversation">
-            <div id="conversation-feed" class="conversation-feed space-y-4 px-4 pt-4"></div>
-            <form id="message-form" class="conversation-composer border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-18px_40px_rgba(15,23,42,.08)] backdrop-blur">
-              <div class="mx-auto flex max-w-[44rem] items-end gap-2">
-                <button class="grid size-11 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-700 transition active:scale-95" type="button" aria-label="Attach file" data-attach>
-                  <i data-lucide="paperclip" class="size-4"></i>
-                </button>
-                <label class="min-w-0 flex-1">
-                  <span class="sr-only">Message</span>
-                  <textarea id="message-input" class="max-h-32 min-h-11 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[16px] leading-5 text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-400" rows="1" placeholder="Message"></textarea>
-                </label>
-                <button class="grid size-11 shrink-0 place-items-center rounded-lg bg-slate-950 text-white shadow-sm transition active:scale-95" type="submit" aria-label="Send message">
-                  <i data-lucide="send" class="size-4"></i>
-                </button>
+          <div id="message-feed" class="message-feed"></div>
+
+          <form id="composer-form" class="composer">
+            <div class="composer-actions" aria-label="Quick actions">
+              <button type="button" data-composer-action="attach" aria-label="Attachment"><i data-lucide="paperclip" class="size-5"></i></button>
+              <button type="button" data-open-route="payment" aria-label="Payment"><i data-lucide="badge-dollar-sign" class="size-5"></i></button>
+              <button type="button" data-open-route="deal" aria-label="Offer"><i data-lucide="handshake" class="size-5"></i></button>
+              <button type="button" data-composer-action="memo" aria-label="Memo"><i data-lucide="file-text" class="size-5"></i></button>
+            </div>
+            <div class="composer-input">
+              <textarea id="message-input" rows="1" placeholder="Message"></textarea>
+              <button type="submit" aria-label="Send"><i data-lucide="send" class="size-5"></i></button>
+            </div>
+          </form>
+        </section>
+
+        <section class="screen hidden bg-[#f7f8fa]" data-screen="deal">
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="channel" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="eyebrow">Deal</p>
+              <h1 class="detail-title">Current offer</h1>
+            </div>
+          </header>
+          <div class="detail-content">
+            <section class="plain-panel">
+              <div class="deal-amount">
+                <span>Price</span>
+                <strong id="deal-price">450 STRK</strong>
+                <small id="deal-status">Accepted</small>
               </div>
-            </form>
-          </section>
+              <div class="split-list mt-5">
+                <div><span>Buyer</span><strong>Alice</strong></div>
+                <div><span>Seller</span><strong>Bob</strong></div>
+                <div><span>Asset</span><strong>Rights package</strong></div>
+                <div><span>Status</span><strong id="deal-current-status">Accepted</strong></div>
+              </div>
+              <div class="mt-5 grid grid-cols-3 gap-2">
+                <button class="secondary-action" type="button" data-deal-action="reject">Reject</button>
+                <button class="secondary-action" type="button" data-deal-action="counter">Counter</button>
+                <button class="primary-action" type="button" data-deal-action="accept">Accept</button>
+              </div>
+            </section>
 
-          <section class="channel-panel hidden px-4 pb-28 pt-4" data-panel="deal">
-            <div class="space-y-3">
-              <section class="deal-section">
-                <div class="deal-section-head">
-                  <span>Offer</span>
-                  <strong id="offer-status">Accepted</strong>
-                </div>
-                <div class="deal-grid">
-                  <div>
-                    <span>Seller</span>
-                    <strong id="seller-offer">500 STRK</strong>
-                  </div>
-                  <div>
-                    <span>Counter</span>
-                    <strong id="buyer-counter">450 STRK</strong>
-                  </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                  <button class="secondary-action" type="button" data-deal-action="counter">
-                    <i data-lucide="reply" class="size-4"></i>
-                    <span>Counter</span>
-                  </button>
-                  <button class="primary-action" type="button" data-deal-action="accept">
-                    <i data-lucide="check" class="size-4"></i>
-                    <span>Accept</span>
-                  </button>
-                </div>
-              </section>
+            <section class="plain-panel">
+              <h2 class="section-title">History</h2>
+              <ol class="event-list">
+                <li><span>Offer</span><strong>500 STRK</strong></li>
+                <li><span>Counter</span><strong>450 STRK</strong></li>
+                <li><span>Accepted</span><strong>Today</strong></li>
+              </ol>
+            </section>
 
-              <section class="deal-section">
-                <div class="deal-section-head">
-                  <span>Escrow</span>
-                  <strong id="escrow-status">Ready</strong>
-                </div>
-                <div class="deal-progress">
-                  <span class="done">Buyer confirmed</span>
-                  <span class="done">Seller confirmed</span>
-                  <span id="settlement-chip">Waiting release</span>
-                </div>
-                <button class="primary-action w-full" type="button" data-deal-action="complete-escrow">
-                  <i data-lucide="shield-check" class="size-4"></i>
-                  <span>Complete Escrow</span>
-                </button>
-              </section>
+            <button class="primary-action w-full" type="button" data-open-route="escrow">
+              <i data-lucide="shield-check" class="size-5"></i>
+              <span>Continue to Escrow</span>
+            </button>
+          </div>
+        </section>
 
-              <section class="deal-section">
-                <div class="deal-section-head">
-                  <span>Payment</span>
-                  <strong id="payment-state">Ready</strong>
-                </div>
-                <label class="field">
-                  <span>Amount</span>
-                  <input id="payment-amount" type="text" value="450 STRK" />
-                </label>
-                <label class="field">
-                  <span>Recipient</span>
-                  <input id="payment-recipient" type="text" value="Bob" />
-                </label>
-                <div>
-                  <span class="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">Mode</span>
-                  <div class="grid grid-cols-2 gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
-                    <button class="payment-mode active" type="button" data-payment-mode="Private">Private</button>
-                    <button class="payment-mode" type="button" data-payment-mode="Public">Public</button>
-                  </div>
-                </div>
-                <label class="field">
-                  <span>Memo</span>
-                  <textarea id="payment-memo" rows="3">Final settlement for rights transfer.</textarea>
-                </label>
-                <button class="primary-action w-full" type="button" data-deal-action="send-payment">
-                  <i data-lucide="send" class="size-4"></i>
-                  <span>Send Payment</span>
-                </button>
-              </section>
-
-              <section class="deal-section">
-                <div class="deal-section-head">
-                  <span>Settlement</span>
-                  <strong id="settlement-status">Pending</strong>
-                </div>
-                <div class="deal-row">
-                  <span>Proof</span>
-                  <strong id="proof-status">Not attached</strong>
-                </div>
-                <button class="secondary-action w-full" type="button" data-deal-action="attach-proof">
-                  <i data-lucide="file-check-2" class="size-4"></i>
-                  <span>Attach Proof</span>
-                </button>
-              </section>
+        <section class="screen hidden bg-[#f7f8fa]" data-screen="escrow">
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="deal" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="eyebrow">Escrow</p>
+              <h1 class="detail-title">Release conditions</h1>
             </div>
-          </section>
+          </header>
+          <div class="detail-content">
+            <section class="plain-panel">
+              <h2 class="section-title">Deposit progress</h2>
+              <div class="escrow-checks">
+                <div class="complete"><i data-lucide="check" class="size-5"></i><span>Buyer deposited</span></div>
+                <div class="complete"><i data-lucide="check" class="size-5"></i><span>Seller deposited</span></div>
+              </div>
+              <div class="plain-note">Release when both parties confirm settlement memo and payment details.</div>
+              <button class="primary-action mt-5 w-full" type="button" data-escrow-release>
+                <i data-lucide="unlock" class="size-5"></i>
+                <span>Release Escrow</span>
+              </button>
+              <button class="secondary-action mt-2 w-full" type="button" data-escrow-dispute>Dispute</button>
+            </section>
+            <section class="plain-list">
+              <div><span>Transaction proof</span><strong id="escrow-proof">Pending</strong></div>
+            </section>
+          </div>
+        </section>
 
-          <section class="channel-panel hidden px-4 pb-28 pt-4" data-panel="assistant">
-            <div class="space-y-3">
-              <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Suggestion</p>
-                <h2 class="mt-1 text-lg font-black">Send memo before release.</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-600">This keeps the payment context clear before escrow completion.</p>
-                <button class="primary-action mt-4 w-full" type="button" data-deal-action="send-payment">
-                  <i data-lucide="send" class="size-4"></i>
-                  <span>Send Memo</span>
-                </button>
-              </section>
-              <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Risk</p>
-                <h2 class="mt-1 text-lg font-black">Confirm proof after settlement.</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-600">Attach proof once payment is sent and escrow is completed.</p>
-              </section>
-              <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <p class="text-xs font-black uppercase tracking-wide text-slate-500">Recommendation</p>
-                <h2 class="mt-1 text-lg font-black">450 STRK is ready to close.</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-600">Both sides have converged. Move through payment, escrow, then proof.</p>
-              </section>
+        <section class="screen hidden bg-[#f7f8fa]" data-screen="payment">
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="channel" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="eyebrow">Payment</p>
+              <h1 class="detail-title">Send payment</h1>
             </div>
-          </section>
+          </header>
+          <form id="payment-form" class="detail-content">
+            <label class="field"><span>Recipient</span><input id="payment-recipient" value="Bob" /></label>
+            <label class="field"><span>Asset</span><input id="payment-asset" value="STRK" /></label>
+            <label class="field"><span>Amount</span><input id="payment-amount" value="450" inputmode="decimal" /></label>
+            <div>
+              <span class="field-label">Privacy Mode</span>
+              <div class="segmented">
+                <button class="active" type="button" data-payment-mode="Private">Private</button>
+                <button type="button" data-payment-mode="Public">Public</button>
+              </div>
+            </div>
+            <label class="field"><span>Memo</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>
+            <button class="secondary-action w-full" type="button" data-payment-review>Review</button>
+            <button class="primary-action w-full" type="submit">
+              <i data-lucide="send" class="size-5"></i>
+              <span>Send</span>
+            </button>
+          </form>
+        </section>
+
+        <section class="screen hidden bg-[#f7f8fa]" data-screen="settlement">
+          <div class="success-screen">
+            <div class="success-icon"><i data-lucide="check" class="size-9"></i></div>
+            <p class="eyebrow">Settlement</p>
+            <h1>Settlement complete.</h1>
+            <p>Proof generated and attached to the deal.</p>
+            <button class="primary-action w-full" type="button" data-open-route="proof">View Proof</button>
+            <button class="secondary-action w-full" type="button" data-nav="channel">Back to Conversation</button>
+          </div>
+        </section>
+
+        <section class="screen hidden bg-[#f7f8fa]" data-screen="proof">
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="settlement" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="eyebrow">Proof</p>
+              <h1 class="detail-title">Settlement trail</h1>
+            </div>
+          </header>
+          <div class="detail-content">
+            <section class="plain-panel">
+              <ol class="proof-timeline">
+                <li><span>Offer</span><strong>500 STRK</strong></li>
+                <li><span>Counter</span><strong>450 STRK</strong></li>
+                <li><span>Escrow</span><strong>Released</strong></li>
+                <li><span>Payment</span><strong>Sent</strong></li>
+                <li><span>Settlement</span><strong>Complete</strong></li>
+              </ol>
+            </section>
+            <section class="plain-list">
+              <div><span>Proof Hash</span><strong class="break-all">0x6cdd37...4e207</strong></div>
+              <div><span>Explorer</span><strong>Sepolia</strong></div>
+            </section>
+            <button class="primary-action w-full" type="button" data-export-proof>
+              <i data-lucide="download" class="size-5"></i>
+              <span>Export PDF</span>
+            </button>
+          </div>
         </section>
       </main>
 
-      <nav class="bottom-nav fixed inset-x-0 bottom-0 z-50 mx-auto grid max-w-[44rem] grid-cols-2 gap-1 border-t border-slate-200 bg-white/95 px-3 pb-[calc(.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_40px_rgba(15,23,42,.08)] backdrop-blur" aria-label="Primary navigation">
-        <button class="bottom-nav-item active" type="button" data-nav="home">
-          <i data-lucide="inbox" class="size-4"></i>
-          <span>Home</span>
+      <nav class="bottom-nav" aria-label="Primary navigation">
+        <button class="bottom-nav-item active" type="button" data-top-nav="conversations">
+          <i data-lucide="messages-square" class="size-5"></i>
+          <span>Conversation</span>
         </button>
-        <button class="bottom-nav-item" type="button" data-nav="channels">
-          <i data-lucide="messages-square" class="size-4"></i>
-          <span>Channels</span>
+        <button class="bottom-nav-item" type="button" data-top-nav="activity">
+          <i data-lucide="bell" class="size-5"></i>
+          <span>Activity</span>
+        </button>
+        <button class="bottom-nav-item" type="button" data-top-nav="wallet">
+          <i data-lucide="wallet-cards" class="size-5"></i>
+          <span>Wallet</span>
+        </button>
+        <button class="bottom-nav-item" type="button" data-top-nav="settings">
+          <i data-lucide="settings" class="size-5"></i>
+          <span>Settings</span>
         </button>
       </nav>
 
-      <div id="toast" class="pointer-events-none fixed inset-x-3 bottom-24 z-[70] mx-auto max-w-[40rem] translate-y-3 rounded-lg bg-slate-950 px-4 py-3 text-sm font-bold text-white opacity-0 shadow-2xl transition" role="status" aria-live="polite"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </div>
   </body>
 </html>

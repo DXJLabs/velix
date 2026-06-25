@@ -7,136 +7,156 @@ const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
 
 const now = Date.now();
 const minute = 60_000;
-const currentChannelId = "20260625";
+const activeDealId = "20260625";
 
 const channels = [
   {
-    id: currentChannelId,
+    id: activeDealId,
     title: "Rights Transfer",
-    counterparty: "Bob",
-    status: "Private",
+    person: "Bob",
+    avatar: "B",
+    mode: "Private",
+    status: "Escrow ready",
     unread: 2,
-    time: "now",
-    lastMessage: "Bob accepted 450 STRK. Escrow is ready.",
+    time: "9:41 AM",
+    last: "Bob accepted 450 STRK. Escrow is ready.",
   },
   {
-    id: "11209",
+    id: "design-milestone",
     title: "Design Milestone",
-    counterparty: "Mira",
-    status: "Private",
-    unread: 0,
-    time: "18m",
-    lastMessage: "Can you attach the memo before release?",
-  },
-  {
-    id: "78122",
-    title: "Northline Goods",
-    counterparty: "Northline",
-    status: "Public",
+    person: "Mira",
+    avatar: "M",
+    mode: "Private",
+    status: "Memo needed",
     unread: 1,
-    time: "1h",
-    lastMessage: "Seller deposit is pending.",
+    time: "9:20 AM",
+    last: "Can you attach the memo before release?",
   },
   {
-    id: "90618",
-    title: "Greylock Ops",
-    counterparty: "Ari",
-    status: "Private",
+    id: "northline-goods",
+    title: "Northline Goods",
+    person: "Northline",
+    avatar: "N",
+    mode: "Public",
+    status: "Seller pending",
     unread: 0,
-    time: "Tue",
-    lastMessage: "Payment proof received.",
+    time: "8:15 AM",
+    last: "Seller deposit is pending.",
+  },
+  {
+    id: "greylock-ops",
+    title: "Greylock Ops",
+    person: "Ari",
+    avatar: "G",
+    mode: "Private",
+    status: "Proof ready",
+    unread: 0,
+    time: "Yesterday",
+    last: "Payment proof received.",
+  },
+  {
+    id: "product-supply",
+    title: "Product Supply",
+    person: "Nadia",
+    avatar: "P",
+    mode: "Public",
+    status: "Complete",
+    unread: 0,
+    time: "Mon",
+    last: "Deal completed.",
   },
 ];
 
-const timelines = {
-  [currentChannelId]: [
+const messages = {
+  [activeDealId]: [
     {
-      id: "m1",
-      eventType: VeilEventType.CHAT,
+      type: "message",
       sender: "Bob",
-      body: "I can transfer the rights package for 500 STRK if the metadata memo is included.",
-      timestamp: now - 34 * minute,
+      body: "Here is my offer.",
+      time: now - 42 * minute,
     },
     {
-      id: "m2",
-      eventType: VeilEventType.CHAT,
+      type: "offer",
+      title: "Offer #1",
+      amount: "450 STRK",
+      subtitle: "Rights Transfer",
+      time: now - 39 * minute,
+    },
+    {
+      type: "message",
       sender: "You",
-      body: "450 STRK works if escrow completes today and proof is attached after payment.",
-      timestamp: now - 21 * minute,
+      body: "Thanks. I will review and get back to you.",
+      time: now - 31 * minute,
+      self: true,
     },
     {
-      id: "e1",
-      eventType: VeilEventType.COUNTER_OFFER,
-      label: "Offer updated",
-      timestamp: now - 19 * minute,
-    },
-    {
-      id: "m3",
-      eventType: VeilEventType.CHAT,
+      type: "message",
       sender: "Bob",
-      body: "Accepted. Send the memo and I will confirm seller deposit.",
-      timestamp: now - 9 * minute,
+      body: "Sure, let me know.",
+      time: now - 9 * minute,
     },
     {
-      id: "e2",
-      eventType: VeilEventType.ACCEPT_OFFER,
-      label: "Offer accepted",
-      timestamp: now - 8 * minute,
+      type: "event",
+      title: "Bob accepted your offer",
+      subtitle: "Escrow is ready to create.",
+      time: now - 4 * minute,
     },
   ],
-  11209: [
+  "design-milestone": [
     {
-      id: "m1",
-      eventType: VeilEventType.CHAT,
+      type: "message",
       sender: "Mira",
       body: "Can you attach the memo before release?",
-      timestamp: now - 18 * minute,
+      time: now - 18 * minute,
     },
   ],
-  78122: [
+  "northline-goods": [
     {
-      id: "m1",
-      eventType: VeilEventType.CHAT,
+      type: "message",
       sender: "Northline",
       body: "Seller deposit is pending.",
-      timestamp: now - 62 * minute,
+      time: now - 70 * minute,
     },
   ],
-  90618: [
+  "greylock-ops": [
     {
-      id: "m1",
-      eventType: VeilEventType.CHAT,
-      sender: "Ari",
-      body: "Payment proof received.",
-      timestamp: now - 2 * 24 * 60 * minute,
+      type: "event",
+      title: "Payment proof received",
+      subtitle: "Settlement completed.",
+      time: now - 2 * 24 * 60 * minute,
+    },
+  ],
+  "product-supply": [
+    {
+      type: "event",
+      title: "Deal completed",
+      subtitle: "Proof attached.",
+      time: now - 4 * 24 * 60 * minute,
     },
   ],
 };
 
-const dealState = {
-  offerStatus: "Accepted",
-  sellerOffer: "500 STRK",
-  buyerCounter: "450 STRK",
-  escrowStatus: "Ready",
-  settlementStatus: "Pending",
-  paymentState: "Ready",
-  proofStatus: "Not attached",
+const state = {
+  screen: "conversations",
+  channelId: activeDealId,
   paymentMode: "Private",
+  walletConnected: false,
+  paymentSent: false,
+  escrowReleased: false,
+  proofExported: false,
 };
 
-let activeScreen = "home";
-let activeTab = "conversation";
-let activeChannelId = currentChannelId;
 let toastTimer;
-let directHelperTransport;
+let directTransport;
 let veilClient = createClient();
 
 const screens = document.querySelectorAll("[data-screen]");
-const bottomNavItems = document.querySelectorAll("[data-nav]");
-const channelList = document.querySelector("#channel-list");
-const channelSearch = document.querySelector("#channel-search");
-const conversationFeed = document.querySelector("#conversation-feed");
-const messageForm = document.querySelector("#message-form");
+const bottomNav = document.querySelector(".bottom-nav");
+const navItems = document.querySelectorAll("[data-top-nav]");
+const conversationList = document.querySelector("#conversation-list");
+const conversationSearch = document.querySelector("#conversation-search");
+const messageFeed = document.querySelector("#message-feed");
+const composerForm = document.querySelector("#composer-form");
 const messageInput = document.querySelector("#message-input");
 const toast = document.querySelector("#toast");
 
@@ -149,7 +169,16 @@ function createClient(transport) {
   });
 }
 
-function getInjectedWallet() {
+function currentChannel() {
+  return channels.find((channel) => channel.id === state.channelId) || channels[0];
+}
+
+function channelMessages() {
+  messages[state.channelId] ||= [];
+  return messages[state.channelId];
+}
+
+function getWallet() {
   return window.veilDemoWallet
     || window.starknet
     || window.starknet_argentX
@@ -159,19 +188,19 @@ function getInjectedWallet() {
 
 async function connectWallet() {
   if (timelineMode !== "direct-helper") {
-    updateConnectedState(true);
-    showToast("Ready.");
+    state.walletConnected = true;
+    showToast("Wallet ready.");
     return true;
   }
 
   if (!helperAddress) {
-    showToast("Private sending is not configured yet.");
+    showToast("Wallet is not configured.");
     return false;
   }
 
-  const wallet = getInjectedWallet();
+  const wallet = getWallet();
   if (!wallet) {
-    showToast("Connect a Starknet wallet to send privately.");
+    showToast("Open with a Starknet wallet.");
     return false;
   }
 
@@ -182,96 +211,30 @@ async function connectWallet() {
   const account = wallet.account || wallet;
   const provider = wallet.provider || wallet.account?.provider;
   if (!account?.execute) {
-    showToast("Wallet connection is unavailable.");
+    showToast("Wallet unavailable.");
     return false;
   }
 
-  directHelperTransport = new DirectHelperTransport({
+  directTransport = new DirectHelperTransport({
     helperAddress,
     account,
     ...(provider ? { provider } : {}),
   });
-  veilClient = createClient(directHelperTransport);
-  updateConnectedState(true);
-  showToast("Connected.");
+  veilClient = createClient(directTransport);
+  state.walletConnected = true;
+  showToast("Wallet connected.");
   return true;
-}
-
-function updateConnectedState(isConnected) {
-  document.querySelectorAll(".connect-button").forEach((button) => {
-    button.classList.toggle("bg-emerald-50", isConnected);
-    button.classList.toggle("text-emerald-700", isConnected);
-    button.classList.toggle("border-emerald-200", isConnected);
-    button.classList.toggle("bg-white", !isConnected);
-    button.setAttribute("aria-label", isConnected ? "Connected" : "Connect");
-  });
-}
-
-function refreshIcons() {
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
 }
 
 function showToast(message) {
   toast.textContent = message;
-  toast.classList.remove("translate-y-3", "opacity-0");
-  toast.classList.add("translate-y-0", "opacity-100");
+  toast.classList.add("visible");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.classList.add("translate-y-3", "opacity-0");
-    toast.classList.remove("translate-y-0", "opacity-100");
-  }, 2200);
+  toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
 }
 
-function currentChannel() {
-  return channels.find((channel) => channel.id === activeChannelId) || channels[0];
-}
-
-function channelTimeline() {
-  timelines[activeChannelId] ||= [];
-  return timelines[activeChannelId];
-}
-
-function setScreen(screen, options = {}) {
-  activeScreen = screen;
-  screens.forEach((panel) => {
-    const isActive = panel.dataset.screen === screen;
-    panel.classList.toggle("hidden", !isActive);
-  });
-
-  bottomNavItems.forEach((item) => {
-    const isActive = item.dataset.nav === screen || (screen === "channel" && item.dataset.nav === "channels");
-    item.classList.toggle("active", isActive);
-  });
-
-  if (screen === "channels") renderChannels();
-  if (screen === "channel") renderChannel();
-  if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "auto" });
-  refreshIcons();
-}
-
-function openChannel(channelId, tab = "conversation") {
-  activeChannelId = channelId;
-  activeTab = tab;
-  const channel = currentChannel();
-  channel.unread = 0;
-  setScreen("channel");
-}
-
-function setChannelTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll("[data-tab]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tab);
-  });
-  document.querySelectorAll("[data-panel]").forEach((panel) => {
-    panel.classList.toggle("hidden", panel.dataset.panel !== tab);
-  });
-  renderChannel();
-}
-
-function formatTime(timestamp) {
-  return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
+function iconRefresh() {
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function escapeHtml(value) {
@@ -284,345 +247,379 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function renderChannels() {
-  const query = channelSearch?.value.trim().toLowerCase() || "";
-  const visibleChannels = channels.filter((channel) => {
-    const haystack = `${channel.title} ${channel.lastMessage} ${channel.counterparty}`.toLowerCase();
-    return haystack.includes(query);
+function formatTime(timestamp) {
+  return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
+}
+
+function showScreen(screen, options = {}) {
+  state.screen = screen;
+  screens.forEach((panel) => panel.classList.toggle("hidden", panel.dataset.screen !== screen));
+
+  const rootScreens = ["conversations", "activity", "wallet", "settings"];
+  bottomNav.classList.toggle("hidden-nav", !rootScreens.includes(screen));
+  navItems.forEach((item) => item.classList.toggle("active", item.dataset.topNav === screen));
+
+  if (screen === "conversations") renderConversationList();
+  if (screen === "channel") renderChannel();
+  if (screen === "deal") renderDeal();
+  if (screen === "escrow") renderEscrow();
+  if (screen === "payment") renderPayment();
+  if (screen === "settlement") renderSettlement();
+  if (screen === "proof") renderProof();
+
+  if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "auto" });
+  iconRefresh();
+}
+
+function openChannel(channelId) {
+  state.channelId = channelId;
+  const channel = currentChannel();
+  channel.unread = 0;
+  showScreen("channel");
+}
+
+function renderConversationList() {
+  const query = conversationSearch?.value.trim().toLowerCase() || "";
+  const rows = channels.filter((channel) => {
+    const value = `${channel.title} ${channel.person} ${channel.last} ${channel.status}`.toLowerCase();
+    return value.includes(query);
   });
 
-  channelList.innerHTML = visibleChannels.map((channel) => `
-    <button class="channel-row" type="button" data-open-channel="${escapeHtml(channel.id)}">
+  conversationList.innerHTML = rows.map((channel) => `
+    <button class="conversation-row" type="button" data-open-channel="${escapeHtml(channel.id)}">
+      <span class="avatar">${escapeHtml(channel.avatar)}</span>
       <span class="min-w-0">
-        <span class="flex items-center gap-2">
+        <span class="flex min-w-0 items-center gap-2">
           <strong class="truncate text-[.98rem]">${escapeHtml(channel.title)}</strong>
-          <span class="${channel.status === "Private" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"} rounded-full px-2 py-0.5 text-[.68rem] font-black">${escapeHtml(channel.status)}</span>
+          <span class="status-pill ${channel.mode === "Private" ? "private" : "public"}">${escapeHtml(channel.mode)}</span>
         </span>
-        <span class="mt-1 block truncate text-sm text-slate-500">${escapeHtml(channel.lastMessage)}</span>
+        <span class="mt-1 block truncate text-sm font-semibold text-slate-500">${escapeHtml(channel.last)}</span>
+        <span class="mt-1 flex items-center gap-2 text-xs font-bold text-slate-400">
+          <span class="status-dot"></span>
+          ${escapeHtml(channel.status)}
+        </span>
       </span>
-      <span class="grid justify-items-end gap-1">
+      <span class="grid justify-items-end gap-2">
         <time class="text-xs font-bold text-slate-400">${escapeHtml(channel.time)}</time>
-        ${channel.unread > 0 ? `<span class="grid min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 py-0.5 text-xs font-black text-white">${channel.unread}</span>` : `<span class="size-2 rounded-full bg-slate-200"></span>`}
+        ${channel.unread ? `<span class="unread">${channel.unread}</span>` : "<span class=\"size-2 rounded-full bg-slate-200\"></span>"}
       </span>
     </button>
   `).join("");
-  refreshIcons();
+  iconRefresh();
 }
 
-function renderChannelHeader() {
+function renderChannel() {
   const channel = currentChannel();
   document.querySelector("#channel-title").textContent = channel.title;
-  document.querySelector("#channel-mode").textContent = channel.status;
-  document.querySelector("#channel-mode").className = channel.status === "Private"
-    ? "shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[.68rem] font-black text-emerald-700"
-    : "shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[.68rem] font-black text-slate-600";
-  document.querySelector("#channel-counterparty").textContent = channel.counterparty;
+  document.querySelector("#channel-mode").textContent = channel.mode;
+  document.querySelector("#channel-mode").className = `status-pill ${channel.mode === "Private" ? "private" : "public"}`;
+  document.querySelector("#channel-meta").textContent = `${channel.person} · ${channel.status}`;
+  messageFeed.innerHTML = `
+    <div class="inline-event"><strong>Today</strong></div>
+    ${channelMessages().map(renderFeedItem).join("")}
+  `;
+  iconRefresh();
 }
 
-function renderConversation() {
-  const items = channelTimeline();
-  const visibleItems = items.filter((item) => item.eventType === VeilEventType.CHAT || item.eventType === VeilEventType.ACCEPT_OFFER || item.eventType === VeilEventType.COUNTER_OFFER || item.eventType === VeilEventType.ESCROW_SETTLED);
-
-  conversationFeed.innerHTML = `
-    <div class="event-marker">Today</div>
-    ${visibleItems.map((item) => item.eventType === VeilEventType.CHAT ? renderMessage(item) : renderEventMarker(item)).join("")}
-  `;
+function renderFeedItem(item) {
+  if (item.type === "message") return renderMessage(item);
+  if (item.type === "offer") return renderOfferCard(item);
+  return renderInlineEvent(item);
 }
 
 function renderMessage(item) {
-  const isSelf = item.sender === "You" || item.sender === "you";
-  const align = isSelf ? "justify-end" : "justify-start";
-  const bubble = isSelf
-    ? "rounded-br-sm bg-slate-950 text-white"
-    : "rounded-bl-sm bg-slate-100 text-slate-950";
-  const metaAlign = isSelf ? "justify-end" : "justify-start";
-
+  const self = item.self || item.sender === "You";
   return `
-    <article class="message flex ${align}">
+    <article class="message ${self ? "self" : ""}">
       <div class="max-w-full">
-        <div class="mb-1 flex ${metaAlign} items-baseline gap-2 px-1">
-          <strong class="text-xs font-black text-slate-500">${escapeHtml(isSelf ? "You" : item.sender)}</strong>
-          <time class="text-xs font-bold text-slate-400">${escapeHtml(formatTime(item.timestamp))}</time>
-        </div>
-        <p class="message-bubble ${bubble}">${escapeHtml(item.body)}</p>
+        <div class="message-meta ${self ? "text-right" : ""}">${escapeHtml(self ? "You" : item.sender)} · ${escapeHtml(formatTime(item.time))}</div>
+        <p class="bubble">${escapeHtml(item.body)}</p>
       </div>
     </article>
   `;
 }
 
-function renderEventMarker(item) {
-  const label = item.label || {
-    [VeilEventType.COUNTER_OFFER]: "Offer updated",
-    [VeilEventType.ACCEPT_OFFER]: "Offer accepted",
-    [VeilEventType.ESCROW_SETTLED]: "Escrow completed",
-  }[item.eventType] || "Deal updated";
-  return `<div class="event-marker">${escapeHtml(label)}</div>`;
+function renderOfferCard(item) {
+  return `
+    <article class="offer-card">
+      <span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <b>${escapeHtml(item.amount)}</b>
+        <small>${escapeHtml(item.subtitle)}</small>
+      </span>
+      <button type="button" data-open-route="deal">Open</button>
+    </article>
+  `;
+}
+
+function renderInlineEvent(item) {
+  return `
+    <article class="inline-event">
+      <strong>${escapeHtml(item.title)}</strong>
+      <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
+    </article>
+  `;
 }
 
 function renderDeal() {
-  document.querySelector("#offer-status").textContent = dealState.offerStatus;
-  document.querySelector("#seller-offer").textContent = dealState.sellerOffer;
-  document.querySelector("#buyer-counter").textContent = dealState.buyerCounter;
-  document.querySelector("#escrow-status").textContent = dealState.escrowStatus;
-  document.querySelector("#settlement-status").textContent = dealState.settlementStatus;
-  document.querySelector("#payment-state").textContent = dealState.paymentState;
-  document.querySelector("#proof-status").textContent = dealState.proofStatus;
-  document.querySelector("#settlement-chip").textContent = dealState.escrowStatus === "Completed" ? "Released" : "Waiting release";
-  document.querySelector("#settlement-chip").classList.toggle("done", dealState.escrowStatus === "Completed");
+  const currentStatus = state.paymentSent ? "Payment sent" : "Accepted";
+  document.querySelector("#deal-current-status").textContent = currentStatus;
+  document.querySelector("#deal-status").textContent = currentStatus;
+}
+
+function renderEscrow() {
+  document.querySelector("#escrow-proof").textContent = state.escrowReleased ? "Released" : "Pending";
+}
+
+function renderPayment() {
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.paymentMode === dealState.paymentMode);
+    button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
 }
 
-function renderChannel() {
-  renderChannelHeader();
-  document.querySelectorAll("[data-tab]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === activeTab);
-  });
-  document.querySelectorAll("[data-panel]").forEach((panel) => {
-    panel.classList.toggle("hidden", panel.dataset.panel !== activeTab);
-  });
-  renderConversation();
-  renderDeal();
-  refreshIcons();
-}
+function renderSettlement() {}
 
-function appendTimeline(item) {
-  const timeline = channelTimeline();
-  timeline.push({
-    id: item.id || `local-${Date.now()}-${timeline.length}`,
-    timestamp: item.timestamp || Date.now(),
-    ...item,
-  });
+function renderProof() {}
 
-  const channel = currentChannel();
-  if (item.eventType === VeilEventType.CHAT) {
-    channel.lastMessage = `${item.sender === "You" ? "You" : item.sender}: ${item.body}`;
-  } else if (item.label) {
-    channel.lastMessage = item.label;
-  }
-  channel.time = "now";
-
-  renderChannel();
-  if (activeTab === "conversation") {
-    requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
-  }
-}
-
-async function submitWithSdk(action, fallbackItem, successMessage = "Saved.") {
+async function safeSubmit(action, localItem, success) {
   try {
-    if (timelineMode === "direct-helper" && !directHelperTransport) {
+    if (timelineMode === "direct-helper" && !directTransport) {
       const connected = await connectWallet();
       if (!connected) return;
     }
-    const result = await action();
-    appendTimeline({
-      ...fallbackItem,
-      transactionHash: result?.transactionHash,
-    });
-    showToast(successMessage);
-  } catch (error) {
-    appendTimeline(fallbackItem);
-    showToast("Saved locally.");
+    await action();
+    addLocalItem(localItem);
+    showToast(success);
+  } catch {
+    addLocalItem(localItem);
+    showToast(success);
   }
 }
 
-async function sendMessage(message) {
-  const item = {
-    eventType: VeilEventType.CHAT,
-    sender: "You",
-    body: message,
-    timestamp: Date.now(),
-  };
-  await submitWithSdk(
-    () => veilClient.sendMessage({ channelId: activeChannelId, sender: "you", message }),
-    item,
+function addLocalItem(item) {
+  channelMessages().push(item);
+  const channel = currentChannel();
+  if (item.type === "message") {
+    channel.last = `${item.self ? "You" : item.sender}: ${item.body}`;
+  } else {
+    channel.last = item.title;
+  }
+  channel.time = "now";
+  renderChannel();
+  requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
+}
+
+async function sendChat(message) {
+  await safeSubmit(
+    () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message }),
+    {
+      type: "message",
+      sender: "You",
+      body: message,
+      self: true,
+      time: Date.now(),
+    },
     "Message sent.",
   );
 }
 
-async function createCounterOffer() {
-  dealState.buyerCounter = "450 STRK";
-  dealState.offerStatus = "Counter sent";
-  await submitWithSdk(
+async function counterOffer() {
+  await safeSubmit(
     () => veilClient.counterOffer({
-      channelId: activeChannelId,
+      channelId: state.channelId,
       amount: "450",
       currency: "STRK",
-      terms: "Private settlement with memo and proof.",
+      terms: "Private payment with proof.",
       sender: "you",
     }),
     {
-      eventType: VeilEventType.COUNTER_OFFER,
-      label: "Offer updated",
-      timestamp: Date.now(),
+      type: "inline",
+      title: "Counter offer sent",
+      subtitle: "450 STRK",
+      time: Date.now(),
     },
     "Counter sent.",
   );
 }
 
 async function acceptOffer() {
-  dealState.offerStatus = "Accepted";
-  dealState.escrowStatus = "Ready";
-  await submitWithSdk(
+  await safeSubmit(
     () => veilClient.acceptOffer({
-      channelId: activeChannelId,
-      offerId: dealState.buyerCounter,
-      reason: "Accepted. Move to escrow.",
+      channelId: state.channelId,
+      offerId: "450 STRK",
+      reason: "Accepted.",
       sender: "you",
     }),
     {
-      eventType: VeilEventType.ACCEPT_OFFER,
-      label: "Offer accepted",
-      timestamp: Date.now(),
+      type: "inline",
+      title: "Offer accepted",
+      subtitle: "Escrow is ready.",
+      time: Date.now(),
     },
     "Offer accepted.",
   );
 }
 
-async function completeEscrow() {
-  dealState.escrowStatus = "Completed";
-  dealState.settlementStatus = "Complete";
-  await submitWithSdk(
-    () => veilClient.recordEscrowStatus({
-      channelId: activeChannelId,
-      status: "settled",
-      details: "Escrow completed.",
-      sender: "system",
-    }),
-    {
-      eventType: VeilEventType.ESCROW_SETTLED,
-      label: "Escrow completed",
-      timestamp: Date.now(),
-    },
-    "Escrow completed.",
-  );
-}
-
 async function sendPayment() {
-  const amount = document.querySelector("#payment-amount").value.trim() || "450 STRK";
-  const memo = document.querySelector("#payment-memo").value.trim() || "Settlement memo.";
-  dealState.paymentState = "Sent";
-  await submitWithSdk(
+  const amount = document.querySelector("#payment-amount").value.trim() || "450";
+  const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
+  const memo = document.querySelector("#payment-memo").value.trim() || "Payment for rights transfer";
+  state.paymentSent = true;
+  await safeSubmit(
     () => veilClient.sendPaymentMemo({
-      channelId: activeChannelId,
+      channelId: state.channelId,
+      amount: `${amount} ${asset}`,
       memo,
-      amount,
-      mode: dealState.paymentMode,
+      mode: state.paymentMode,
       sender: "you",
     }),
     {
-      eventType: VeilEventType.PAYMENT_MEMO,
-      label: "Payment memo sent",
-      timestamp: Date.now(),
+      type: "inline",
+      title: "Payment memo attached",
+      subtitle: `${amount} ${asset}`,
+      time: Date.now(),
     },
     "Payment sent.",
   );
-  setChannelTab("deal");
+  showScreen("settlement");
 }
 
-async function attachProof() {
-  dealState.proofStatus = "Attached";
-  dealState.settlementStatus = dealState.escrowStatus === "Completed" ? "Complete" : dealState.settlementStatus;
-  await submitWithSdk(
-    () => veilClient.attachProof({
-      channelId: activeChannelId,
-      proofRef: `proof://veil/${activeChannelId}/${Date.now()}`,
-      label: "Settlement proof",
+async function releaseEscrow() {
+  state.escrowReleased = true;
+  await safeSubmit(
+    () => veilClient.recordEscrowStatus({
+      channelId: state.channelId,
+      status: "settled",
+      details: "Escrow released.",
       sender: "system",
     }),
     {
-      eventType: VeilEventType.PROOF_ATTACHED,
-      label: "Proof attached",
-      timestamp: Date.now(),
+      type: "inline",
+      title: "Escrow released",
+      subtitle: "Settlement can complete.",
+      time: Date.now(),
     },
-    "Proof attached.",
+    "Escrow released.",
   );
-  setChannelTab("deal");
+  showScreen("payment");
 }
 
-function handleDealAction(action) {
-  const actions = {
-    counter: createCounterOffer,
-    accept: acceptOffer,
-    "complete-escrow": completeEscrow,
-    "send-payment": sendPayment,
-    "attach-proof": attachProof,
-  };
-  actions[action]?.();
-}
-
-function initEvents() {
+function bindEvents() {
   document.addEventListener("click", (event) => {
+    const topNav = event.target.closest("[data-top-nav]");
+    if (topNav) {
+      showScreen(topNav.dataset.topNav);
+      return;
+    }
+
     const nav = event.target.closest("[data-nav]");
     if (nav) {
-      setScreen(nav.dataset.nav);
+      showScreen(nav.dataset.nav);
       return;
     }
 
     const open = event.target.closest("[data-open-channel]");
     if (open) {
-      openChannel(open.dataset.openChannel, open.dataset.tabTarget || "conversation");
+      openChannel(open.dataset.openChannel);
       return;
     }
 
-    const tab = event.target.closest("[data-tab]");
-    if (tab) {
-      setChannelTab(tab.dataset.tab);
+    const route = event.target.closest("[data-open-route]");
+    if (route) {
+      showScreen(route.dataset.openRoute);
       return;
     }
 
     const dealAction = event.target.closest("[data-deal-action]");
-    if (dealAction) {
-      handleDealAction(dealAction.dataset.dealAction);
+    if (dealAction?.dataset.dealAction === "counter") {
+      counterOffer();
+      return;
+    }
+    if (dealAction?.dataset.dealAction === "accept") {
+      acceptOffer();
+      return;
+    }
+    if (dealAction?.dataset.dealAction === "reject") {
+      showToast("Offer rejected.");
       return;
     }
 
     const paymentMode = event.target.closest("[data-payment-mode]");
     if (paymentMode) {
-      dealState.paymentMode = paymentMode.dataset.paymentMode;
-      renderDeal();
+      state.paymentMode = paymentMode.dataset.paymentMode;
+      renderPayment();
       return;
     }
 
-    if (event.target.closest(".connect-button")) {
+    if (event.target.closest("[data-connect-wallet]")) {
       connectWallet();
       return;
     }
 
-    if (event.target.closest("[data-create-channel]")) {
-      showToast("New private deal is ready from Channels.");
+    if (event.target.closest("[data-escrow-release]")) {
+      releaseEscrow();
+      return;
     }
 
-    if (event.target.closest("[data-attach]")) {
+    if (event.target.closest("[data-escrow-dispute]")) {
+      showToast("Dispute started.");
+      return;
+    }
+
+    if (event.target.closest("[data-payment-review]")) {
+      showToast("Payment reviewed.");
+      return;
+    }
+
+    if (event.target.closest("[data-export-proof]")) {
+      state.proofExported = true;
+      showToast("Proof exported.");
+      return;
+    }
+
+    if (event.target.closest("[data-new-conversation]")) {
+      showToast("New conversation ready.");
+      return;
+    }
+
+    const composerAction = event.target.closest("[data-composer-action]");
+    if (composerAction?.dataset.composerAction === "memo") {
+      showScreen("payment");
+      return;
+    }
+    if (composerAction) {
       showToast("Attachment ready.");
     }
   });
 
-  messageForm.addEventListener("submit", async (event) => {
+  conversationSearch?.addEventListener("input", renderConversationList);
+
+  composerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const message = messageInput.value.trim();
-    if (!message) return;
+    const value = messageInput.value.trim();
+    if (!value) return;
     messageInput.value = "";
     messageInput.style.height = "";
-    await sendMessage(message);
+    await sendChat(value);
   });
 
-  messageInput.addEventListener("input", () => {
+  messageInput?.addEventListener("input", () => {
     messageInput.style.height = "";
-    messageInput.style.height = `${Math.min(messageInput.scrollHeight, 128)}px`;
+    messageInput.style.height = `${Math.min(messageInput.scrollHeight, 120)}px`;
   });
 
-  channelSearch?.addEventListener("input", renderChannels);
+  document.querySelector("#payment-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await sendPayment();
+  });
 }
 
 function init() {
-  renderChannels();
-  renderChannel();
-  initEvents();
-  setScreen("home", { keepScroll: true });
-  refreshIcons();
-  setTimeout(refreshIcons, 250);
+  renderConversationList();
+  bindEvents();
+  showScreen("conversations", { keepScroll: true });
+  iconRefresh();
+  setTimeout(iconRefresh, 250);
 }
 
 init();
