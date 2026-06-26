@@ -120,6 +120,8 @@ Important variables:
 
 ```text
 VITE_PRIVY_APP_ID=
+PRIVY_APP_ID=
+PRIVY_APP_SECRET=
 VITE_STARKNET_CHAIN_ID=SN_SEPOLIA
 VITE_STARKNET_RPC_URL=
 VITE_PRIVACY_POOL_ADDRESS=
@@ -134,10 +136,10 @@ Timeline modes:
 | Mode | Purpose |
 | --- | --- |
 | `mock` | Local in-memory demo. |
-| `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke`. |
+| `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
-For `direct-helper`, open the channel workspace, press `Connect Wallet`, then run `Run A/B Proof`. The app looks for `window.veilDemoWallet`, `window.starknet`, `window.starknet_argentX`, or `window.starknet_braavos`.
+Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). The browser never receives a private key. For `direct-helper`, VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
 
 ## Build And Test
 

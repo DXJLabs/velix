@@ -19,7 +19,7 @@
             <p>Unlock your private channels. Messages decrypt on this device.</p>
             <button class="primary-action w-full" type="button" data-connect-wallet>
               <i data-lucide="wallet-cards" class="size-5"></i>
-              <span>Connect Wallet</span>
+              <span data-wallet-label>Connect Wallet</span>
             </button>
           </div>
         </section>
@@ -112,35 +112,40 @@
         <section class="screen hidden" data-screen="wallet">
           <header class="surface-header">
             <p class="eyebrow">Wallet</p>
-            <h1 class="page-title">Payment readiness</h1>
+            <h1 class="page-title">Wallet connection</h1>
           </header>
-          <div class="content-with-nav px-4 pt-4">
-            <section class="plain-panel">
-              <div class="flex items-center justify-between gap-4">
-                <span>
-                  <strong class="block text-lg">Private Mode</strong>
-                  <small class="mt-1 block text-sm font-semibold text-slate-500">Ready for settlement</small>
+          <div class="content-with-nav wallet-page px-4 pt-4">
+            <section class="wallet-card">
+              <div class="wallet-card-top">
+                <span class="wallet-icon">
+                  <i data-lucide="wallet-cards" class="size-5"></i>
                 </span>
-                <span class="status-pill private">Ready</span>
+                <span id="wallet-status-pill" class="status-pill public">Required</span>
               </div>
+              <strong id="wallet-state-title">Connect wallet</strong>
+              <small id="wallet-state-subtitle">Use Privy to unlock VEIL on this device.</small>
               <button class="primary-action mt-5 w-full" type="button" data-connect-wallet>
                 <i data-lucide="wallet-cards" class="size-5"></i>
-                <span>Connect Wallet</span>
+                <span data-wallet-label>Connect Wallet</span>
               </button>
             </section>
 
-            <section class="plain-list mt-5">
+            <section class="plain-list wallet-readiness mt-4">
               <div>
-                <span>Available asset</span>
-                <strong>STRK</strong>
+                <span>Provider</span>
+                <strong id="wallet-provider">Privy</strong>
               </div>
               <div>
-                <span>Next payment</span>
-                <strong>450 STRK</strong>
+                <span>Account</span>
+                <strong id="wallet-account">Not connected</strong>
               </div>
               <div>
-                <span>Recipient</span>
-                <strong>Bob</strong>
+                <span>Network</span>
+                <strong id="wallet-network">Sepolia</strong>
+              </div>
+              <div>
+                <span>Helper</span>
+                <strong id="wallet-helper">Check required</strong>
               </div>
             </section>
           </div>
@@ -152,27 +157,27 @@
             <h1 class="page-title">Preferences</h1>
           </header>
           <div class="content-with-nav px-4 pt-4">
-            <section class="plain-list">
+            <section class="settings-list">
               <label class="setting-row">
-                <span>
+                <span class="setting-copy">
                   <strong>Default privacy</strong>
                   <small>Start new deals in Private Mode</small>
                 </span>
-                <input type="checkbox" checked />
+                <input class="switch-input" type="checkbox" checked />
               </label>
               <label class="setting-row">
-                <span>
+                <span class="setting-copy">
                   <strong>Payment memo</strong>
                   <small>Ask for memo before sending</small>
                 </span>
-                <input type="checkbox" checked />
+                <input class="switch-input" type="checkbox" checked />
               </label>
               <label class="setting-row">
-                <span>
+                <span class="setting-copy">
                   <strong>Proof reminder</strong>
                   <small>Show proof after settlement</small>
                 </span>
-                <input type="checkbox" checked />
+                <input class="switch-input" type="checkbox" checked />
               </label>
             </section>
           </div>
@@ -188,7 +193,7 @@
                 <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
                 <span id="channel-mode" class="status-pill private">Private</span>
               </div>
-              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob · Offer accepted</p>
+              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob - Offer accepted</p>
             </button>
             <button class="icon-button ghost" type="button" data-open-route="deal" aria-label="Deal menu">
               <i data-lucide="more-horizontal" class="size-5"></i>
@@ -381,5 +386,6 @@
 
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </div>
+    <div id="privy-auth-root" hidden></div>
   </body>
 </html>

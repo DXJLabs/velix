@@ -1,9 +1,11 @@
 import { DirectHelperTransport, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
 
 const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
+const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
 const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
 const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
+const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
 
 const now = Date.now();
 const minute = 60_000;
@@ -141,6 +143,13 @@ const state = {
   channelId: activeDealId,
   paymentMode: "Private",
   walletConnected: false,
+  walletAddress: "",
+  walletNetwork: expectedChainId,
+  walletSource: privyAppId ? "Privy" : "Demo",
+  helperVerified: false,
+  privyReady: false,
+  privyAuthenticated: false,
+  privyWallet: null,
   paymentSent: false,
   escrowReleased: false,
   proofExported: false,
@@ -159,6 +168,7 @@ const messageFeed = document.querySelector("#message-feed");
 const composerForm = document.querySelector("#composer-form");
 const messageInput = document.querySelector("#message-input");
 const toast = document.querySelector("#toast");
+const privyAuthRoot = document.querySelector("#privy-auth-root");
 
 function createClient(transport) {
   return new VeilClient({
@@ -167,6 +177,71 @@ function createClient(transport) {
     rpcUrl,
     ...(transport ? { transport } : {}),
   });
+}
+
+async function mountPrivy() {
+  if (!privyAppId || !privyAuthRoot) return;
+
+  const [
+    ReactModule,
+    ReactDomModule,
+    PrivyModule,
+  ] = await Promise.all([
+    import("https://esm.sh/react@19.2.7"),
+    import("https://esm.sh/react-dom@19.2.7/client"),
+    import("https://esm.sh/@privy-io/react-auth@3.32.2?deps=react@19.2.7,react-dom@19.2.7"),
+  ]);
+
+  const React = ReactModule.default;
+  const { useEffect } = ReactModule;
+  const { createRoot } = ReactDomModule;
+  const { PrivyProvider, usePrivy, useWallets } = PrivyModule;
+
+  function PrivyStateBridge() {
+    const privy = usePrivy();
+    const walletState = useWallets();
+    const wallets = walletState?.wallets || [];
+
+    useEffect(() => {
+      window.__veilPrivy = {
+        ready: Boolean(privy.ready),
+        authenticated: Boolean(privy.authenticated),
+        user: privy.user || null,
+        login: privy.login,
+        logout: privy.logout,
+        getAccessToken: privy.getAccessToken,
+        wallets,
+      };
+
+      window.dispatchEvent(new CustomEvent("veil:privy-state", {
+        detail: {
+          ready: Boolean(privy.ready),
+          authenticated: Boolean(privy.authenticated),
+          user: privy.user || null,
+          wallets,
+        },
+      }));
+    }, [privy.ready, privy.authenticated, privy.user, privy.login, privy.logout, privy.getAccessToken, wallets]);
+
+    return null;
+  }
+
+  createRoot(privyAuthRoot).render(
+    React.createElement(
+      PrivyProvider,
+      {
+        appId: privyAppId,
+        config: {
+          appearance: {
+            accentColor: "#10b981",
+            theme: "light",
+          },
+          loginMethods: ["email", "wallet", "google"],
+        },
+      },
+      React.createElement(PrivyStateBridge),
+    ),
+  );
 }
 
 function currentChannel() {
@@ -186,11 +261,201 @@ function getWallet() {
     || null;
 }
 
+function normalizeChainId(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (!normalized) return "";
+  if (normalized === "SN_SEPOLIA" || normalized === "0X534E5F5345504F4C4941") return "SN_SEPOLIA";
+  if (normalized === "SN_MAIN" || normalized === "0X534E5F4D41494E") return "SN_MAIN";
+  return normalized;
+}
+
+function networkLabel(chainId = state.walletNetwork) {
+  const normalized = normalizeChainId(chainId);
+  if (normalized === "SN_SEPOLIA") return "Sepolia";
+  if (normalized === "SN_MAIN") return "Mainnet";
+  return normalized || "Not detected";
+}
+
+function shortAddress(address) {
+  if (!address) return "Not connected";
+  if (address.length <= 14) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getPrivyBridge() {
+  return window.__veilPrivy || null;
+}
+
+function refreshConnectLabels() {
+  const label = state.walletConnected
+    ? "Wallet Ready"
+    : privyAppId && !state.privyReady
+      ? "Loading Privy"
+      : "Connect Wallet";
+
+  document.querySelectorAll("[data-wallet-label]").forEach((node) => {
+    node.textContent = label;
+  });
+}
+
+function waitForPrivyState(predicate, timeout = 18_000) {
+  return new Promise((resolve) => {
+    const current = getPrivyBridge();
+    if (current && predicate(current)) {
+      resolve(current);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      window.removeEventListener("veil:privy-state", onState);
+      resolve(getPrivyBridge());
+    }, timeout);
+
+    function onState() {
+      const bridge = getPrivyBridge();
+      if (!bridge || !predicate(bridge)) return;
+      clearTimeout(timer);
+      window.removeEventListener("veil:privy-state", onState);
+      resolve(bridge);
+    }
+
+    window.addEventListener("veil:privy-state", onState);
+  });
+}
+
+async function ensurePrivyAuthenticated() {
+  if (!privyAppId) return null;
+
+  const readyBridge = await waitForPrivyState((bridge) => bridge.ready);
+  if (!readyBridge?.ready) {
+    showToast("Privy is still loading.");
+    return null;
+  }
+
+  if (!readyBridge.authenticated) {
+    await readyBridge.login();
+  }
+
+  const authenticatedBridge = await waitForPrivyState((bridge) => bridge.ready && bridge.authenticated);
+  if (!authenticatedBridge?.authenticated) {
+    showToast("Wallet login was not completed.");
+    return null;
+  }
+
+  return authenticatedBridge;
+}
+
+async function fetchPrivyStarknetWallet(bridge) {
+  if (state.privyWallet) return state.privyWallet;
+
+  const accessToken = await bridge.getAccessToken?.();
+  if (!accessToken) {
+    throw new Error("Privy access token is missing.");
+  }
+
+  const response = await fetch("/api/wallet/starknet", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ userId: bridge.user?.id || bridge.user?.did || "veil-user" }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "Failed to create Starknet wallet with Privy.");
+  }
+
+  const { wallet } = await response.json();
+  state.privyWallet = wallet;
+  state.walletAddress = wallet?.address || state.walletAddress;
+  state.walletSource = "Privy";
+  return wallet;
+}
+
+async function resolveWalletChain(wallet, provider) {
+  const candidates = [
+    () => provider?.getChainId?.(),
+    () => wallet?.getChainId?.(),
+    () => wallet?.request?.({ type: "wallet_requestChainId" }),
+    () => wallet?.request?.({ type: "wallet_getChainId" }),
+    () => provider?.chainId,
+    () => wallet?.chainId,
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const value = await candidate();
+      const normalized = normalizeChainId(value);
+      if (normalized) return normalized;
+    } catch {
+      // Try the next wallet/provider shape.
+    }
+  }
+
+  return "";
+}
+
+async function ensureExpectedNetwork(wallet, provider) {
+  if (timelineMode !== "direct-helper") return true;
+
+  const detected = await resolveWalletChain(wallet, provider);
+  if (detected) {
+    state.walletNetwork = detected;
+  }
+
+  if (detected && detected !== expectedChainId) {
+    renderWallet();
+    showToast(`Switch wallet to ${networkLabel(expectedChainId)}.`);
+    return false;
+  }
+
+  state.walletNetwork = expectedChainId;
+  return true;
+}
+
+async function verifyHelperDeployment() {
+  if (timelineMode !== "direct-helper") return true;
+  if (!helperAddress) {
+    showToast("Helper address is missing.");
+    return false;
+  }
+
+  try {
+    await veilClient.getEventCount(state.channelId);
+    state.helperVerified = true;
+    renderWallet();
+    return true;
+  } catch (error) {
+    console.error(error);
+    state.helperVerified = false;
+    renderWallet();
+    showToast("Helper not deployed on this network.");
+    return false;
+  }
+}
+
 async function connectWallet(options = {}) {
   const goToInbox = options.goToInbox ?? state.screen === "unlock";
+  refreshConnectLabels();
 
   if (timelineMode !== "direct-helper") {
+    if (privyAppId) {
+      try {
+        const bridge = await ensurePrivyAuthenticated();
+        if (!bridge) return false;
+        await fetchPrivyStarknetWallet(bridge);
+      } catch (error) {
+        console.error(error);
+        showToast("Privy wallet setup failed.");
+        return false;
+      }
+    }
     state.walletConnected = true;
+    state.walletNetwork = expectedChainId;
+    renderWallet();
+    refreshConnectLabels();
     showToast("Wallet ready.");
     if (goToInbox) showScreen("conversations");
     return true;
@@ -201,9 +466,21 @@ async function connectWallet(options = {}) {
     return false;
   }
 
+  if (privyAppId) {
+    try {
+      const bridge = await ensurePrivyAuthenticated();
+      if (!bridge) return false;
+      await fetchPrivyStarknetWallet(bridge);
+    } catch (error) {
+      console.error(error);
+      showToast("Privy wallet setup failed.");
+      return false;
+    }
+  }
+
   const wallet = getWallet();
   if (!wallet) {
-    showToast("Open with a Starknet wallet.");
+    showToast("Connect with Privy or Starknet wallet.");
     return false;
   }
 
@@ -217,6 +494,13 @@ async function connectWallet(options = {}) {
     showToast("Wallet unavailable.");
     return false;
   }
+  if (!provider) {
+    showToast("Starknet provider unavailable.");
+    return false;
+  }
+
+  const isExpectedNetwork = await ensureExpectedNetwork(wallet, provider);
+  if (!isExpectedNetwork) return false;
 
   directTransport = new DirectHelperTransport({
     helperAddress,
@@ -224,7 +508,13 @@ async function connectWallet(options = {}) {
     ...(provider ? { provider } : {}),
   });
   veilClient = createClient(directTransport);
+
+  if (!(await verifyHelperDeployment())) return false;
+
   state.walletConnected = true;
+  state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
+  renderWallet();
+  refreshConnectLabels();
   showToast("Wallet connected.");
   if (goToInbox) showScreen("conversations");
   return true;
@@ -268,6 +558,7 @@ function showScreen(screen, options = {}) {
   if (screen === "deal") renderDeal();
   if (screen === "escrow") renderEscrow();
   if (screen === "payment") renderPayment();
+  if (screen === "wallet") renderWallet();
   if (screen === "settlement") renderSettlement();
   if (screen === "proof") renderProof();
 
@@ -317,7 +608,7 @@ function renderChannel() {
   document.querySelector("#channel-title").textContent = channel.title;
   document.querySelector("#channel-mode").textContent = channel.mode;
   document.querySelector("#channel-mode").className = `status-pill ${channel.mode === "Private" ? "private" : "public"}`;
-  document.querySelector("#channel-meta").textContent = `${channel.person} · ${channel.status}`;
+  document.querySelector("#channel-meta").textContent = `${channel.person} - ${channel.status}`;
   messageFeed.innerHTML = `
     <div class="inline-event"><strong>Today</strong></div>
     ${channelMessages().map(renderFeedItem).join("")}
@@ -336,7 +627,7 @@ function renderMessage(item) {
   return `
     <article class="message ${self ? "self" : ""}">
       <div class="max-w-full">
-        <div class="message-meta ${self ? "text-right" : ""}">${escapeHtml(self ? "You" : item.sender)} · ${escapeHtml(formatTime(item.time))}</div>
+        <div class="message-meta ${self ? "text-right" : ""}">${escapeHtml(self ? "You" : item.sender)} - ${escapeHtml(formatTime(item.time))}</div>
         <p class="bubble">${escapeHtml(item.body)}</p>
       </div>
     </article>
@@ -381,6 +672,38 @@ function renderPayment() {
   });
 }
 
+function renderWallet() {
+  const connected = state.walletConnected || state.privyAuthenticated;
+  const walletTitle = document.querySelector("#wallet-state-title");
+  const walletSubtitle = document.querySelector("#wallet-state-subtitle");
+  const walletStatus = document.querySelector("#wallet-status-pill");
+  const walletAccount = document.querySelector("#wallet-account");
+  const walletNetwork = document.querySelector("#wallet-network");
+  const walletProvider = document.querySelector("#wallet-provider");
+  const walletHelper = document.querySelector("#wallet-helper");
+
+  if (walletTitle) walletTitle.textContent = connected ? "Wallet ready" : "Connect wallet";
+  if (walletSubtitle) {
+    walletSubtitle.textContent = connected
+      ? "Private channels are unlocked for messages and deals."
+      : "Use Privy to unlock VEIL on this device.";
+  }
+  if (walletStatus) {
+    walletStatus.textContent = connected ? "Ready" : "Required";
+    walletStatus.className = `status-pill ${connected ? "private" : "public"}`;
+  }
+  if (walletAccount) walletAccount.textContent = shortAddress(state.walletAddress || state.privyWallet?.address);
+  if (walletNetwork) walletNetwork.textContent = networkLabel();
+  if (walletProvider) walletProvider.textContent = state.walletSource;
+  if (walletHelper) {
+    walletHelper.textContent = timelineMode === "direct-helper"
+      ? state.helperVerified ? "Verified" : "Check required"
+      : "Mock demo";
+  }
+
+  refreshConnectLabels();
+}
+
 function renderSettlement() {}
 
 function renderProof() {}
@@ -391,10 +714,18 @@ async function safeSubmit(action, localItem, success) {
       const connected = await connectWallet();
       if (!connected) return;
     }
+    if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
+      return;
+    }
     await action();
     addLocalItem(localItem);
     showToast(success);
-  } catch {
+  } catch (error) {
+    console.error(error);
+    if (timelineMode === "direct-helper") {
+      showToast("Onchain action failed. Check Sepolia.");
+      return;
+    }
     addLocalItem(localItem);
     showToast(success);
   }
@@ -509,6 +840,19 @@ async function releaseEscrow() {
 }
 
 function bindEvents() {
+  window.addEventListener("veil:privy-state", (event) => {
+    const detail = event.detail || {};
+    state.privyReady = Boolean(detail.ready);
+    state.privyAuthenticated = Boolean(detail.authenticated);
+    state.walletConnected ||= state.privyAuthenticated;
+    state.walletSource = privyAppId ? "Privy" : state.walletSource;
+    if (detail.user?.wallet?.address && !state.walletAddress) {
+      state.walletAddress = detail.user.wallet.address;
+    }
+    renderWallet();
+    refreshConnectLabels();
+  });
+
   document.addEventListener("click", (event) => {
     const topNav = event.target.closest("[data-top-nav]");
     if (topNav) {
@@ -619,8 +963,13 @@ function bindEvents() {
 }
 
 function init() {
-  renderConversationList();
   bindEvents();
+  mountPrivy().catch((error) => {
+    console.error(error);
+    showToast("Privy SDK failed to load.");
+  });
+  renderConversationList();
+  refreshConnectLabels();
   showScreen("unlock", { keepScroll: true });
   iconRefresh();
   setTimeout(iconRefresh, 250);
