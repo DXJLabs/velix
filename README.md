@@ -125,6 +125,7 @@ PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 VITE_STARKNET_CHAIN_ID=SN_SEPOLIA
 VITE_STARKNET_RPC_URL=
+VITE_PRIVY_STARKNET_RPC_URL=https://starknet-sepolia.public.blastapi.io/rpc/v0_8
 VITE_PRIVACY_POOL_ADDRESS=
 VITE_VEIL_CHANNEL_HELPER_ADDRESS=
 VITE_VEIL_ESCROW_ADDRESS=
@@ -140,7 +141,7 @@ Timeline modes:
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
-Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL builds a Ready/Argent v0.5 Starknet account from the Privy public key and signs with Privy `rawSign`. That account must hold Sepolia STRK before deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
 
 ## Build And Test
 

@@ -32,8 +32,11 @@ export default async function handler(request, response) {
     const result = await createPrivyClient().wallets().rawSign(walletId, {
       params: { hash },
     });
+    const signature = typeof result === "string"
+      ? result
+      : result.signature || result.rawSignature || result.raw_signature || result;
 
-    response.status(200).json({ signature: result.signature });
+    response.status(200).json({ signature });
   } catch (error) {
     response.status(500).json({ error: error.message || "Failed to sign Starknet hash." });
   }

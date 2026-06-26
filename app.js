@@ -9,7 +9,11 @@ const privyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,wa
 const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
 const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
+const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
+  || rpcUrl.replace("/v0_10", "/v0_8")
+  || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
+const READY_ACCOUNT_CLASS_HASH_V0_5_0 = "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2";
 
 const now = Date.now();
 const minute = 60_000;
@@ -154,6 +158,9 @@ const state = {
   privyReady: false,
   privyAuthenticated: false,
   privyWallet: null,
+  privyAccount: null,
+  privyProvider: null,
+  privyAccountDeployed: false,
   paymentSent: false,
   escrowReleased: false,
   proofExported: false,
@@ -258,11 +265,33 @@ function channelMessages() {
 }
 
 function getWallet() {
-  return window.veilDemoWallet
+  return state.privyAccount
+    || window.veilDemoWallet
     || window.starknet
     || window.starknet_argentX
     || window.starknet_braavos
     || null;
+}
+
+function ensureHex(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  return normalized.startsWith("0x") ? normalized : `0x${normalized}`;
+}
+
+function splitPrivySignature(signature) {
+  if (Array.isArray(signature) && signature.length >= 2) {
+    return [ensureHex(signature[0]), ensureHex(signature[1])];
+  }
+
+  const raw = typeof signature === "string"
+    ? signature
+    : signature?.signature || signature?.rawSignature || signature?.raw_signature || "";
+  const hex = ensureHex(raw).slice(2);
+  if (hex.length < 128) {
+    throw new Error("Privy signature is not a 64-byte Stark signature.");
+  }
+  return [`0x${hex.slice(0, 64)}`, `0x${hex.slice(64, 128)}`];
 }
 
 function normalizeChainId(value) {
@@ -356,6 +385,15 @@ async function fetchPrivyStarknetWallet(bridge) {
   if (!accessToken) {
     throw new Error("Privy access token is missing.");
   }
+  const userId = bridge.user?.id || bridge.user?.did || "veil-user";
+  const cacheKey = `veil:privy:starknet:${userId}`;
+  const cachedWallet = JSON.parse(window.localStorage.getItem(cacheKey) || "null");
+  if (cachedWallet?.id && cachedWallet?.publicKey) {
+    state.privyWallet = cachedWallet;
+    state.walletAddress = cachedWallet.address || state.walletAddress;
+    state.walletSource = "Privy";
+    return cachedWallet;
+  }
 
   const response = await fetch("/api/wallet/starknet", {
     method: "POST",
@@ -363,7 +401,7 @@ async function fetchPrivyStarknetWallet(bridge) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ userId: bridge.user?.id || bridge.user?.did || "veil-user" }),
+    body: JSON.stringify({ userId }),
   });
 
   if (!response.ok) {
@@ -375,7 +413,108 @@ async function fetchPrivyStarknetWallet(bridge) {
   state.privyWallet = wallet;
   state.walletAddress = wallet?.address || state.walletAddress;
   state.walletSource = "Privy";
+  window.localStorage.setItem(cacheKey, JSON.stringify(wallet));
   return wallet;
+}
+
+async function loadStarknetSdk() {
+  if (window.__veilStarknetSdk) return window.__veilStarknetSdk;
+  window.__veilStarknetSdk = await import("https://esm.sh/starknet@7.6.4?target=es2022");
+  return window.__veilStarknetSdk;
+}
+
+async function signWithPrivy(walletId, messageHash, bridge) {
+  const accessToken = await bridge.getAccessToken?.();
+  const response = await fetch("/api/wallet/sign", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify({ walletId, hash: messageHash }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "Privy raw sign failed.");
+  }
+
+  const payload = await response.json();
+  return splitPrivySignature(payload.signature);
+}
+
+async function createPrivyStarknetAccount(bridge) {
+  if (state.privyAccount && state.privyProvider) {
+    return { account: state.privyAccount, provider: state.privyProvider };
+  }
+
+  const wallet = await fetchPrivyStarknetWallet(bridge);
+  const publicKey = ensureHex(wallet.publicKey || wallet.public_key);
+  if (!wallet.id || !publicKey) {
+    throw new Error("Privy Starknet wallet is missing wallet id or public key.");
+  }
+
+  const starknet = await loadStarknetSdk();
+  const {
+    Account,
+    CallData,
+    CairoCustomEnum,
+    CairoOption,
+    CairoOptionVariant,
+    RpcProvider,
+    Signer,
+    hash,
+  } = starknet;
+
+  const provider = new RpcProvider({ nodeUrl: privyStarknetRpcUrl });
+  const owner = new CairoCustomEnum({ Starknet: { pubkey: publicKey } });
+  const guardian = new CairoOption(CairoOptionVariant.None);
+  const constructorCalldata = CallData.compile({ owner, guardian });
+  const contractAddress = hash.calculateContractAddressFromHash(
+    publicKey,
+    READY_ACCOUNT_CLASS_HASH_V0_5_0,
+    constructorCalldata,
+    0,
+  );
+
+  class PrivyRawSigner extends Signer {
+    async getPubKey() {
+      return publicKey;
+    }
+
+    async signRaw(messageHash) {
+      return signWithPrivy(wallet.id, messageHash, bridge);
+    }
+  }
+
+  const account = new Account(provider, contractAddress, new PrivyRawSigner("0x1"));
+  state.privyAccount = account;
+  state.privyProvider = provider;
+  state.walletAddress = contractAddress;
+  state.walletSource = "Privy";
+  state.privyWallet = { ...wallet, address: contractAddress, publicKey };
+
+  try {
+    await provider.getClassHashAt(contractAddress);
+    state.privyAccountDeployed = true;
+  } catch {
+    state.privyAccountDeployed = false;
+    try {
+      const deployResult = await account.deployAccount({
+        classHash: READY_ACCOUNT_CLASS_HASH_V0_5_0,
+        contractAddress,
+        constructorCalldata,
+        addressSalt: publicKey,
+      });
+      await provider.waitForTransaction(deployResult.transaction_hash);
+      state.privyAccountDeployed = true;
+    } catch (error) {
+      console.error(error);
+      throw new Error(`Fund and deploy Privy account ${shortAddress(contractAddress)} on Sepolia first.`);
+    }
+  }
+
+  return { account, provider };
 }
 
 async function resolveWalletChain(wallet, provider) {
@@ -470,14 +609,15 @@ async function connectWallet(options = {}) {
     return false;
   }
 
+  let privyAccountContext = null;
   if (privyAppId) {
     try {
       const bridge = await ensurePrivyAuthenticated();
       if (!bridge) return false;
-      await fetchPrivyStarknetWallet(bridge);
+      privyAccountContext = await createPrivyStarknetAccount(bridge);
     } catch (error) {
       console.error(error);
-      showToast("Privy wallet setup failed.");
+      showToast(error.message || "Privy Starknet account is not ready.");
       return false;
     }
   }
@@ -493,7 +633,7 @@ async function connectWallet(options = {}) {
   }
 
   const account = wallet.account || wallet;
-  const provider = wallet.provider || wallet.account?.provider;
+  const provider = privyAccountContext?.provider || state.privyProvider || wallet.provider || wallet.account?.provider;
   if (!account?.execute) {
     showToast("Wallet unavailable.");
     return false;
@@ -688,9 +828,11 @@ function renderWallet() {
 
   if (walletTitle) walletTitle.textContent = connected ? "Wallet ready" : "Connect wallet";
   if (walletSubtitle) {
-    walletSubtitle.textContent = connected
-      ? "Private channels are unlocked for messages and deals."
-      : "Use Privy to unlock VEIL on this device.";
+    walletSubtitle.textContent = state.privyAccount && !state.privyAccountDeployed
+      ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
+      : connected
+        ? "Private channels are unlocked for messages and deals."
+        : "Use Privy to unlock VEIL on this device.";
   }
   if (walletStatus) {
     walletStatus.textContent = connected ? "Ready" : "Required";
@@ -701,7 +843,9 @@ function renderWallet() {
   if (walletProvider) walletProvider.textContent = state.walletSource;
   if (walletHelper) {
     walletHelper.textContent = timelineMode === "direct-helper"
-      ? state.helperVerified ? "Verified" : "Check required"
+      ? state.privyAccount && !state.privyAccountDeployed
+        ? "Account funding needed"
+        : state.helperVerified ? "Verified" : "Check required"
       : "Mock demo";
   }
 
@@ -844,6 +988,14 @@ async function releaseEscrow() {
 }
 
 function bindEvents() {
+  window.addEventListener("unhandledrejection", (event) => {
+    const message = String(event.reason?.message || event.reason || "");
+    if (message.includes("Login with Google not allowed")) {
+      event.preventDefault();
+      showToast("Enable Google in Privy dashboard.");
+    }
+  });
+
   window.addEventListener("veil:privy-state", (event) => {
     const detail = event.detail || {};
     state.privyReady = Boolean(detail.ready);
