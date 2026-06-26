@@ -2,6 +2,10 @@ import { DirectHelperTransport, VeilClient, VeilEventType } from "./packages/vei
 
 const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
+const privyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,wallet,google")
+  .split(",")
+  .map((method) => method.trim())
+  .filter(Boolean);
 const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
 const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
@@ -236,7 +240,7 @@ async function mountPrivy() {
             accentColor: "#10b981",
             theme: "light",
           },
-          loginMethods: ["email", "wallet", "google"],
+          loginMethods: privyLoginMethods,
         },
       },
       React.createElement(PrivyStateBridge),

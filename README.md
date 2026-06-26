@@ -120,6 +120,7 @@ Important variables:
 
 ```text
 VITE_PRIVY_APP_ID=
+VITE_PRIVY_LOGIN_METHODS=email,wallet,google
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 VITE_STARKNET_CHAIN_ID=SN_SEPOLIA
@@ -139,7 +140,7 @@ Timeline modes:
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
-Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). The browser never receives a private key. For `direct-helper`, VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
 
 ## Build And Test
 
