@@ -94,7 +94,7 @@ export async function authenticatePrivyRequest(request, context) {
     const verified = await verifyAccessToken({
       access_token: accessToken,
       app_id: requireEnv("PRIVY_APP_ID", context),
-      verification_key: requireEnv("PRIVY_VERIFICATION_KEY", context, ["PRIVY_JWT_VERIFICATION_KEY"]),
+      verification_key: requireEnv("PRIVY_VERIFICATION_KEY", context),
     });
     logEvent("info", "auth.privy.access_token.verified", context, {
       userIdHash: hashForLog(verified.user_id),
