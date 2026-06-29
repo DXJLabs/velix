@@ -1,4 +1,7 @@
 import { ChannelEncryptionAdapter, DirectHelperTransport, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
+import React, { useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { PrivyProvider, usePrivy, useWallets } from "@privy-io/react-auth";
 import { StarkZap } from "starkzap-sdk";
 import { accountPresets } from "starkzap-account-presets";
 import { ChainId } from "starkzap-config";
@@ -254,21 +257,6 @@ async function mountPrivy() {
       ? "For Google OAuth, add this origin to Privy Allowed OAuth Redirect URLs and Google Authorized JavaScript Origins."
       : undefined,
   });
-
-  const [
-    ReactModule,
-    ReactDomModule,
-    PrivyModule,
-  ] = await Promise.all([
-    import("https://esm.sh/react@19.2.7"),
-    import("https://esm.sh/react-dom@19.2.7/client"),
-    import("https://esm.sh/@privy-io/react-auth@3.32.2?deps=react@19.2.7,react-dom@19.2.7"),
-  ]);
-
-  const React = ReactModule.default;
-  const { useEffect } = ReactModule;
-  const { createRoot } = ReactDomModule;
-  const { PrivyProvider, usePrivy, useWallets } = PrivyModule;
 
   function PrivyStateBridge() {
     const privy = usePrivy();
