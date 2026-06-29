@@ -73,24 +73,53 @@
         </section>
 
         <section class="screen hidden" data-screen="conversations">
-          <header class="surface-header">
-            <div class="flex items-center justify-between gap-3">
-              <div class="min-w-0">
-                <p class="eyebrow">VEIL</p>
-                <h1 class="page-title">Conversations</h1>
-              </div>
-              <button class="icon-button" type="button" data-new-conversation aria-label="New conversation">
-                <i data-lucide="square-pen" class="size-5"></i>
-              </button>
-            </div>
-            <label class="search-field">
-              <i data-lucide="search" class="size-4"></i>
-              <input id="conversation-search" type="search" placeholder="Search private deals" autocomplete="off" />
-            </label>
-          </header>
+          <div class="conversation-workspace">
+            <div class="conversation-column">
+              <header class="surface-header conversation-header">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="eyebrow">VEIL</p>
+                    <h1 class="page-title">Conversations</h1>
+                  </div>
+                  <button class="icon-button" type="button" data-new-conversation aria-label="New conversation">
+                    <i data-lucide="square-pen" class="size-5"></i>
+                  </button>
+                </div>
+                <label class="search-field">
+                  <i data-lucide="search" class="size-4"></i>
+                  <input id="conversation-search" type="search" placeholder="Search private deals" autocomplete="off" />
+                </label>
+              </header>
 
-          <div class="content-with-nav">
-            <div id="conversation-list" class="conversation-list"></div>
+              <div class="content-with-nav conversation-content">
+                <div id="conversation-list" class="conversation-list"></div>
+              </div>
+            </div>
+
+            <aside class="conversation-inspector" aria-label="Selected deal">
+              <div class="inspector-top">
+                <div>
+                  <p class="eyebrow">Active deal</p>
+                  <h2>Rights Transfer</h2>
+                </div>
+                <span class="status-pill private">Private</span>
+              </div>
+              <div class="inspector-amount">
+                <span>Accepted offer</span>
+                <strong>450 STRK</strong>
+                <small>Escrow ready for settlement flow</small>
+              </div>
+              <div class="inspector-timeline">
+                <div class="complete"><i data-lucide="check" class="size-4"></i><span>Offer accepted</span></div>
+                <div class="complete"><i data-lucide="check" class="size-4"></i><span>Memo prepared</span></div>
+                <div><i data-lucide="shield" class="size-4"></i><span>Escrow release pending</span></div>
+                <div><i data-lucide="file-check-2" class="size-4"></i><span>Proof export next</span></div>
+              </div>
+              <button class="primary-action w-full" type="button" data-open-channel="20260625">
+                <i data-lucide="message-circle" class="size-5"></i>
+                <span>Open Conversation</span>
+              </button>
+            </aside>
           </div>
         </section>
 

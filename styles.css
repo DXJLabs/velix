@@ -29,6 +29,10 @@ body:has(.unlock-screen:not(.hidden)) .app-shell {
   max-width: 80rem;
 }
 
+body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
+  max-width: 78rem;
+}
+
 .screen {
   min-height: 100dvh;
   animation: var(--animate-screen-in);
@@ -344,6 +348,18 @@ body:has(.unlock-screen:not(.hidden)) .app-shell {
   padding-bottom: calc(5.8rem + env(safe-area-inset-bottom));
 }
 
+.conversation-workspace {
+  min-height: 100dvh;
+}
+
+.conversation-column {
+  min-width: 0;
+}
+
+.conversation-inspector {
+  display: none;
+}
+
 .conversation-list {
   border-top: 1px solid rgb(241 245 249);
   background: white;
@@ -363,6 +379,10 @@ body:has(.unlock-screen:not(.hidden)) .app-shell {
 }
 
 .conversation-row:active {
+  background: rgb(248 250 252);
+}
+
+.conversation-row:hover {
   background: rgb(248 250 252);
 }
 
@@ -1101,6 +1121,157 @@ body:has(.unlock-screen:not(.hidden)) .app-shell {
     left: 50%;
     width: 46rem;
     transform: translateX(-50%);
+  }
+}
+
+@media (min-width: 64rem) {
+  body:has(.bottom-nav:not(.hidden-nav)) main {
+    padding-left: 6.5rem;
+  }
+
+  body:has(.bottom-nav:not(.hidden-nav)) .bottom-nav {
+    top: 0;
+    right: auto;
+    bottom: 0;
+    left: max(0rem, calc(50% - 39rem));
+    width: 6.5rem;
+    max-width: none;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: .5rem;
+    margin-inline: 0;
+    border-top: 0;
+    border-right: 1px solid rgb(226 232 240);
+    background: rgba(255, 255, 255, .98);
+    padding: 1rem .7rem;
+    transform: none;
+  }
+
+  body:has(.bottom-nav:not(.hidden-nav)) .bottom-nav-item {
+    min-height: 4.5rem;
+    align-content: center;
+    gap: .35rem;
+    border-radius: .75rem;
+    font-size: .67rem;
+  }
+
+  .conversation-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22.5rem;
+    gap: 1rem;
+    min-height: 100dvh;
+    padding: 1rem;
+  }
+
+  .conversation-column {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid rgb(226 232 240);
+    border-radius: .85rem;
+    background: white;
+  }
+
+  .conversation-header {
+    position: static;
+    border-bottom: 1px solid rgb(226 232 240);
+    background: white;
+    padding: 1rem;
+  }
+
+  .conversation-content {
+    min-height: 0;
+    overflow: auto;
+    padding-bottom: 0;
+  }
+
+  .conversation-list {
+    border-top: 0;
+  }
+
+  .conversation-row {
+    grid-template-columns: 3.1rem minmax(0, 1fr) 4.5rem;
+    padding: 1rem;
+  }
+
+  .conversation-inspector {
+    position: sticky;
+    top: 1rem;
+    display: grid;
+    align-self: start;
+    gap: 1rem;
+    border: 1px solid rgb(226 232 240);
+    border-radius: .85rem;
+    background: white;
+    padding: 1rem;
+    box-shadow: 0 16px 44px rgba(15, 23, 42, .08);
+  }
+
+  .inspector-top {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .inspector-top h2 {
+    margin-top: .2rem;
+    color: rgb(15 23 42);
+    font-size: 1.35rem;
+    font-weight: 950;
+    letter-spacing: 0;
+  }
+
+  .inspector-amount {
+    border: 1px solid rgb(253 230 138);
+    border-radius: .6rem;
+    background: rgb(255 251 235);
+    padding: .9rem;
+  }
+
+  .inspector-amount span {
+    display: block;
+    color: rgb(146 64 14);
+    font-size: .72rem;
+    font-weight: 950;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .inspector-amount strong {
+    display: block;
+    margin-top: .2rem;
+    color: rgb(15 23 42);
+    font-size: 2.1rem;
+    font-weight: 950;
+  }
+
+  .inspector-amount small {
+    display: block;
+    color: rgb(146 64 14);
+    font-weight: 800;
+  }
+
+  .inspector-timeline {
+    display: grid;
+    gap: .55rem;
+  }
+
+  .inspector-timeline div {
+    display: flex;
+    min-height: 2.85rem;
+    align-items: center;
+    gap: .55rem;
+    border-radius: .6rem;
+    background: rgb(248 250 252);
+    padding: .7rem;
+    color: rgb(51 65 85);
+    font-weight: 900;
+  }
+
+  .inspector-timeline .complete {
+    background: rgb(236 253 245);
+    color: rgb(4 120 87);
   }
 }
 
