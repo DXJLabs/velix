@@ -79,6 +79,10 @@ function createHelperCall(contractAddress: string, entrypoint: string, calldata:
   };
 }
 
+function createSpanHelperCall(contractAddress: string, entrypoint: string, calldata: readonly string[]): StarknetContractCall {
+  return createHelperCall(contractAddress, entrypoint, [String(calldata.length), ...calldata]);
+}
+
 export function channelIdToFelt(channelId: string): string {
   const trimmed = channelId.trim();
   if (!trimmed) {
@@ -149,7 +153,7 @@ export class DirectHelperTransport implements VeilTransport {
     ];
 
     const result = await account.execute([
-      createHelperCall(input.helperAddress || this.#helperAddress, this.#entrypoint, calldata),
+      createSpanHelperCall(input.helperAddress || this.#helperAddress, this.#entrypoint, calldata),
     ]);
     const transactionHash = extractTransactionHash(result);
     const item: TimelineItem = {
