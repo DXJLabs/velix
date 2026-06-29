@@ -6,11 +6,17 @@ const privyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,wa
   .split(",")
   .map((method) => method.trim())
   .filter(Boolean);
-const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
+const LEGACY_CHANNEL_HELPER_ADDRESS = "0x0333e805547d0e91cec741045bf7305e8ff58e8b7d1e9f70ecb3ca559712ef6c";
+const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x018b25f0b870610e9d28a764c432dd17c18cad7d3c09aebb6e61b4efdef4efd7";
+const configuredHelperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
+const helperAddress = configuredHelperAddress.toLowerCase() === LEGACY_CHANNEL_HELPER_ADDRESS
+  ? DEPLOYED_CHANNEL_HELPER_ADDRESS
+  : configuredHelperAddress || DEPLOYED_CHANNEL_HELPER_ADDRESS;
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
 const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
 const channelKey = import.meta.env.VITE_VEIL_CHANNEL_KEY || "";
-const onchainPayloads = (import.meta.env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true";
+const onchainPayloads = (import.meta.env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true"
+  || helperAddress.toLowerCase() === DEPLOYED_CHANNEL_HELPER_ADDRESS;
 const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
@@ -691,22 +697,32 @@ async function connectWallet(options = {}) {
     return false;
   }
 
-  const injectedWalletEntry = await waitForInjectedStarknetWallet();
-  const injectedWallet = injectedWalletEntry?.wallet || null;
+  let injectedWalletEntry = null;
+  let injectedWallet = null;
   let privyAccountContext = null;
-  if (privyAppId && !injectedWallet) {
+  if (privyAppId) {
     try {
       const bridge = await ensurePrivyAuthenticated();
       if (!bridge) return false;
       privyAccountContext = await createPrivyStarknetAccount(bridge);
     } catch (error) {
       console.error(error);
-      showToast(error.message || "Privy Starknet account is not ready.");
-      return false;
+      injectedWalletEntry = await waitForInjectedStarknetWallet();
+      injectedWallet = injectedWalletEntry?.wallet || null;
+      if (!injectedWallet) {
+        showToast(error.message || "Privy Starknet account is not ready.");
+        return false;
+      }
+      showToast("Privy unavailable, using Starknet wallet.");
     }
   }
 
-  const wallet = injectedWallet || getWallet();
+  if (!privyAccountContext && !injectedWallet) {
+    injectedWalletEntry = await waitForInjectedStarknetWallet();
+    injectedWallet = injectedWalletEntry?.wallet || null;
+  }
+
+  const wallet = privyAccountContext?.account || injectedWallet || getWallet();
   if (!wallet) {
     showToast("Connect with Privy or Starknet wallet.");
     return false;
