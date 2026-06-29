@@ -29,6 +29,8 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
 const avnuPaymasterEnabled = (import.meta.env.VITE_AVNU_PAYMASTER_ENABLED || "true").toLowerCase() !== "false";
+const WALLET_INIT_TIMEOUT_MS = 30_000;
+const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "deploying", "connecting_paymaster"]);
 
 const now = Date.now();
 const minute = 60_000;
@@ -176,12 +178,18 @@ const state = {
   privyAccount: null,
   privyProvider: null,
   privyAccountDeployed: false,
+  walletInitState: "idle",
+  walletInitMessage: "Connect Wallet",
+  walletInitError: "",
+  walletInitStartedAt: 0,
+  walletInitTraceId: "",
   paymentSent: false,
   escrowReleased: false,
   proofExported: false,
 };
 
 let toastTimer;
+let walletInitTimer;
 let directTransport;
 let veilClient = createClient();
 let starknetReadProvider;
@@ -520,8 +528,110 @@ function getPrivyBridge() {
   return window.__veilPrivy || null;
 }
 
+function walletInitLabel(status = state.walletInitState) {
+  switch (status) {
+    case "connecting":
+      return "Connecting wallet...";
+    case "creating_account":
+      return "Creating Smart Account...";
+    case "deploying":
+      return "Deploying Account...";
+    case "connecting_paymaster":
+      return "Connecting Paymaster...";
+    case "ready":
+      return "Wallet Ready";
+    case "failed":
+      return "Retry";
+    default:
+      return privyAppId && !state.privyReady ? "Loading Privy" : "Connect Wallet";
+  }
+}
+
+function isWalletInitializationPending(status = state.walletInitState) {
+  return WALLET_INIT_PENDING_STATES.has(status);
+}
+
+function renderWalletInitializationState() {
+  refreshConnectLabels();
+  if (state.screen === "wallet") renderWallet();
+}
+
+function setWalletInitializationState(nextState, details = {}) {
+  const previousState = state.walletInitState;
+  state.walletInitState = nextState;
+  state.walletInitMessage = details.message || walletInitLabel(nextState);
+  state.walletInitError = details.errorMessage || "";
+  if (details.traceId) state.walletInitTraceId = details.traceId;
+  if (nextState === "connecting") state.walletInitStartedAt = Date.now();
+  if (nextState === "idle") {
+    state.walletInitStartedAt = 0;
+    state.walletInitTraceId = "";
+  }
+
+  veilLog("info", "wallet.init.state.changed", {
+    traceId: state.walletInitTraceId || details.traceId,
+    where: "setWalletInitializationState",
+    previousState,
+    nextState,
+    message: state.walletInitMessage,
+    error: state.walletInitError || undefined,
+  });
+  renderWalletInitializationState();
+}
+
+function beginWalletInitialization(traceId) {
+  clearTimeout(walletInitTimer);
+  setWalletInitializationState("connecting", { traceId });
+  walletInitTimer = setTimeout(() => {
+    if (state.walletInitTraceId !== traceId || !isWalletInitializationPending()) return;
+    veilLog("warn", "wallet.init.timeout", {
+      traceId,
+      where: "beginWalletInitialization",
+      timeoutMs: WALLET_INIT_TIMEOUT_MS,
+      why: "Wallet initialization did not reach ready before the production timeout.",
+      howToFix: "Check the preceding Privy, StarkZap, AVNU Paymaster, and RPC logs for the first failed step.",
+    });
+    setWalletInitializationState("failed", {
+      traceId,
+      message: "Unable to connect wallet.",
+      errorMessage: `Wallet initialization exceeded ${WALLET_INIT_TIMEOUT_MS / 1000} seconds.`,
+    });
+    showToast("Unable to connect wallet.");
+  }, WALLET_INIT_TIMEOUT_MS);
+}
+
+function updateWalletInitialization(step, traceId, details = {}) {
+  if (state.walletInitTraceId && state.walletInitTraceId !== traceId) return;
+  if (!isWalletInitializationPending(step) && step !== "ready" && step !== "failed") return;
+  setWalletInitializationState(step, { traceId, ...details });
+}
+
+function completeWalletInitialization(traceId) {
+  clearTimeout(walletInitTimer);
+  setWalletInitializationState("ready", { traceId, message: "Wallet Ready" });
+}
+
+function failWalletInitialization(error, traceId, details = {}) {
+  clearTimeout(walletInitTimer);
+  const errorMessage = error?.message || details.errorMessage || "Wallet initialization failed.";
+  setWalletInitializationState("failed", {
+    traceId,
+    message: "Unable to connect wallet.",
+    errorMessage,
+  });
+  veilError("wallet.init.failed", error instanceof Error ? error : new Error(errorMessage), {
+    traceId,
+    where: details.where || "failWalletInitialization",
+    howToFix: details.howToFix || "Open the browser console and Vercel function logs for the matching traceId, then retry wallet connection.",
+  });
+  showToast("Unable to connect wallet.");
+  return false;
+}
+
 function refreshConnectLabels() {
-  const label = state.walletConnected
+  const label = isWalletInitializationPending() || state.walletInitState === "failed"
+    ? walletInitLabel()
+    : state.walletConnected
     ? "Wallet Ready"
     : privyAppId && !state.privyReady
       ? "Loading Privy"
@@ -532,7 +642,7 @@ function refreshConnectLabels() {
   });
 }
 
-function waitForPrivyState(predicate, timeout = 18_000) {
+function waitForPrivyState(predicate, timeout = WALLET_INIT_TIMEOUT_MS) {
   return new Promise((resolve) => {
     const current = getPrivyBridge();
     if (current && predicate(current)) {
@@ -584,7 +694,6 @@ async function ensurePrivyAuthenticated(traceId = createTraceId("privy-auth")) {
       why: "Privy did not become ready before the login timeout.",
       howToFix: "Confirm VITE_PRIVY_APP_ID is set and the current origin is allowed in the Privy dashboard.",
     });
-    showToast("Privy is still loading.");
     return null;
   }
 
@@ -639,7 +748,6 @@ async function ensurePrivyAuthenticated(traceId = createTraceId("privy-auth")) {
       why: "Privy login did not complete.",
       howToFix: "Complete the Privy login modal, or fix OAuth provider settings if Google returned redirect_uri_mismatch.",
     });
-    showToast("Wallet login was not completed.");
     return null;
   }
 
@@ -922,6 +1030,9 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
     return { account: state.privyAccount, provider: state.privyProvider };
   }
 
+  updateWalletInitialization("creating_account", traceId, {
+    message: "Creating Smart Account...",
+  });
   const wallet = await fetchPrivyStarknetWallet(bridge, traceId);
   const publicKey = ensureHex(wallet.publicKey || wallet.public_key);
   if (!wallet.id || !publicKey) {
@@ -953,6 +1064,9 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
   });
   let paymasterAccessToken = "";
   if (avnuPaymasterEnabled) {
+    updateWalletInitialization("connecting_paymaster", traceId, {
+      message: "Connecting Paymaster...",
+    });
     tracePrivyStarkZap(traceId, "paymaster.get_access_token.start", {
       where: "createPrivyStarknetAccount",
       walletId: wallet.id,
@@ -978,6 +1092,9 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
   const signEndpoint = new URL("/api/wallet/sign", currentOrigin()).toString();
 
   try {
+    updateWalletInitialization("deploying", traceId, {
+      message: "Deploying Account...",
+    });
     starkzapOnboardResult = await sdk.onboard({
       strategy: OnboardStrategy.Privy,
       accountPreset: accountPresets.argentXV050,
@@ -1023,6 +1140,20 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
         },
       },
       onProgress: (event) => {
+        const progress = String(event?.step || event?.status || event?.type || "").toLowerCase();
+        if (progress.includes("paymaster")) {
+          updateWalletInitialization("connecting_paymaster", traceId, {
+            message: "Connecting Paymaster...",
+          });
+        } else if (progress.includes("deploy")) {
+          updateWalletInitialization("deploying", traceId, {
+            message: "Deploying Account...",
+          });
+        } else if (progress.includes("wallet") || progress.includes("account") || progress.includes("resolve")) {
+          updateWalletInitialization("creating_account", traceId, {
+            message: "Creating Smart Account...",
+          });
+        }
         tracePrivyStarkZap(traceId, "sdk_onboard.progress", {
           where: "createPrivyStarknetAccount",
           walletId: wallet.id,
@@ -1112,7 +1243,6 @@ async function ensureExpectedNetwork(wallet, provider) {
 
   if (detected && detected !== expectedChainId) {
     renderWallet();
-    showToast(`Switch wallet to ${networkLabel(expectedChainId)}.`);
     return false;
   }
 
@@ -1123,7 +1253,6 @@ async function ensureExpectedNetwork(wallet, provider) {
 async function verifyHelperDeployment() {
   if (timelineMode !== "direct-helper") return true;
   if (!helperAddress) {
-    showToast("Helper address is missing.");
     return false;
   }
 
@@ -1139,7 +1268,6 @@ async function verifyHelperDeployment() {
     });
     state.helperVerified = false;
     renderWallet();
-    showToast("Helper not deployed on this network.");
     return false;
   }
 }
@@ -1154,7 +1282,7 @@ async function connectWallet(options = {}) {
     screen: state.screen,
     privyAppIdConfigured: Boolean(privyAppId),
   });
-  refreshConnectLabels();
+  beginWalletInitialization(traceId);
 
   if (timelineMode !== "direct-helper") {
     if (privyAppId) {
@@ -1167,8 +1295,14 @@ async function connectWallet(options = {}) {
             why: "Privy bridge was not ready or authenticated.",
             howToFix: "Check earlier trace steps for privy_ready.timeout or authenticated.timeout.",
           });
-          return false;
+          return failWalletInitialization(new Error("Privy authentication did not complete."), traceId, {
+            where: "connectWallet",
+            howToFix: "Check earlier trace steps for privy_ready.timeout or authenticated.timeout.",
+          });
         }
+        updateWalletInitialization("creating_account", traceId, {
+          message: "Creating Smart Account...",
+        });
         await fetchPrivyStarknetWallet(bridge, traceId);
       } catch (error) {
         veilError("wallet.privy.setup.failed", error, {
@@ -1176,15 +1310,18 @@ async function connectWallet(options = {}) {
           where: "connectWallet",
           howToFix: "Check Privy app credentials, token verification env vars, and /api/wallet/starknet logs.",
         });
-        showToast("Privy wallet setup failed.");
-        return false;
+        return failWalletInitialization(error, traceId, {
+          where: "connectWallet",
+          howToFix: "Check Privy app credentials, token verification env vars, and /api/wallet/starknet logs.",
+        });
       }
     }
     state.walletConnected = true;
     state.walletNetwork = expectedChainId;
+    completeWalletInitialization(traceId);
     renderWallet();
     refreshConnectLabels();
-    showToast("Wallet ready.");
+    showToast("Wallet Ready");
     if (goToInbox) showScreen("conversations");
     tracePrivyStarkZap(traceId, "connect.success", {
       where: "connectWallet",
@@ -1196,14 +1333,16 @@ async function connectWallet(options = {}) {
   }
 
   if (!helperAddress) {
-    showToast("Wallet is not configured.");
     tracePrivyStarkZap(traceId, "connect.stopped", {
       where: "connectWallet",
       stoppedAt: "helper_address",
       why: "VITE_VEIL_CHANNEL_HELPER_ADDRESS is missing.",
       howToFix: "Set VITE_VEIL_CHANNEL_HELPER_ADDRESS to the deployed helper contract for the selected Starknet network.",
     });
-    return false;
+    return failWalletInitialization(new Error("Wallet helper address is not configured."), traceId, {
+      where: "connectWallet",
+      howToFix: "Set VITE_VEIL_CHANNEL_HELPER_ADDRESS to the deployed helper contract for the selected Starknet network.",
+    });
   }
 
   let injectedWalletEntry = null;
@@ -1219,8 +1358,14 @@ async function connectWallet(options = {}) {
           why: "Privy bridge was not ready or authenticated.",
           howToFix: "Check earlier trace steps for privy_ready.timeout or authenticated.timeout.",
         });
-        return false;
+        return failWalletInitialization(new Error("Privy authentication did not complete."), traceId, {
+          where: "connectWallet",
+          howToFix: "Check earlier trace steps for privy_ready.timeout or authenticated.timeout.",
+        });
       }
+      updateWalletInitialization("creating_account", traceId, {
+        message: "Creating Smart Account...",
+      });
       privyAccountContext = await createPrivyStarknetAccount(bridge, traceId);
     } catch (error) {
       veilError("starkzap.privy.onboard.failed", error, {
@@ -1239,10 +1384,17 @@ async function connectWallet(options = {}) {
         source: injectedWallet ? walletSourceLabel(injectedWallet) : undefined,
       });
       if (!injectedWallet) {
-        showToast(error.message || "Privy Starknet account is not ready.");
-        return false;
+        return failWalletInitialization(error, traceId, {
+          where: "connectWallet",
+          howToFix: "Check StarkZap/Privy logs for sdk.onboard(), AVNU Paymaster sponsorship, /api/wallet/sign, and RPC errors.",
+        });
       }
-      showToast("Privy unavailable, using Starknet wallet.");
+      veilLog("warn", "wallet.init.injected_fallback.used", {
+        traceId,
+        where: "connectWallet",
+        source: walletSourceLabel(injectedWallet),
+        why: "Privy StarkZap onboarding failed, but an injected Starknet wallet was available.",
+      });
     }
   }
 
@@ -1261,14 +1413,16 @@ async function connectWallet(options = {}) {
 
   const wallet = privyAccountContext?.account || injectedWallet || getWallet();
   if (!wallet) {
-    showToast("Connect with Privy or Starknet wallet.");
     tracePrivyStarkZap(traceId, "connect.stopped", {
       where: "connectWallet",
       stoppedAt: "wallet_selection",
       why: "No Privy Starknet account or injected Starknet wallet was available.",
       howToFix: "Check prior Privy trace steps, or install/connect an injected Starknet wallet as fallback.",
     });
-    return false;
+    return failWalletInitialization(new Error("No Privy Starknet account or injected Starknet wallet was available."), traceId, {
+      where: "connectWallet",
+      howToFix: "Check prior Privy trace steps, or install/connect an injected Starknet wallet as fallback.",
+    });
   }
 
   if (!wallet.account && typeof wallet.enable === "function") {
@@ -1285,24 +1439,28 @@ async function connectWallet(options = {}) {
     return walletProvider;
   });
   if (!account?.execute) {
-    showToast("Wallet unavailable.");
     tracePrivyStarkZap(traceId, "connect.stopped", {
       where: "connectWallet",
       stoppedAt: "account_execute",
       why: "Selected wallet/account does not expose execute().",
       howToFix: "Check StarkZap onboard result account shape or connect a Starknet wallet that supports account.execute().",
     });
-    return false;
+    return failWalletInitialization(new Error("Selected wallet account does not expose execute()."), traceId, {
+      where: "connectWallet",
+      howToFix: "Check StarkZap onboard result account shape or connect a Starknet wallet that supports account.execute().",
+    });
   }
   if (!walletProvider) {
-    showToast("Starknet provider unavailable.");
     tracePrivyStarkZap(traceId, "connect.stopped", {
       where: "connectWallet",
       stoppedAt: "wallet_provider",
       why: "No Starknet provider was available from Privy/StarkZap or injected wallet.",
       howToFix: "Check sdk.onboard() result and VITE_PRIVY_STARKNET_RPC_URL.",
     });
-    return false;
+    return failWalletInitialization(new Error("No Starknet provider was available from Privy/StarkZap or injected wallet."), traceId, {
+      where: "connectWallet",
+      howToFix: "Check sdk.onboard() result and VITE_PRIVY_STARKNET_RPC_URL.",
+    });
   }
 
   const isExpectedNetwork = await ensureExpectedNetwork(wallet, walletProvider);
@@ -1315,7 +1473,10 @@ async function connectWallet(options = {}) {
       why: "Wallet/provider is connected to a different Starknet network.",
       howToFix: `Switch wallet/provider to ${networkLabel(expectedChainId)} or update VITE_STARKNET_CHAIN_ID.`,
     });
-    return false;
+    return failWalletInitialization(new Error(`Wallet/provider is not connected to ${networkLabel(expectedChainId)}.`), traceId, {
+      where: "connectWallet",
+      howToFix: `Switch wallet/provider to ${networkLabel(expectedChainId)} or update VITE_STARKNET_CHAIN_ID.`,
+    });
   }
 
   directTransport = new DirectHelperTransport({
@@ -1334,15 +1495,19 @@ async function connectWallet(options = {}) {
       why: "Helper contract verification failed on the configured RPC/network.",
       howToFix: "Confirm VITE_VEIL_CHANNEL_HELPER_ADDRESS is deployed on VITE_PRIVY_STARKNET_RPC_URL / VITE_STARKNET_RPC_URL.",
     });
-    return false;
+    return failWalletInitialization(new Error("Helper contract verification failed on the configured RPC/network."), traceId, {
+      where: "connectWallet",
+      howToFix: "Confirm VITE_VEIL_CHANNEL_HELPER_ADDRESS is deployed on VITE_PRIVY_STARKNET_RPC_URL / VITE_STARKNET_RPC_URL.",
+    });
   }
 
   state.walletConnected = true;
   state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
   if (injectedWallet) state.walletSource = walletSourceLabel(injectedWallet);
+  completeWalletInitialization(traceId);
   renderWallet();
   refreshConnectLabels();
-  showToast("Wallet connected.");
+  showToast("Wallet Ready");
   if (goToInbox) showScreen("conversations");
   tracePrivyStarkZap(traceId, "connect.success", {
     where: "connectWallet",
@@ -1590,7 +1755,33 @@ function renderPayment() {
 }
 
 function renderWallet() {
-  const connected = state.walletConnected || state.privyAuthenticated;
+  const connected = state.walletConnected;
+  const pending = isWalletInitializationPending();
+  const failed = state.walletInitState === "failed";
+  const title = pending
+    ? walletInitLabel()
+    : failed
+      ? "Unable to connect wallet."
+      : connected ? "Wallet Ready" : "Connect wallet";
+  const subtitle = pending
+    ? "Preparing secure Starknet access."
+    : failed
+      ? "Retry wallet connection."
+      : state.privyAccount && !state.privyAccountDeployed
+        ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
+        : connected
+          ? "Private channels are unlocked for messages and deals."
+          : "Use Privy to unlock VEIL on this device.";
+  const statusText = pending ? "Connecting" : failed ? "Failed" : connected ? "Ready" : "Required";
+  const helperText = pending
+    ? state.walletInitMessage
+    : failed
+      ? "Retry"
+      : timelineMode === "direct-helper"
+        ? state.privyAccount && !state.privyAccountDeployed
+          ? "Account funding needed"
+          : state.helperVerified ? "Verified" : "Check required"
+        : "Mock demo";
   const walletTitle = document.querySelector("#wallet-state-title");
   const walletSubtitle = document.querySelector("#wallet-state-subtitle");
   const walletStatus = document.querySelector("#wallet-status-pill");
@@ -1599,28 +1790,16 @@ function renderWallet() {
   const walletProvider = document.querySelector("#wallet-provider");
   const walletHelper = document.querySelector("#wallet-helper");
 
-  if (walletTitle) walletTitle.textContent = connected ? "Wallet ready" : "Connect wallet";
-  if (walletSubtitle) {
-    walletSubtitle.textContent = state.privyAccount && !state.privyAccountDeployed
-      ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
-      : connected
-        ? "Private channels are unlocked for messages and deals."
-        : "Use Privy to unlock VEIL on this device.";
-  }
+  if (walletTitle) walletTitle.textContent = title;
+  if (walletSubtitle) walletSubtitle.textContent = subtitle;
   if (walletStatus) {
-    walletStatus.textContent = connected ? "Ready" : "Required";
-    walletStatus.className = `status-pill ${connected ? "private" : "public"}`;
+    walletStatus.textContent = statusText;
+    walletStatus.className = `status-pill ${connected || pending ? "private" : "public"}`;
   }
   if (walletAccount) walletAccount.textContent = shortAddress(state.walletAddress || state.privyWallet?.address);
   if (walletNetwork) walletNetwork.textContent = networkLabel();
   if (walletProvider) walletProvider.textContent = state.walletSource;
-  if (walletHelper) {
-    walletHelper.textContent = timelineMode === "direct-helper"
-      ? state.privyAccount && !state.privyAccountDeployed
-        ? "Account funding needed"
-        : state.helperVerified ? "Verified" : "Check required"
-      : "Mock demo";
-  }
+  if (walletHelper) walletHelper.textContent = helperText;
 
   refreshConnectLabels();
 }
@@ -1804,7 +1983,9 @@ function bindEvents() {
     const detail = event.detail || {};
     state.privyReady = Boolean(detail.ready);
     state.privyAuthenticated = Boolean(detail.authenticated);
-    state.walletConnected ||= state.privyAuthenticated;
+    if (timelineMode !== "direct-helper") {
+      state.walletConnected ||= state.privyAuthenticated;
+    }
     state.walletSource = privyAppId ? "Privy" : state.walletSource;
     veilLog("info", "auth.privy.state.changed", {
       where: "veil:privy-state",
