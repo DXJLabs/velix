@@ -169,6 +169,7 @@ const state = {
 let toastTimer;
 let directTransport;
 let veilClient = createClient();
+let starknetReadProvider;
 
 const screens = document.querySelectorAll("[data-screen]");
 const bottomNav = document.querySelector(".bottom-nav");
@@ -492,6 +493,13 @@ async function loadStarknetSdk() {
   return window.__veilStarknetSdk;
 }
 
+async function getStarknetReadProvider() {
+  if (starknetReadProvider) return starknetReadProvider;
+  const { RpcProvider } = await loadStarknetSdk();
+  starknetReadProvider = new RpcProvider({ nodeUrl: privyStarknetRpcUrl });
+  return starknetReadProvider;
+}
+
 async function signWithPrivy(walletId, messageHash, bridge) {
   const accessToken = await bridge.getAccessToken?.();
   const response = await fetch("/api/wallet/sign", {
@@ -704,23 +712,27 @@ async function connectWallet(options = {}) {
   }
 
   const account = wallet.account || wallet;
-  const provider = privyAccountContext?.provider || state.privyProvider || wallet.provider || wallet.account?.provider;
+  const walletProvider = privyAccountContext?.provider || state.privyProvider || wallet.provider || wallet.account?.provider;
+  const readProvider = await getStarknetReadProvider().catch((error) => {
+    console.error(error);
+    return walletProvider;
+  });
   if (!account?.execute) {
     showToast("Wallet unavailable.");
     return false;
   }
-  if (!provider) {
+  if (!walletProvider) {
     showToast("Starknet provider unavailable.");
     return false;
   }
 
-  const isExpectedNetwork = await ensureExpectedNetwork(wallet, provider);
+  const isExpectedNetwork = await ensureExpectedNetwork(wallet, walletProvider);
   if (!isExpectedNetwork) return false;
 
   directTransport = new DirectHelperTransport({
     helperAddress,
     account,
-    ...(provider ? { provider } : {}),
+    ...(readProvider ? { provider: readProvider } : {}),
   });
   veilClient = createClient(directTransport);
 
