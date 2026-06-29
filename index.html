@@ -13,15 +13,62 @@
     <div class="app-shell mx-auto min-h-dvh w-full bg-[#f7f8fa]">
       <main class="relative min-h-dvh">
         <section class="screen unlock-screen" data-screen="unlock">
-          <div class="unlock-content">
-            <div class="brand-mark">V</div>
-            <p class="eyebrow">VEIL</p>
-            <h1>Private negotiation and escrow.</h1>
-            <p>Unlock your private channels. Messages decrypt on this device.</p>
-            <button class="primary-action w-full" type="button" data-connect-wallet>
-              <i data-lucide="wallet-cards" class="size-5"></i>
-              <span data-wallet-label>Connect Wallet</span>
-            </button>
+          <div class="unlock-layout">
+            <div class="unlock-copy">
+              <div class="brand-row">
+                <div class="brand-mark">V</div>
+                <div>
+                  <p class="eyebrow">VEIL</p>
+                  <strong>Private deal workspace</strong>
+                </div>
+              </div>
+              <h1>Private negotiation and escrow, ready for Starknet.</h1>
+              <p>Encrypted deal channels, settlement context, and wallet-gated access in one focused workspace.</p>
+              <div class="unlock-actions">
+                <button class="primary-action" type="button" data-connect-wallet>
+                  <i data-lucide="wallet-cards" class="size-5"></i>
+                  <span data-wallet-label>Connect Wallet</span>
+                </button>
+                <span class="unlock-network">
+                  <i data-lucide="shield-check" class="size-4"></i>
+                  Sepolia direct helper
+                </span>
+              </div>
+              <div class="unlock-stats" aria-label="Workspace status">
+                <div><span>Mode</span><strong>Private</strong></div>
+                <div><span>Escrow</span><strong>Ready</strong></div>
+                <div><span>Proof</span><strong>Linked</strong></div>
+              </div>
+            </div>
+
+            <div class="unlock-preview" aria-label="Deal preview">
+              <div class="preview-header">
+                <div>
+                  <p class="eyebrow">Rights Transfer</p>
+                  <strong>Bob accepted 450 STRK</strong>
+                </div>
+                <span class="status-pill private">Encrypted</span>
+              </div>
+              <div class="preview-thread">
+                <div class="preview-message">
+                  <span>Bob</span>
+                  <p>Counter accepted. Escrow can move next.</p>
+                </div>
+                <div class="preview-message self">
+                  <span>You</span>
+                  <p>Memo attached. Preparing settlement proof.</p>
+                </div>
+              </div>
+              <div class="preview-deal">
+                <span>Active escrow</span>
+                <strong>450 STRK</strong>
+                <small>Buyer and seller deposits confirmed</small>
+              </div>
+              <div class="preview-checks">
+                <span><i data-lucide="lock-keyhole" class="size-4"></i> Channel locked</span>
+                <span><i data-lucide="file-check-2" class="size-4"></i> Proof trail ready</span>
+              </div>
+            </div>
           </div>
         </section>
 
