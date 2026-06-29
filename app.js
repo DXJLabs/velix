@@ -267,10 +267,79 @@ function channelMessages() {
 function getWallet() {
   return state.privyAccount
     || window.veilDemoWallet
-    || window.starknet
-    || window.starknet_argentX
-    || window.starknet_braavos
+    || getInjectedStarknetWallet()
     || null;
+}
+
+function getInjectedStarknetWallet() {
+  return getInjectedStarknetWalletEntry()?.wallet || null;
+}
+
+function getWindowValue(key) {
+  try {
+    return window[key];
+  } catch {
+    return null;
+  }
+}
+
+function isInjectedStarknetWallet(wallet) {
+  return Boolean(wallet)
+    && typeof wallet === "object"
+    && (
+      typeof wallet.enable === "function"
+      || typeof wallet.request === "function"
+      || Boolean(wallet.account)
+      || Boolean(wallet.provider)
+    );
+}
+
+function getInjectedStarknetWalletEntry() {
+  const keys = [
+    "starknet_argentX",
+    "starknet_ready",
+    "starknet_readyX",
+    "starknet_argent",
+    "starknet",
+    "starknet_braavos",
+  ];
+
+  const discoveredKeys = Object.getOwnPropertyNames(window)
+    .filter((key) => /^starknet/i.test(key) && !keys.includes(key));
+
+  return [...keys, ...discoveredKeys]
+    .map((key) => ({ key, wallet: getWindowValue(key) }))
+    .filter((entry) => isInjectedStarknetWallet(entry.wallet))
+    .sort((first, second) => walletPriority(first) - walletPriority(second))[0] || null;
+}
+
+function walletPriority(entry) {
+  const label = `${entry.key} ${walletSourceLabel(entry.wallet)}`;
+  if (/argent|ready/i.test(label)) return 0;
+  if (/braavos/i.test(label)) return 1;
+  if (entry.key === "starknet") return 2;
+  return 3;
+}
+
+async function waitForInjectedStarknetWallet(timeout = 2_000) {
+  const existing = getInjectedStarknetWalletEntry();
+  if (existing) return existing;
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeout) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const entry = getInjectedStarknetWalletEntry();
+    if (entry) return entry;
+  }
+
+  return null;
+}
+
+function walletSourceLabel(wallet) {
+  const name = wallet?.name || wallet?.id || wallet?.metadata?.name || "";
+  if (/argent|ready/i.test(name)) return "Argent";
+  if (/braavos/i.test(name)) return "Braavos";
+  return name || "Starknet wallet";
 }
 
 function ensureHex(value) {
@@ -609,8 +678,10 @@ async function connectWallet(options = {}) {
     return false;
   }
 
+  const injectedWalletEntry = await waitForInjectedStarknetWallet();
+  const injectedWallet = injectedWalletEntry?.wallet || null;
   let privyAccountContext = null;
-  if (privyAppId) {
+  if (privyAppId && !injectedWallet) {
     try {
       const bridge = await ensurePrivyAuthenticated();
       if (!bridge) return false;
@@ -622,7 +693,7 @@ async function connectWallet(options = {}) {
     }
   }
 
-  const wallet = getWallet();
+  const wallet = injectedWallet || getWallet();
   if (!wallet) {
     showToast("Connect with Privy or Starknet wallet.");
     return false;
@@ -657,6 +728,7 @@ async function connectWallet(options = {}) {
 
   state.walletConnected = true;
   state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
+  if (injectedWallet) state.walletSource = walletSourceLabel(injectedWallet);
   renderWallet();
   refreshConnectLabels();
   showToast("Wallet connected.");
