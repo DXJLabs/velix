@@ -28,6 +28,7 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
+const avnuPaymasterEnabled = (import.meta.env.VITE_AVNU_PAYMASTER_ENABLED || "true").toLowerCase() !== "false";
 
 const now = Date.now();
 const minute = 60_000;
@@ -806,11 +807,23 @@ function getStarkZapChainId() {
   throw new Error(`Unsupported StarkZap chain id ${expectedChainId}.`);
 }
 
-function getStarkZapSdk() {
-  if (starkzapSdk) return starkzapSdk;
+function getStarkZapSdk(options = {}) {
+  if (!options.paymasterAccessToken && starkzapSdk) return starkzapSdk;
+  const paymasterNodeUrl = new URL("/api/paymaster", currentOrigin()).toString();
+  const paymasterConfig = options.paymasterAccessToken
+    ? {
+        paymaster: {
+          nodeUrl: paymasterNodeUrl,
+          headers: {
+            Authorization: `Bearer ${options.paymasterAccessToken}`,
+          },
+        },
+      }
+    : {};
   starkzapSdk = new StarkZap({
     rpcUrl: privyStarknetRpcUrl,
     chainId: getStarkZapChainId(),
+    ...paymasterConfig,
     logging: {
       logger: console,
       logLevel: "info",
@@ -820,6 +833,8 @@ function getStarkZapSdk() {
     where: "getStarkZapSdk",
     chainId: expectedChainId,
     rpcConfigured: Boolean(privyStarknetRpcUrl),
+    paymasterConfigured: Boolean(options.paymasterAccessToken),
+    paymasterNodeUrl: options.paymasterAccessToken ? paymasterNodeUrl : undefined,
   });
   return starkzapSdk;
 }
@@ -926,6 +941,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
     walletId: wallet.id,
     chainId: expectedChainId,
     deploy: "if_needed",
+    feeMode: avnuPaymasterEnabled ? "paymaster" : "user_pays",
     accountPreset: "argentXV050",
   });
   veilLog("info", "starkzap.privy.onboard.start", {
@@ -933,8 +949,32 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
     where: "createPrivyStarknetAccount",
     walletId: wallet.id,
     chainId: expectedChainId,
+    feeMode: avnuPaymasterEnabled ? "paymaster" : "user_pays",
   });
-  const sdk = getStarkZapSdk();
+  let paymasterAccessToken = "";
+  if (avnuPaymasterEnabled) {
+    tracePrivyStarkZap(traceId, "paymaster.get_access_token.start", {
+      where: "createPrivyStarknetAccount",
+      walletId: wallet.id,
+    });
+    paymasterAccessToken = await bridge.getAccessToken?.();
+    if (!paymasterAccessToken) {
+      const error = new Error("Privy access token is missing for AVNU Paymaster proxy.");
+      veilError("trace.privy_starkzap.paymaster.get_access_token.failed", error, {
+        traceId,
+        where: "createPrivyStarknetAccount",
+        walletId: wallet.id,
+        howToFix: "Refresh the Privy session before onboarding so /api/paymaster can authenticate the sponsorship request.",
+      });
+      throw error;
+    }
+    tracePrivyStarkZap(traceId, "paymaster.configured", {
+      where: "createPrivyStarknetAccount",
+      walletId: wallet.id,
+      nodeUrl: new URL("/api/paymaster", currentOrigin()).toString(),
+    });
+  }
+  const sdk = getStarkZapSdk({ paymasterAccessToken });
   const signEndpoint = new URL("/api/wallet/sign", currentOrigin()).toString();
 
   try {
@@ -942,6 +982,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
       strategy: OnboardStrategy.Privy,
       accountPreset: accountPresets.argentXV050,
       deploy: "if_needed",
+      ...(avnuPaymasterEnabled ? { feeMode: { type: "paymaster" } } : {}),
       privy: {
         resolve: async () => {
           tracePrivyStarkZap(traceId, "sdk_onboard.resolve.start", {
@@ -1007,11 +1048,12 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
     throw error;
   }
 
-  const account = starkzapOnboardResult.wallet.getAccount();
-  const provider = starkzapOnboardResult.wallet.getProvider();
-  const accountAddress = account.address || starkzapOnboardResult.wallet.address;
+  const connectedWallet = starkzapOnboardResult.wallet;
+  const account = connectedWallet.getAccount();
+  const provider = connectedWallet.getProvider();
+  const accountAddress = connectedWallet.address || account.address;
 
-  state.privyAccount = account;
+  state.privyAccount = connectedWallet;
   state.privyProvider = provider;
   state.walletAddress = accountAddress;
   state.walletSource = "Privy";
@@ -1023,6 +1065,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
     walletId: wallet.id,
     address: accountAddress,
     deployed: state.privyAccountDeployed,
+    feeMode: avnuPaymasterEnabled ? "paymaster" : "user_pays",
   });
   veilLog("info", "starkzap.privy.onboard.success", {
     traceId,
@@ -1030,9 +1073,10 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
     walletId: wallet.id,
     address: accountAddress,
     deployed: state.privyAccountDeployed,
+    feeMode: avnuPaymasterEnabled ? "paymaster" : "user_pays",
   });
 
-  return { account, provider };
+  return { account: connectedWallet, provider, starknetAccount: account, wallet: connectedWallet };
 }
 
 async function resolveWalletChain(wallet, provider) {

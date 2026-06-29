@@ -126,6 +126,9 @@ VITE_VEIL_ONCHAIN_PAYLOADS=false
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 PRIVY_VERIFICATION_KEY=
+AVNU_PAYMASTER_API_KEY=
+AVNU_PAYMASTER_NODE_URL=https://sepolia.paymaster.avnu.fi
+VITE_AVNU_PAYMASTER_ENABLED=true
 VITE_STARKNET_CHAIN_ID=SN_SEPOLIA
 VITE_STARKNET_RPC_URL=
 VITE_PRIVY_STARKNET_RPC_URL=https://starknet-sepolia.public.blastapi.io/rpc/v0_8
@@ -145,7 +148,7 @@ Timeline modes:
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
-Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL follows StarkZap's Privy server-signing model: `/api/wallet/starknet` creates a server-managed Starknet wallet without a Privy owner, maps it to the authenticated user with a stable `external_id`, and `/api/wallet/sign` signs with Privy `rawSign`. The JWT is still required to authenticate VEIL API requests and prevent signing a wallet mapped to another user. StarkZap handles account address derivation and `deploy: "if_needed"` with the ArgentX v0.5 account preset. The account must hold Sepolia STRK when using user-pays deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL follows StarkZap's Privy server-signing model: `/api/wallet/starknet` creates a server-managed Starknet wallet without a Privy owner, maps it to the authenticated user with a stable `external_id`, and `/api/wallet/sign` signs with Privy `rawSign`. The JWT is still required to authenticate VEIL API requests and prevent signing a wallet mapped to another user. StarkZap handles account address derivation and `deploy: "if_needed"` with the ArgentX v0.5 account preset. When `VITE_AVNU_PAYMASTER_ENABLED=true`, StarkZap uses `feeMode: { type: "paymaster" }` and `/api/paymaster` proxies AVNU Paymaster requests with the server-side `AVNU_PAYMASTER_API_KEY`; never expose that key in frontend code. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
 
 ### Google OAuth And Privy Redirects
 
@@ -173,6 +176,8 @@ Server:
 - `PRIVY_APP_ID` must match `VITE_PRIVY_APP_ID`.
 - `PRIVY_APP_SECRET` must come from the same Privy app.
 - `PRIVY_VERIFICATION_KEY` must come from the same Privy app and is required to authenticate VEIL API requests. Wallets are server-managed in Privy and mapped to users by `external_id`, so Privy `rawSign` uses app credentials rather than user-owned wallet authorization.
+- `AVNU_PAYMASTER_API_KEY` must be an active AVNU Paymaster key. If the key was exposed in screenshots or logs, rotate it before adding it to Vercel Production and Preview.
+- `AVNU_PAYMASTER_NODE_URL` defaults to Sepolia/Mainnet from `VITE_STARKNET_CHAIN_ID`; set it explicitly when using a custom AVNU endpoint.
 
 ### Encrypted Onchain Messaging
 
