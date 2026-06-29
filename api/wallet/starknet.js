@@ -17,6 +17,11 @@ export default async function handler(request, response) {
   const context = createRequestContext(request, "/api/wallet/starknet");
 
   try {
+    logEvent("info", "wallet.starknet.request.received", context, {
+      method: request.method,
+      contentType: request.headers["content-type"],
+      authorizationPresent: Boolean(request.headers.authorization || request.headers.Authorization),
+    });
     requirePost(request, response, context);
 
     const auth = await authenticatePrivyRequest(request, context);
@@ -36,6 +41,13 @@ export default async function handler(request, response) {
         walletId: existingWallet.id,
         address: existingWallet.address,
       });
+      logEvent("info", "wallet.starknet.response.ready", context, {
+        userIdHash,
+        walletMode: "server-managed",
+        walletId: existingWallet.id,
+        address: existingWallet.address,
+        publicKeyPresent: Boolean(existingWallet.public_key || existingWallet.publicKey),
+      });
       response.status(200).json({ wallet: formatWallet(existingWallet) });
       return;
     }
@@ -43,6 +55,8 @@ export default async function handler(request, response) {
     logEvent("info", "wallet.starknet.create.start", context, {
       userIdHash,
       walletMode: "server-managed",
+      chainType: STARKNET_CHAIN_TYPE,
+      externalIdPresent: Boolean(externalId),
     });
     const wallet = await client.wallets().create({
       chain_type: STARKNET_CHAIN_TYPE,
@@ -55,6 +69,14 @@ export default async function handler(request, response) {
       walletMode: "server-managed",
       walletId: wallet.id,
       address: wallet.address,
+      publicKeyPresent: Boolean(wallet.public_key || wallet.publicKey),
+    });
+    logEvent("info", "wallet.starknet.response.ready", context, {
+      userIdHash,
+      walletMode: "server-managed",
+      walletId: wallet.id,
+      address: wallet.address,
+      publicKeyPresent: Boolean(wallet.public_key || wallet.publicKey),
     });
     response.status(200).json({
       wallet: formatWallet(wallet),

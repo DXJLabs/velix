@@ -43,6 +43,7 @@ export function sendError(response, context, error) {
     why: apiError.why,
     howToFix: apiError.howToFix,
     status: apiError.status,
+    ...serializeError(error),
     ...apiError.details,
   });
   response.status(apiError.status).json({
@@ -75,6 +76,9 @@ export function createPrivyClient(context) {
 }
 
 export async function authenticatePrivyRequest(request, context) {
+  logEvent("info", "auth.privy.access_token.verify.start", context, {
+    authorizationPresent: Boolean(request.headers.authorization || request.headers.Authorization),
+  });
   const accessToken = getBearerToken(request);
   if (!accessToken) {
     throw new ApiError(
@@ -108,7 +112,7 @@ export async function authenticatePrivyRequest(request, context) {
       context.route,
       "The Privy access token could not be verified.",
       "Confirm PRIVY_APP_ID and PRIVY_VERIFICATION_KEY match the same Privy app, then retry after a fresh login.",
-      { errorName: error?.name },
+      serializeError(error),
     );
   }
 }
@@ -193,8 +197,21 @@ function normalizeError(route, error) {
     route,
     error?.message || "The wallet operation failed unexpectedly.",
     "Check the structured server log for this requestId, confirm Privy credentials and wallet ownership, then retry.",
-    { errorName: error?.name },
+    serializeError(error),
   );
+}
+
+function serializeError(error) {
+  if (!error) return {};
+  const cause = error.cause;
+  return {
+    errorName: error.name,
+    errorMessage: error.message || String(error),
+    errorStack: error.stack,
+    errorCauseName: cause?.name,
+    errorCauseMessage: cause?.message || (cause ? String(cause) : undefined),
+    errorCauseStack: cause?.stack,
+  };
 }
 
 function sanitizeLogDetails(details) {

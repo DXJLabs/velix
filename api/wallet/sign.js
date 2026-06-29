@@ -15,9 +15,18 @@ export default async function handler(request, response) {
   const context = createRequestContext(request, "/api/wallet/sign");
 
   try {
+    logEvent("info", "wallet.sign.request.received", context, {
+      method: request.method,
+      contentType: request.headers["content-type"],
+      authorizationPresent: Boolean(request.headers.authorization || request.headers.Authorization),
+    });
     requirePost(request, response, context);
 
     const { walletId, hash } = request.body || {};
+    logEvent("info", "wallet.sign.input.validating", context, {
+      walletIdPresent: Boolean(walletId),
+      hashPresent: Boolean(hash),
+    });
     if (!walletId || !hash) {
       throw new ApiError(
         400,
@@ -30,6 +39,11 @@ export default async function handler(request, response) {
     const normalizedHash = assertHexHash(hash, context);
     const auth = await authenticatePrivyRequest(request, context);
     const client = createPrivyClient(context);
+    logEvent("info", "wallet.sign.wallet.lookup.start", context, {
+      userIdHash: hashForLog(auth.userId),
+      walletMode: "server-managed",
+      walletId,
+    });
     const wallet = await getServerManagedStarknetWallet(client, auth.userId, walletId, context);
     if (!wallet) {
       throw new ApiError(
@@ -41,8 +55,20 @@ export default async function handler(request, response) {
         { walletId, userIdHash: hashForLog(auth.userId) },
       );
     }
+    logEvent("info", "wallet.sign.wallet.lookup.hit", context, {
+      userIdHash: hashForLog(auth.userId),
+      walletMode: "server-managed",
+      walletId,
+      address: wallet.address,
+    });
 
     logEvent("info", "wallet.sign.start", context, {
+      userIdHash: hashForLog(auth.userId),
+      walletMode: "server-managed",
+      walletId,
+      hashPrefix: `${normalizedHash.slice(0, 10)}...`,
+    });
+    logEvent("info", "wallet.sign.raw_sign.start", context, {
       userIdHash: hashForLog(auth.userId),
       walletMode: "server-managed",
       walletId,
@@ -55,10 +81,17 @@ export default async function handler(request, response) {
       ? result
       : result.signature || result.rawSignature || result.raw_signature || result;
 
+    logEvent("info", "wallet.sign.raw_sign.success", context, {
+      userIdHash: hashForLog(auth.userId),
+      walletMode: "server-managed",
+      walletId,
+      signaturePresent: Boolean(signature),
+    });
     logEvent("info", "wallet.sign.success", context, {
       userIdHash: hashForLog(auth.userId),
       walletMode: "server-managed",
       walletId,
+      signaturePresent: Boolean(signature),
     });
     response.status(200).json({ signature });
   } catch (error) {
