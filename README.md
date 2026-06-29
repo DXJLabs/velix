@@ -121,6 +121,8 @@ Important variables:
 ```text
 VITE_PRIVY_APP_ID=
 VITE_PRIVY_LOGIN_METHODS=email,wallet,google
+VITE_VEIL_CHANNEL_KEY=
+VITE_VEIL_ONCHAIN_PAYLOADS=false
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
 VITE_STARKNET_CHAIN_ID=SN_SEPOLIA
@@ -130,6 +132,7 @@ VITE_PRIVACY_POOL_ADDRESS=
 VITE_VEIL_CHANNEL_HELPER_ADDRESS=
 VITE_VEIL_ESCROW_ADDRESS=
 VITE_DEMO_COUNTERPARTY_ADDRESS=
+VEIL_INDEXER_FROM_BLOCK=0
 VITE_VEIL_TIMELINE_MODE=mock
 ```
 
@@ -142,6 +145,24 @@ Timeline modes:
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
 Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL builds a Ready/Argent v0.5 Starknet account from the Privy public key and signs with Privy `rawSign`. That account must hold Sepolia STRK before deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+
+### Encrypted Onchain Messaging
+
+`VeilChannelHelper` supports append-only encrypted timeline storage. `privacy_invoke` accepts the legacy four-felt reference format and a chunked format:
+
+```text
+channel_id, event_type, encrypted_payload, payload_hash, payload_chunk_count, payload_chunk...
+```
+
+The helper stores metadata, stores each encrypted payload chunk, and emits reconstructable events. The Vercel indexer endpoint reads helper events and returns ciphertext only:
+
+```text
+GET /api/indexer/messages?channelId=20260625
+```
+
+Decryption stays in the browser. `VITE_VEIL_CHANNEL_KEY` can be set to a 128/192/256-bit AES key for the current channel demo; production should derive this key from the Privacy Pool channel/viewing-key flow rather than trusting the backend.
+
+Set `VITE_VEIL_ONCHAIN_PAYLOADS=true` only after deploying the upgraded `VeilChannelHelper` that supports payload chunks. Older helper deployments only accept the four-felt reference format.
 
 ## Build And Test
 

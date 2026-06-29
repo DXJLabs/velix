@@ -225,6 +225,9 @@ export class VeilClient {
       eventType,
       encryptedPayload: encrypted.encryptedPayload,
       payloadHash: encrypted.payloadHash,
+      ...(encrypted.payloadChunks?.length
+        ? { payloadChunkCount: encrypted.payloadChunks.length, payloadChunks: encrypted.payloadChunks }
+        : {}),
       timestamp: this.#now(),
       payload,
     };

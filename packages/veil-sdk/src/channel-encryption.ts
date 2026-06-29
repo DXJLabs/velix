@@ -11,6 +11,7 @@ import {
   type TimelineItem,
   type VeilTimelinePayload,
 } from "./types";
+import { feltChunksToString, stringToFeltChunks } from "./payload-chunks";
 
 const AES_GCM_ALGORITHM = "AES-GCM";
 const NONCE_BYTES = 12;
@@ -217,7 +218,7 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
     }
 
     await this.#payloadStore.saveEnvelope(envelope);
-    return { encryptedPayload, payloadHash };
+    return { encryptedPayload, payloadHash, payloadChunks: stringToFeltChunks(JSON.stringify(envelope)) };
   }
 
   async decryptPayload(item: TimelineItem, context?: EncryptionContext): Promise<VeilTimelinePayload | null> {
@@ -225,7 +226,13 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
       throw new Error("ChannelEncryptionAdapter requires Web Crypto.");
     }
 
-    const envelope = await this.#payloadStore.loadEnvelope(item.encryptedPayload);
+    let envelope = await this.#payloadStore.loadEnvelope(item.encryptedPayload);
+    if (!envelope && item.payloadChunks?.length) {
+      envelope = JSON.parse(feltChunksToString(item.payloadChunks)) as EncryptedPayloadEnvelope;
+      if (envelope.encryptedPayload === item.encryptedPayload) {
+        await this.#payloadStore.saveEnvelope(envelope);
+      }
+    }
     if (!envelope) {
       return item.payload ?? null;
     }

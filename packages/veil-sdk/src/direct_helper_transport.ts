@@ -97,6 +97,7 @@ export class DirectHelperTransport implements VeilTransport {
   readonly #entrypoint: string;
   readonly #account: StarknetAccountLike | undefined;
   readonly #provider: StarknetProviderLike | undefined;
+  readonly #storePayloadChunks: boolean;
   readonly #sessionAccountResolver: DirectHelperTransportConfig["sessionAccountResolver"];
   readonly #now: () => number;
   readonly #channelIdEncoder: (channelId: string) => string;
@@ -106,6 +107,7 @@ export class DirectHelperTransport implements VeilTransport {
     this.#entrypoint = config.entrypoint ?? "privacy_invoke";
     this.#account = config.account;
     this.#provider = config.provider;
+    this.#storePayloadChunks = config.storePayloadChunks ?? true;
     this.#sessionAccountResolver = config.sessionAccountResolver;
     this.#now = config.now ?? (() => Date.now());
     this.#channelIdEncoder = config.channelIdEncoder ?? channelIdToFelt;
@@ -138,6 +140,12 @@ export class DirectHelperTransport implements VeilTransport {
       toFeltString(input.item.eventType, "event_type"),
       toFeltString(input.item.encryptedPayload, "encrypted_payload"),
       toFeltString(input.item.payloadHash, "payload_hash"),
+      ...(this.#storePayloadChunks && input.item.payloadChunks?.length
+        ? [
+            String(input.item.payloadChunks.length),
+            ...input.item.payloadChunks.map((chunk) => toFeltString(chunk, "payload_chunk")),
+          ]
+        : []),
     ];
 
     const result = await account.execute([
@@ -171,13 +179,27 @@ export class DirectHelperTransport implements VeilTransport {
       throw new Error("get_event returned an incomplete VeilTimelineEvent.");
     }
 
+    const hasPayloadChunkCount = result.length >= 7;
+    const payloadChunkCount = hasPayloadChunkCount
+      ? feltToNumber(result[5] as FeltLike, "payload_chunk_count")
+      : 0;
+    const payloadChunks = payloadChunkCount > 0
+      ? await Promise.all(
+          Array.from({ length: payloadChunkCount }, async (_, chunkIndex) =>
+            this.#getPayloadChunk(channelId, index, chunkIndex),
+          ),
+        )
+      : undefined;
+    const payloadChunkFields = payloadChunks ? { payloadChunkCount, payloadChunks } : {};
+
     return {
       eventId: toFeltString(result[0] as FeltLike, "event_id"),
       channelId,
       eventType: feltToNumber(result[2] as FeltLike, "event_type"),
       encryptedPayload: toFeltString(result[3] as FeltLike, "encrypted_payload"),
       payloadHash: toFeltString(result[4] as FeltLike, "payload_hash"),
-      timestamp: timestampFromChain(result[5] as FeltLike),
+      ...payloadChunkFields,
+      timestamp: timestampFromChain(result[hasPayloadChunkCount ? 6 : 5] as FeltLike),
       optimistic: false,
     };
   }
@@ -198,5 +220,18 @@ export class DirectHelperTransport implements VeilTransport {
     return normalizeCallResult(
       await this.#provider.callContract(createHelperCall(this.#helperAddress, entrypoint, calldata)),
     );
+  }
+
+  async #getPayloadChunk(channelId: string, eventIndex: number, chunkIndex: number): Promise<string> {
+    const result = await this.#callHelper("get_payload_chunk", [
+      this.#channelIdEncoder(channelId),
+      String(eventIndex),
+      String(chunkIndex),
+    ]);
+    const chunk = result[0];
+    if (chunk === undefined) {
+      throw new Error("get_payload_chunk returned no data.");
+    }
+    return toFeltString(chunk, "payload_chunk");
   }
 }

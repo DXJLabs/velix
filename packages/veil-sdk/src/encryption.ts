@@ -1,4 +1,5 @@
 import type { EncryptedPayload, EncryptionAdapter, TimelineItem, VeilTimelinePayload } from "./types";
+import { feltChunksToString, stringToFeltChunks } from "./payload-chunks";
 
 const FELT_MODULUS = 2n ** 251n + 17n * 2n ** 192n + 1n;
 const textEncoder = new TextEncoder();
@@ -49,14 +50,34 @@ export class MockEncryptionAdapter implements EncryptionAdapter {
     const ciphertext = bytesToBase64(textEncoder.encode(serializedPayload));
     const encryptedPayload = await hashToFelt(`veil:encrypted:${ciphertext}`);
     const payloadHash = await hashToFelt(`veil:payload:${serializedPayload}`);
+    const payloadChunks = stringToFeltChunks(JSON.stringify({
+      version: 1,
+      algorithm: "mock-base64",
+      ciphertext,
+    }));
 
     this.#payloadCache.set(encryptedPayload, payload);
 
-    return { encryptedPayload, payloadHash };
+    return { encryptedPayload, payloadHash, payloadChunks };
   }
 
   async decryptPayload(item: TimelineItem): Promise<VeilTimelinePayload | null> {
-    return this.#payloadCache.get(item.encryptedPayload) ?? item.payload ?? null;
+    const cached = this.#payloadCache.get(item.encryptedPayload) ?? item.payload;
+    if (cached) return cached;
+
+    if (item.payloadChunks?.length) {
+      const envelope = JSON.parse(feltChunksToString(item.payloadChunks)) as {
+        algorithm?: string;
+        ciphertext?: string;
+      };
+      if (envelope.algorithm === "mock-base64" && envelope.ciphertext) {
+        const payload = JSON.parse(textDecoder.decode(base64ToBytes(envelope.ciphertext))) as VeilTimelinePayload;
+        this.#payloadCache.set(item.encryptedPayload, payload);
+        return payload;
+      }
+    }
+
+    return null;
   }
 
   importPayload(encryptedPayload: string, encodedPayload: string): VeilTimelinePayload {

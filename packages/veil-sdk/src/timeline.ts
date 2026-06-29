@@ -1,7 +1,14 @@
 import { VeilEventType, type TimelineItem, type VeilEventGroup, type VeilTimelinePayload } from "./types";
 
 export function encodeInvokeCalldata(item: TimelineItem): readonly string[] {
-  return [item.channelId, String(item.eventType), item.encryptedPayload, item.payloadHash];
+  const payloadChunks = item.payloadChunks ?? [];
+  return [
+    item.channelId,
+    String(item.eventType),
+    item.encryptedPayload,
+    item.payloadHash,
+    ...(payloadChunks.length ? [String(payloadChunks.length), ...payloadChunks] : []),
+  ];
 }
 
 export function getEventGroup(eventType: number): VeilEventGroup {

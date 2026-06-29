@@ -23,6 +23,21 @@ fn make_calldata(
     calldata
 }
 
+fn make_chunked_calldata(
+    channel_id: felt252,
+    event_type: felt252,
+    encrypted_payload: felt252,
+    payload_hash: felt252,
+    first_chunk: felt252,
+    second_chunk: felt252,
+) -> Array<felt252> {
+    let mut calldata = make_calldata(channel_id, event_type, encrypted_payload, payload_hash);
+    calldata.append(2);
+    calldata.append(first_chunk);
+    calldata.append(second_chunk);
+    calldata
+}
+
 fn store_event(
     dispatcher: IVeilChannelHelperDispatcher,
     channel_id: felt252,
@@ -84,6 +99,22 @@ fn store_chat_event_via_privacy_invoke() {
     assert(dispatcher.get_event_count(1010) == 1, 'Invalid count');
     let event = dispatcher.get_event(1010, 0);
     assert_event_eq(event, 1, 1010, EVENT_CHAT, 112, 223);
+}
+
+#[test]
+fn store_chat_event_with_onchain_payload_chunks() {
+    let contract_address = deploy_contract();
+    let dispatcher = IVeilChannelHelperDispatcher { contract_address };
+    let calldata = make_chunked_calldata(1111, EVENT_CHAT, 700, 800, 900, 901);
+
+    let deposits = dispatcher.privacy_invoke(calldata.span());
+    assert(deposits.len() == 0, 'Expected empty deposits');
+
+    let event = dispatcher.get_event(1111, 0);
+    assert_event_eq(event, 1, 1111, EVENT_CHAT, 700, 800);
+    assert(event.payload_chunk_count == 2, 'Invalid chunk count');
+    assert(dispatcher.get_payload_chunk(1111, 0, 0) == 900, 'Invalid chunk 0');
+    assert(dispatcher.get_payload_chunk(1111, 0, 1) == 901, 'Invalid chunk 1');
 }
 
 #[test]

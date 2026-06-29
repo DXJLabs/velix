@@ -1,4 +1,4 @@
-import { DirectHelperTransport, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
+import { ChannelEncryptionAdapter, DirectHelperTransport, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
 
 const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
@@ -9,6 +9,8 @@ const privyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,wa
 const helperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
 const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
+const channelKey = import.meta.env.VITE_VEIL_CHANNEL_KEY || "";
+const onchainPayloads = (import.meta.env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true";
 const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
@@ -187,6 +189,9 @@ function createClient(transport) {
     privacyPoolAddress,
     helperAddress: helperAddress || "mock-veil-helper",
     rpcUrl,
+    ...(channelKey
+      ? { encryption: new ChannelEncryptionAdapter({ channelKey, keyId: "veil-env-channel" }) }
+      : {}),
     ...(transport ? { transport } : {}),
   });
 }
@@ -733,6 +738,7 @@ async function connectWallet(options = {}) {
     helperAddress,
     account,
     ...(readProvider ? { provider: readProvider } : {}),
+    storePayloadChunks: onchainPayloads,
   });
   veilClient = createClient(directTransport);
 
@@ -799,6 +805,86 @@ function openChannel(channelId) {
   const channel = currentChannel();
   channel.unread = 0;
   showScreen("channel");
+  loadIndexedChannelTimeline(channelId);
+}
+
+async function loadIndexedChannelTimeline(channelId) {
+  if (timelineMode !== "direct-helper" || !helperAddress) return;
+
+  try {
+    const response = await fetch(`/api/indexer/messages?channelId=${encodeURIComponent(channelId)}`);
+    if (!response.ok) return;
+    const payload = await response.json();
+    const indexedItems = Array.isArray(payload.messages) ? payload.messages : [];
+    if (!indexedItems.length) return;
+
+    const feedItems = [];
+    for (const indexedItem of indexedItems) {
+      const timelineItem = {
+        ...indexedItem,
+        channelId,
+        eventType: Number(indexedItem.eventType),
+        timestamp: Number(indexedItem.timestamp || Date.now()),
+      };
+      const decrypted = await veilClient.encryption.decryptPayload(timelineItem).catch(() => null);
+      const feedItem = decrypted ? timelinePayloadToFeedItem(timelineItem, decrypted) : null;
+      if (feedItem) feedItems.push(feedItem);
+    }
+
+    if (!feedItems.length) return;
+    messages[channelId] = feedItems;
+    const channel = channels.find((item) => item.id === channelId);
+    const lastItem = feedItems[feedItems.length - 1];
+    if (channel && lastItem) {
+      channel.last = lastItem.type === "message" ? `${lastItem.sender}: ${lastItem.body}` : lastItem.title;
+      channel.time = "now";
+    }
+    if (state.channelId === channelId && state.screen === "channel") {
+      renderChannel();
+    }
+  } catch (error) {
+    console.warn("Indexed timeline unavailable.", error);
+  }
+}
+
+function timelinePayloadToFeedItem(item, payload) {
+  const sender = payload.sender === "you" ? "You" : payload.sender || "Peer";
+  const base = { time: item.timestamp };
+
+  if (payload.kind === "chat") {
+    return {
+      ...base,
+      type: "message",
+      sender,
+      body: payload.message,
+      self: sender === "You",
+    };
+  }
+
+  if (payload.kind === "offer" || payload.kind === "counter_offer") {
+    return {
+      ...base,
+      type: "offer",
+      title: payload.kind === "counter_offer" ? "Counter offer" : "Offer",
+      amount: `${payload.amount}${payload.currency ? ` ${payload.currency}` : ""}`,
+      subtitle: payload.terms || "Private terms",
+    };
+  }
+
+  const titles = {
+    accept_offer: "Offer accepted",
+    reject_offer: "Offer rejected",
+    payment_memo: "Payment memo attached",
+    escrow: "Escrow updated",
+    proof: "Proof attached",
+  };
+
+  return {
+    ...base,
+    type: "inline",
+    title: titles[payload.kind] || "Channel event",
+    subtitle: payload.memo || payload.details || payload.label || payload.reason || "Encrypted event",
+  };
 }
 
 function renderConversationList() {

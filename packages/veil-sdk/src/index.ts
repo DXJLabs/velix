@@ -15,6 +15,7 @@ export {
   type EncryptedPayloadStore,
 } from "./encrypted-payload-store";
 export { MockEncryptionAdapter, hashToFelt } from "./encryption";
+export { feltChunksToString, stringToFeltChunks } from "./payload-chunks";
 export { VeilSessionError, VeilSessionKeyManager } from "./session-key-manager";
 export {
   BrowserSessionKeyStore,

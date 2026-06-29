@@ -23,6 +23,8 @@ export interface TimelineItem {
   eventType: number;
   encryptedPayload: string;
   payloadHash: string;
+  payloadChunkCount?: number;
+  payloadChunks?: string[];
   timestamp: number;
   payload?: VeilTimelinePayload;
   transactionHash?: string;
@@ -82,6 +84,7 @@ export interface ProofPayload extends BasePayload {
 export interface EncryptedPayload {
   encryptedPayload: string;
   payloadHash: string;
+  payloadChunks?: string[];
 }
 
 export interface EncryptionContext {
@@ -152,6 +155,7 @@ export interface DirectHelperTransportConfig {
   entrypoint?: string;
   account?: StarknetAccountLike;
   provider?: StarknetProviderLike;
+  storePayloadChunks?: boolean;
   sessionAccountResolver?: (session: VeilSession | undefined) => StarknetAccountLike | undefined;
   now?: () => number;
   channelIdEncoder?: (channelId: string) => string;
