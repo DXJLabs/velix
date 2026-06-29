@@ -4,11 +4,12 @@ import {
   createPrivyClient,
   createRequestContext,
   formatWallet,
-  getUserStarknetWallet,
+  getServerManagedStarknetWallet,
   hashForLog,
   logEvent,
   requirePost,
   sendError,
+  starknetWalletExternalId,
   stableIdempotencyKey,
 } from "../_lib/privy.js";
 
@@ -21,12 +22,17 @@ export default async function handler(request, response) {
     const auth = await authenticatePrivyRequest(request, context);
     const client = createPrivyClient(context);
     const userIdHash = hashForLog(auth.userId);
+    const externalId = starknetWalletExternalId(auth.userId);
 
-    logEvent("info", "wallet.starknet.lookup.start", context, { userIdHash });
-    const existingWallet = await getUserStarknetWallet(client, auth.userId, undefined, context);
+    logEvent("info", "wallet.starknet.lookup.start", context, {
+      userIdHash,
+      walletMode: "server-managed",
+    });
+    const existingWallet = await getServerManagedStarknetWallet(client, auth.userId, undefined, context);
     if (existingWallet) {
       logEvent("info", "wallet.starknet.lookup.hit", context, {
         userIdHash,
+        walletMode: "server-managed",
         walletId: existingWallet.id,
         address: existingWallet.address,
       });
@@ -34,15 +40,19 @@ export default async function handler(request, response) {
       return;
     }
 
-    logEvent("info", "wallet.starknet.create.start", context, { userIdHash });
+    logEvent("info", "wallet.starknet.create.start", context, {
+      userIdHash,
+      walletMode: "server-managed",
+    });
     const wallet = await client.wallets().create({
       chain_type: STARKNET_CHAIN_TYPE,
-      owner: { user_id: auth.userId },
+      external_id: externalId,
       display_name: "VEIL Starknet Wallet",
-      idempotency_key: stableIdempotencyKey("veil-starknet-wallet", auth.userId),
+      "privy-idempotency-key": stableIdempotencyKey("veil-starknet-wallet", auth.userId),
     });
     logEvent("info", "wallet.starknet.create.success", context, {
       userIdHash,
+      walletMode: "server-managed",
       walletId: wallet.id,
       address: wallet.address,
     });

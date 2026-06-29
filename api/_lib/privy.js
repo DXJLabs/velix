@@ -113,9 +113,10 @@ export async function authenticatePrivyRequest(request, context) {
   }
 }
 
-export async function getUserStarknetWallet(client, userId, walletId, context) {
+export async function getServerManagedStarknetWallet(client, userId, walletId, context) {
+  const externalId = starknetWalletExternalId(userId);
   for await (const wallet of client.wallets().list({
-    user_id: userId,
+    external_id: externalId,
     chain_type: STARKNET_CHAIN_TYPE,
   })) {
     if (wallet.archived_at) continue;
@@ -123,6 +124,11 @@ export async function getUserStarknetWallet(client, userId, walletId, context) {
   }
 
   return null;
+}
+
+export function starknetWalletExternalId(userId) {
+  const digest = crypto.createHash("sha256").update(String(userId)).digest("hex").slice(0, 48);
+  return `veil_starknet_${digest}`;
 }
 
 export function formatWallet(wallet) {

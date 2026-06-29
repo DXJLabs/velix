@@ -145,7 +145,7 @@ Timeline modes:
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
-Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL uses StarkZap Privy onboarding with the ArgentX v0.5 account preset and Privy `rawSign` through `/api/wallet/sign`. StarkZap handles account address derivation and `deploy: "if_needed"`. The account must hold Sepolia STRK when using user-pays deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL follows StarkZap's Privy server-signing model: `/api/wallet/starknet` creates a server-managed Starknet wallet without a Privy owner, maps it to the authenticated user with a stable `external_id`, and `/api/wallet/sign` signs with Privy `rawSign`. The JWT is still required to authenticate VEIL API requests and prevent signing a wallet mapped to another user. StarkZap handles account address derivation and `deploy: "if_needed"` with the ArgentX v0.5 account preset. The account must hold Sepolia STRK when using user-pays deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
 
 ### Google OAuth And Privy Redirects
 
@@ -172,7 +172,7 @@ Server:
 
 - `PRIVY_APP_ID` must match `VITE_PRIVY_APP_ID`.
 - `PRIVY_APP_SECRET` must come from the same Privy app.
-- `PRIVY_VERIFICATION_KEY` must come from the same Privy app and is required to verify browser access tokens before wallet creation or signing.
+- `PRIVY_VERIFICATION_KEY` must come from the same Privy app and is required to authenticate VEIL API requests. Wallets are server-managed in Privy and mapped to users by `external_id`, so Privy `rawSign` uses app credentials rather than user-owned wallet authorization.
 
 ### Encrypted Onchain Messaging
 

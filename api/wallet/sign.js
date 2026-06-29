@@ -4,7 +4,7 @@ import {
   authenticatePrivyRequest,
   createPrivyClient,
   createRequestContext,
-  getUserStarknetWallet,
+  getServerManagedStarknetWallet,
   hashForLog,
   logEvent,
   requirePost,
@@ -30,13 +30,13 @@ export default async function handler(request, response) {
     const normalizedHash = assertHexHash(hash, context);
     const auth = await authenticatePrivyRequest(request, context);
     const client = createPrivyClient(context);
-    const wallet = await getUserStarknetWallet(client, auth.userId, walletId, context);
+    const wallet = await getServerManagedStarknetWallet(client, auth.userId, walletId, context);
     if (!wallet) {
       throw new ApiError(
         403,
-        "WALLET_OWNERSHIP_MISMATCH",
+        "WALLET_MAPPING_MISMATCH",
         context.route,
-        "The requested Starknet wallet does not belong to the authenticated Privy user.",
+        "The requested server-managed Starknet wallet is not mapped to the authenticated Privy user.",
         "Fetch the wallet through /api/wallet/starknet after login and sign only with the returned wallet.id.",
         { walletId, userIdHash: hashForLog(auth.userId) },
       );
@@ -44,6 +44,7 @@ export default async function handler(request, response) {
 
     logEvent("info", "wallet.sign.start", context, {
       userIdHash: hashForLog(auth.userId),
+      walletMode: "server-managed",
       walletId,
       hashPrefix: `${normalizedHash.slice(0, 10)}...`,
     });
@@ -56,6 +57,7 @@ export default async function handler(request, response) {
 
     logEvent("info", "wallet.sign.success", context, {
       userIdHash: hashForLog(auth.userId),
+      walletMode: "server-managed",
       walletId,
     });
     response.status(200).json({ signature });
