@@ -1,42 +1,55 @@
-import { PrivyClient } from "@privy-io/node";
-
-function requireEnv(name) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is not configured.`);
-  }
-  return value;
-}
-
-function createPrivyClient() {
-  return new PrivyClient({
-    appId: requireEnv("PRIVY_APP_ID"),
-    appSecret: requireEnv("PRIVY_APP_SECRET"),
-  });
-}
+import {
+  STARKNET_CHAIN_TYPE,
+  authenticatePrivyRequest,
+  createPrivyClient,
+  createRequestContext,
+  formatWallet,
+  getUserStarknetWallet,
+  hashForLog,
+  logEvent,
+  requirePost,
+  sendError,
+  stableIdempotencyKey,
+} from "../_lib/privy.js";
 
 export default async function handler(request, response) {
-  if (request.method !== "POST") {
-    response.setHeader("Allow", "POST");
-    response.status(405).json({ error: "Method not allowed." });
-    return;
-  }
+  const context = createRequestContext(request, "/api/wallet/starknet");
 
   try {
-    const { userId } = request.body || {};
-    const wallet = await createPrivyClient().wallets().create({
-      chain_type: "starknet",
-      ...(userId ? { user_id: userId } : {}),
-    });
+    requirePost(request, response, context);
 
+    const auth = await authenticatePrivyRequest(request, context);
+    const client = createPrivyClient(context);
+    const userIdHash = hashForLog(auth.userId);
+
+    logEvent("info", "wallet.starknet.lookup.start", context, { userIdHash });
+    const existingWallet = await getUserStarknetWallet(client, auth.userId, undefined, context);
+    if (existingWallet) {
+      logEvent("info", "wallet.starknet.lookup.hit", context, {
+        userIdHash,
+        walletId: existingWallet.id,
+        address: existingWallet.address,
+      });
+      response.status(200).json({ wallet: formatWallet(existingWallet) });
+      return;
+    }
+
+    logEvent("info", "wallet.starknet.create.start", context, { userIdHash });
+    const wallet = await client.wallets().create({
+      chain_type: STARKNET_CHAIN_TYPE,
+      owner: { user_id: auth.userId },
+      display_name: "VEIL Starknet Wallet",
+      idempotency_key: stableIdempotencyKey("veil-starknet-wallet", auth.userId),
+    });
+    logEvent("info", "wallet.starknet.create.success", context, {
+      userIdHash,
+      walletId: wallet.id,
+      address: wallet.address,
+    });
     response.status(200).json({
-      wallet: {
-        id: wallet.id,
-        address: wallet.address,
-        publicKey: wallet.public_key || wallet.publicKey,
-      },
+      wallet: formatWallet(wallet),
     });
   } catch (error) {
-    response.status(500).json({ error: error.message || "Failed to create Starknet wallet." });
+    sendError(response, context, error);
   }
 }

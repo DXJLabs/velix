@@ -63,6 +63,10 @@ function extractTransactionHash(result: Awaited<ReturnType<StarknetAccountLike["
     return result;
   }
 
+  if ("hash" in result && typeof result.hash === "string") {
+    return result.hash;
+  }
+
   return result.transaction_hash ?? result.transactionHash;
 }
 

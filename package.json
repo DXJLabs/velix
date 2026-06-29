@@ -20,6 +20,7 @@
   "dependencies": {
     "@privy-io/node": "^0.23.0",
     "react": "^19.2.7",
+    "starkzap": "^3.0.0",
     "swr": "^2.4.2"
   }
 }

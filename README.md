@@ -125,6 +125,7 @@ VITE_VEIL_CHANNEL_KEY=
 VITE_VEIL_ONCHAIN_PAYLOADS=false
 PRIVY_APP_ID=
 PRIVY_APP_SECRET=
+PRIVY_VERIFICATION_KEY=
 VITE_STARKNET_CHAIN_ID=SN_SEPOLIA
 VITE_STARKNET_RPC_URL=
 VITE_PRIVY_STARKNET_RPC_URL=https://starknet-sepolia.public.blastapi.io/rpc/v0_8
@@ -144,7 +145,34 @@ Timeline modes:
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
 | `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
 
-Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL builds a Ready/Argent v0.5 Starknet account from the Privy public key and signs with Privy `rawSign`. That account must hold Sepolia STRK before deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL uses StarkZap Privy onboarding with the ArgentX v0.5 account preset and Privy `rawSign` through `/api/wallet/sign`. StarkZap handles account address derivation and `deploy: "if_needed"`. The account must hold Sepolia STRK when using user-pays deployment. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
+
+### Google OAuth And Privy Redirects
+
+Do not hardcode application redirect URLs in code. Configure them in the provider dashboards for every deployed origin.
+
+Current Privy Google OAuth callback URI:
+
+```text
+https://auth.privy.io/api/v1/oauth/callback
+```
+
+Google Cloud OAuth client:
+
+- Authorized redirect URIs: add `https://auth.privy.io/api/v1/oauth/callback`.
+- Authorized JavaScript origins: add each app origin with no path, for example `http://localhost:5173` and the production origin.
+
+Privy dashboard:
+
+- Allowed domains / OAuth redirect URLs: add each exact app origin that loads VEIL, for example `http://localhost:5173` and the production origin.
+- Login methods: enable Google for the same Privy app id used by `VITE_PRIVY_APP_ID`.
+- Wallets: enable Starknet embedded wallets for the same app.
+
+Server:
+
+- `PRIVY_APP_ID` must match `VITE_PRIVY_APP_ID`.
+- `PRIVY_APP_SECRET` must come from the same Privy app.
+- `PRIVY_VERIFICATION_KEY` must come from the same Privy app and is required to verify browser access tokens before wallet creation or signing.
 
 ### Encrypted Onchain Messaging
 

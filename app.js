@@ -1,4 +1,8 @@
 import { ChannelEncryptionAdapter, DirectHelperTransport, VeilClient, VeilEventType } from "./packages/veil-sdk/src/index.ts";
+import { StarkZap } from "starkzap-sdk";
+import { accountPresets } from "starkzap-account-presets";
+import { ChainId } from "starkzap-config";
+import { OnboardStrategy } from "starkzap-onboard";
 
 const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
@@ -21,7 +25,6 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
-const READY_ACCOUNT_CLASS_HASH_V0_5_0 = "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2";
 
 const now = Date.now();
 const minute = 60_000;
@@ -178,6 +181,8 @@ let toastTimer;
 let directTransport;
 let veilClient = createClient();
 let starknetReadProvider;
+let starkzapSdk;
+let starkzapOnboardResult;
 
 const screens = document.querySelectorAll("[data-screen]");
 const bottomNav = document.querySelector(".bottom-nav");
@@ -202,8 +207,53 @@ function createClient(transport) {
   });
 }
 
+function veilLog(level, event, details = {}) {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    level,
+    event,
+    ...sanitizeLogDetails(details),
+  };
+  const method = level === "error" ? "error" : level === "warn" ? "warn" : "info";
+  console[method](JSON.stringify(payload));
+}
+
+function veilError(event, error, details = {}) {
+  veilLog("error", event, {
+    where: details.where || "frontend",
+    why: error?.message || String(error),
+    howToFix: details.howToFix || "Check the preceding VEIL structured logs and retry the failed action.",
+    errorName: error?.name,
+    ...details,
+  });
+}
+
+function sanitizeLogDetails(details) {
+  return Object.fromEntries(
+    Object.entries(details)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => {
+        if (/token|secret|authorization/i.test(key)) return [key, "[redacted]"];
+        return [key, value];
+      }),
+  );
+}
+
+function currentOrigin() {
+  return window.location.origin;
+}
+
 async function mountPrivy() {
   if (!privyAppId || !privyAuthRoot) return;
+  veilLog("info", "auth.privy.mount.start", {
+    where: "mountPrivy",
+    appIdConfigured: Boolean(privyAppId),
+    loginMethods: privyLoginMethods,
+    currentOrigin: currentOrigin(),
+    howToFix: privyLoginMethods.includes("google")
+      ? "For Google OAuth, add this origin to Privy Allowed OAuth Redirect URLs and Google Authorized JavaScript Origins."
+      : undefined,
+  });
 
   const [
     ReactModule,
@@ -265,6 +315,10 @@ async function mountPrivy() {
       React.createElement(PrivyStateBridge),
     ),
   );
+  veilLog("info", "auth.privy.mount.success", {
+    where: "mountPrivy",
+    appIdConfigured: Boolean(privyAppId),
+  });
 }
 
 function currentChannel() {
@@ -440,22 +494,45 @@ function waitForPrivyState(predicate, timeout = 18_000) {
 async function ensurePrivyAuthenticated() {
   if (!privyAppId) return null;
 
+  veilLog("info", "auth.privy.ready.wait", {
+    where: "ensurePrivyAuthenticated",
+    currentOrigin: currentOrigin(),
+  });
   const readyBridge = await waitForPrivyState((bridge) => bridge.ready);
   if (!readyBridge?.ready) {
+    veilLog("warn", "auth.privy.ready.timeout", {
+      where: "ensurePrivyAuthenticated",
+      why: "Privy did not become ready before the login timeout.",
+      howToFix: "Confirm VITE_PRIVY_APP_ID is set and the current origin is allowed in the Privy dashboard.",
+    });
     showToast("Privy is still loading.");
     return null;
   }
 
   if (!readyBridge.authenticated) {
+    veilLog("info", "auth.privy.login.start", {
+      where: "ensurePrivyAuthenticated",
+      loginMethods: privyLoginMethods,
+      currentOrigin: currentOrigin(),
+    });
     await readyBridge.login();
   }
 
   const authenticatedBridge = await waitForPrivyState((bridge) => bridge.ready && bridge.authenticated);
   if (!authenticatedBridge?.authenticated) {
+    veilLog("warn", "auth.privy.login.incomplete", {
+      where: "ensurePrivyAuthenticated",
+      why: "Privy login did not complete.",
+      howToFix: "Complete the Privy login modal, or fix OAuth provider settings if Google returned redirect_uri_mismatch.",
+    });
     showToast("Wallet login was not completed.");
     return null;
   }
 
+  veilLog("info", "auth.privy.login.success", {
+    where: "ensurePrivyAuthenticated",
+    userPresent: Boolean(authenticatedBridge.user?.id || authenticatedBridge.user?.did),
+  });
   return authenticatedBridge;
 }
 
@@ -467,30 +544,44 @@ async function fetchPrivyStarknetWallet(bridge) {
     throw new Error("Privy access token is missing.");
   }
   const userId = bridge.user?.id || bridge.user?.did || "veil-user";
-  const cacheKey = `veil:privy:starknet:${userId}`;
+  const cacheKey = `veil:privy:starknet:v2:${userId}`;
   const cachedWallet = JSON.parse(window.localStorage.getItem(cacheKey) || "null");
   if (cachedWallet?.id && cachedWallet?.publicKey) {
+    veilLog("info", "wallet.starknet.cache.hit", {
+      where: "fetchPrivyStarknetWallet",
+      walletId: cachedWallet.id,
+      address: cachedWallet.address,
+    });
     state.privyWallet = cachedWallet;
     state.walletAddress = cachedWallet.address || state.walletAddress;
     state.walletSource = "Privy";
     return cachedWallet;
   }
 
+  veilLog("info", "wallet.starknet.api.request", {
+    where: "fetchPrivyStarknetWallet",
+    endpoint: "/api/wallet/starknet",
+  });
   const response = await fetch("/api/wallet/starknet", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error || "Failed to create Starknet wallet with Privy.");
+    throw new Error(payload.error || payload.why || "Failed to create Starknet wallet with Privy.");
   }
 
   const { wallet } = await response.json();
+  veilLog("info", "wallet.starknet.api.success", {
+    where: "fetchPrivyStarknetWallet",
+    walletId: wallet?.id,
+    address: wallet?.address,
+  });
   state.privyWallet = wallet;
   state.walletAddress = wallet?.address || state.walletAddress;
   state.walletSource = "Privy";
@@ -511,8 +602,37 @@ async function getStarknetReadProvider() {
   return starknetReadProvider;
 }
 
+function getStarkZapChainId() {
+  if (expectedChainId === "SN_MAIN") return ChainId.MAINNET;
+  if (expectedChainId === "SN_SEPOLIA") return ChainId.SEPOLIA;
+  throw new Error(`Unsupported StarkZap chain id ${expectedChainId}.`);
+}
+
+function getStarkZapSdk() {
+  if (starkzapSdk) return starkzapSdk;
+  starkzapSdk = new StarkZap({
+    rpcUrl: privyStarknetRpcUrl,
+    chainId: getStarkZapChainId(),
+    logging: {
+      logger: console,
+      logLevel: "info",
+    },
+  });
+  veilLog("info", "starkzap.sdk.created", {
+    where: "getStarkZapSdk",
+    chainId: expectedChainId,
+    rpcConfigured: Boolean(privyStarknetRpcUrl),
+  });
+  return starkzapSdk;
+}
+
 async function signWithPrivy(walletId, messageHash, bridge) {
   const accessToken = await bridge.getAccessToken?.();
+  veilLog("info", "wallet.sign.api.request", {
+    where: "signWithPrivy",
+    walletId,
+    endpoint: "/api/wallet/sign",
+  });
   const response = await fetch("/api/wallet/sign", {
     method: "POST",
     headers: {
@@ -524,10 +644,14 @@ async function signWithPrivy(walletId, messageHash, bridge) {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error || "Privy raw sign failed.");
+    throw new Error(payload.error || payload.why || "Privy raw sign failed.");
   }
 
   const payload = await response.json();
+  veilLog("info", "wallet.sign.api.success", {
+    where: "signWithPrivy",
+    walletId,
+  });
   return splitPrivySignature(payload.signature);
 }
 
@@ -542,65 +666,61 @@ async function createPrivyStarknetAccount(bridge) {
     throw new Error("Privy Starknet wallet is missing wallet id or public key.");
   }
 
-  const starknet = await loadStarknetSdk();
-  const {
-    Account,
-    CallData,
-    CairoCustomEnum,
-    CairoOption,
-    CairoOptionVariant,
-    RpcProvider,
-    Signer,
-    hash,
-  } = starknet;
+  veilLog("info", "starkzap.privy.onboard.start", {
+    where: "createPrivyStarknetAccount",
+    walletId: wallet.id,
+    chainId: expectedChainId,
+  });
+  const sdk = getStarkZapSdk();
+  const signEndpoint = new URL("/api/wallet/sign", currentOrigin()).toString();
 
-  const provider = new RpcProvider({ nodeUrl: privyStarknetRpcUrl });
-  const owner = new CairoCustomEnum({ Starknet: { pubkey: publicKey } });
-  const guardian = new CairoOption(CairoOptionVariant.None);
-  const constructorCalldata = CallData.compile({ owner, guardian });
-  const contractAddress = hash.calculateContractAddressFromHash(
-    publicKey,
-    READY_ACCOUNT_CLASS_HASH_V0_5_0,
-    constructorCalldata,
-    0,
-  );
+  starkzapOnboardResult = await sdk.onboard({
+    strategy: OnboardStrategy.Privy,
+    accountPreset: accountPresets.argentXV050,
+    deploy: "if_needed",
+    privy: {
+      resolve: async () => ({
+        walletId: wallet.id,
+        publicKey,
+        serverUrl: signEndpoint,
+        headers: async () => {
+          const accessToken = await bridge.getAccessToken?.();
+          if (!accessToken) {
+            throw new Error("Privy access token is missing.");
+          }
+          return { Authorization: `Bearer ${accessToken}` };
+        },
+        metadata: {
+          privyWalletAddress: wallet.address,
+        },
+      }),
+    },
+    onProgress: (event) => {
+      veilLog("info", "starkzap.privy.onboard.progress", {
+        where: "createPrivyStarknetAccount",
+        walletId: wallet.id,
+        ...event,
+      });
+    },
+  });
 
-  class PrivyRawSigner extends Signer {
-    async getPubKey() {
-      return publicKey;
-    }
+  const account = starkzapOnboardResult.wallet.getAccount();
+  const provider = starkzapOnboardResult.wallet.getProvider();
+  const accountAddress = account.address || starkzapOnboardResult.wallet.address;
 
-    async signRaw(messageHash) {
-      return signWithPrivy(wallet.id, messageHash, bridge);
-    }
-  }
-
-  const account = new Account(provider, contractAddress, new PrivyRawSigner("0x1"));
   state.privyAccount = account;
   state.privyProvider = provider;
-  state.walletAddress = contractAddress;
+  state.walletAddress = accountAddress;
   state.walletSource = "Privy";
-  state.privyWallet = { ...wallet, address: contractAddress, publicKey };
+  state.privyWallet = { ...wallet, address: accountAddress, publicKey };
+  state.privyAccountDeployed = Boolean(starkzapOnboardResult.deployed);
 
-  try {
-    await provider.getClassHashAt(contractAddress);
-    state.privyAccountDeployed = true;
-  } catch {
-    state.privyAccountDeployed = false;
-    try {
-      const deployResult = await account.deployAccount({
-        classHash: READY_ACCOUNT_CLASS_HASH_V0_5_0,
-        contractAddress,
-        constructorCalldata,
-        addressSalt: publicKey,
-      });
-      await provider.waitForTransaction(deployResult.transaction_hash);
-      state.privyAccountDeployed = true;
-    } catch (error) {
-      console.error(error);
-      throw new Error(`Fund and deploy Privy account ${shortAddress(contractAddress)} on Sepolia first.`);
-    }
-  }
+  veilLog("info", "starkzap.privy.onboard.success", {
+    where: "createPrivyStarknetAccount",
+    walletId: wallet.id,
+    address: accountAddress,
+    deployed: state.privyAccountDeployed,
+  });
 
   return { account, provider };
 }
@@ -659,7 +779,10 @@ async function verifyHelperDeployment() {
     renderWallet();
     return true;
   } catch (error) {
-    console.error(error);
+    veilError("wallet.helper.verify.failed", error, {
+      where: "verifyHelperDeployment",
+      howToFix: "Confirm VITE_VEIL_CHANNEL_HELPER_ADDRESS is deployed on the configured Starknet RPC/network.",
+    });
     state.helperVerified = false;
     renderWallet();
     showToast("Helper not deployed on this network.");
@@ -678,7 +801,10 @@ async function connectWallet(options = {}) {
         if (!bridge) return false;
         await fetchPrivyStarknetWallet(bridge);
       } catch (error) {
-        console.error(error);
+        veilError("wallet.privy.setup.failed", error, {
+          where: "connectWallet",
+          howToFix: "Check Privy app credentials, token verification env vars, and /api/wallet/starknet logs.",
+        });
         showToast("Privy wallet setup failed.");
         return false;
       }
@@ -706,7 +832,10 @@ async function connectWallet(options = {}) {
       if (!bridge) return false;
       privyAccountContext = await createPrivyStarknetAccount(bridge);
     } catch (error) {
-      console.error(error);
+      veilError("starkzap.privy.onboard.failed", error, {
+        where: "connectWallet",
+        howToFix: "Fund the counterfactual account if user-pays deployment is required, verify /api/wallet/sign, and confirm the RPC matches VITE_STARKNET_CHAIN_ID.",
+      });
       injectedWalletEntry = await waitForInjectedStarknetWallet();
       injectedWallet = injectedWalletEntry?.wallet || null;
       if (!injectedWallet) {
@@ -735,7 +864,10 @@ async function connectWallet(options = {}) {
   const account = wallet.account || wallet;
   const walletProvider = privyAccountContext?.provider || state.privyProvider || wallet.provider || wallet.account?.provider;
   const readProvider = await getStarknetReadProvider().catch((error) => {
-    console.error(error);
+    veilError("wallet.rpc.provider.failed", error, {
+      where: "connectWallet",
+      howToFix: "Set VITE_PRIVY_STARKNET_RPC_URL or VITE_STARKNET_RPC_URL to a reachable Starknet RPC for the selected chain.",
+    });
     return walletProvider;
   });
   if (!account?.execute) {
@@ -859,7 +991,10 @@ async function loadIndexedChannelTimeline(channelId) {
       renderChannel();
     }
   } catch (error) {
-    console.warn("Indexed timeline unavailable.", error);
+    veilError("indexer.timeline.load.failed", error, {
+      where: "loadIndexedChannelTimeline",
+      howToFix: "Check /api/indexer/messages, VEIL_INDEXER_FROM_BLOCK, and the helper deployment address for this channel.",
+    });
   }
 }
 
@@ -1051,11 +1186,28 @@ async function safeSubmit(action, localItem, success) {
     if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
       return;
     }
-    await action();
+    veilLog("info", "transaction.submit.start", {
+      where: "safeSubmit",
+      timelineMode,
+      helperAddress,
+      eventType: localItem?.type,
+    });
+    const result = await action();
+    veilLog("info", "transaction.submit.success", {
+      where: "safeSubmit",
+      timelineMode,
+      transactionHash: result?.transactionHash,
+      eventId: result?.eventId,
+    });
     addLocalItem(localItem);
     showToast(success);
   } catch (error) {
-    console.error(error);
+    veilError("transaction.submit.failed", error, {
+      where: "safeSubmit",
+      timelineMode,
+      helperAddress,
+      howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
+    });
     if (timelineMode === "direct-helper") {
       showToast("Onchain action failed. Check Sepolia.");
       return;
@@ -1176,7 +1328,21 @@ async function releaseEscrow() {
 function bindEvents() {
   window.addEventListener("unhandledrejection", (event) => {
     const message = String(event.reason?.message || event.reason || "");
+    if (/redirect_uri_mismatch/i.test(message)) {
+      veilError("auth.google_oauth.redirect_uri_mismatch", event.reason, {
+        where: "window.unhandledrejection",
+        currentOrigin: currentOrigin(),
+        howToFix: "Add the current app origin to Privy Allowed OAuth Redirect URLs and Google Authorized JavaScript Origins; add Privy's documented Google OAuth callback URL to Google Authorized Redirect URIs.",
+      });
+      event.preventDefault();
+      showToast("Fix Google OAuth redirect URI.");
+      return;
+    }
     if (message.includes("Login with Google not allowed")) {
+      veilError("auth.google_oauth.provider_disabled", event.reason, {
+        where: "window.unhandledrejection",
+        howToFix: "Enable Google as a login method in the Privy dashboard for this app.",
+      });
       event.preventDefault();
       showToast("Enable Google in Privy dashboard.");
     }
@@ -1188,6 +1354,12 @@ function bindEvents() {
     state.privyAuthenticated = Boolean(detail.authenticated);
     state.walletConnected ||= state.privyAuthenticated;
     state.walletSource = privyAppId ? "Privy" : state.walletSource;
+    veilLog("info", "auth.privy.state.changed", {
+      where: "veil:privy-state",
+      ready: state.privyReady,
+      authenticated: state.privyAuthenticated,
+      walletCount: Array.isArray(detail.wallets) ? detail.wallets.length : undefined,
+    });
     if (detail.user?.wallet?.address && !state.walletAddress) {
       state.walletAddress = detail.user.wallet.address;
     }
@@ -1307,7 +1479,10 @@ function bindEvents() {
 function init() {
   bindEvents();
   mountPrivy().catch((error) => {
-    console.error(error);
+    veilError("auth.privy.sdk.load.failed", error, {
+      where: "init",
+      howToFix: "Confirm @privy-io/react-auth can load, VITE_PRIVY_APP_ID is valid, and the browser can reach the module CDN or bundled dependency.",
+    });
     showToast("Privy SDK failed to load.");
   });
   renderConversationList();
