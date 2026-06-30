@@ -43,10 +43,10 @@ const channels = [
     person: "Bob",
     avatar: "B",
     mode: "Private",
-    status: "Escrow ready",
+    status: "Settlement Ready",
     unread: 2,
     time: "9:41 AM",
-    last: "Bob accepted 450 STRK. Escrow is ready.",
+    last: "Counter offer accepted",
   },
   {
     id: "design-milestone",
@@ -54,10 +54,10 @@ const channels = [
     person: "Mira",
     avatar: "M",
     mode: "Private",
-    status: "Memo needed",
+    status: "Negotiating",
     unread: 1,
     time: "9:20 AM",
-    last: "Can you attach the memo before release?",
+    last: "Payment memo requested",
   },
   {
     id: "northline-goods",
@@ -65,10 +65,10 @@ const channels = [
     person: "Northline",
     avatar: "N",
     mode: "Public",
-    status: "Seller pending",
+    status: "Waiting Deposit",
     unread: 0,
     time: "8:15 AM",
-    last: "Seller deposit is pending.",
+    last: "Buyer deposited funds",
   },
   {
     id: "greylock-ops",
@@ -76,10 +76,10 @@ const channels = [
     person: "Ari",
     avatar: "G",
     mode: "Private",
-    status: "Proof ready",
+    status: "Settlement Ready",
     unread: 0,
     time: "Yesterday",
-    last: "Payment proof received.",
+    last: "Settlement proof generated",
   },
   {
     id: "product-supply",
@@ -87,10 +87,10 @@ const channels = [
     person: "Nadia",
     avatar: "P",
     mode: "Public",
-    status: "Complete",
+    status: "Completed",
     unread: 0,
     time: "Mon",
-    last: "Deal completed.",
+    last: "Escrow completed",
   },
 ];
 
@@ -1615,10 +1615,11 @@ function shortHash(value) {
 
 function renderChainMeta(item, alignRight = false) {
   const txUrl = starkscanUrl(item.txHash);
-  const parts = [
-    `<span class="mode-badge ${item.mode === "shield" ? "shield" : "unshield"}">${escapeHtml(messageModeLabel(item.mode))}</span>`,
-    `<span>${escapeHtml(messageStatusLabel(item.status))}</span>`,
-  ];
+  const parts = [];
+  if (item.mode) {
+    parts.push(`<span class="mode-badge ${item.mode === "shield" ? "shield" : "unshield"}">${escapeHtml(messageModeLabel(item.mode))}</span>`);
+  }
+  if (item.status) parts.push(`<span>${escapeHtml(messageStatusLabel(item.status))}</span>`);
   if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
   if (item.txHash) {
     parts.push(txUrl
@@ -1626,6 +1627,7 @@ function renderChainMeta(item, alignRight = false) {
       : `<span>${escapeHtml(shortHash(item.txHash))}</span>`);
   }
 
+  if (!parts.length) return "";
   return `<div class="chain-meta ${alignRight ? "right" : ""}">${parts.join("")}</div>`;
 }
 
@@ -1760,12 +1762,12 @@ function renderConversationList() {
       <span class="min-w-0">
         <span class="flex min-w-0 items-center gap-2">
           <strong class="truncate text-[.98rem]">${escapeHtml(channel.title)}</strong>
-          <span class="status-pill ${channel.mode === "Private" ? "private" : "public"}">${escapeHtml(channel.mode)}</span>
+          <span class="status-pill deal-status">${escapeHtml(channel.status)}</span>
         </span>
         <span class="mt-1 block truncate text-sm font-semibold text-slate-500">${escapeHtml(channel.last)}</span>
         <span class="mt-1 flex items-center gap-2 text-xs font-bold text-slate-400">
           <span class="status-dot"></span>
-          ${escapeHtml(channel.status)}
+          ${escapeHtml(channel.person)}
         </span>
       </span>
       <span class="grid justify-items-end gap-2">
@@ -1780,27 +1782,25 @@ function renderConversationList() {
 function renderChannel() {
   const channel = currentChannel();
   document.querySelector("#channel-title").textContent = channel.title;
-  document.querySelector("#channel-mode").textContent = channel.mode;
-  document.querySelector("#channel-mode").className = `status-pill ${channel.mode === "Private" ? "private" : "public"}`;
   document.querySelector("#channel-meta").textContent = `${channel.person} - ${channel.status}`;
   messageFeed.innerHTML = `
     <div class="inline-event"><strong>Today</strong></div>
     ${channelMessages().map(renderFeedItem).join("")}
   `;
-  renderMessageMode();
   iconRefresh();
-}
-
-function renderMessageMode() {
-  document.querySelectorAll("[data-message-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.messageMode === state.messageMode);
-  });
 }
 
 function renderFeedItem(item) {
   if (item.type === "message") return renderMessage(item);
   if (item.type === "offer") return renderOfferCard(item);
   return renderInlineEvent(item);
+}
+
+function renderMessageDelivery(item) {
+  const status = String(item.status || "").toLowerCase();
+  if (status === "failed") return "Encrypted - Failed";
+  if (["encrypting", "signing", "pending"].includes(status)) return "Encrypted - Sending";
+  return "Encrypted - Sent";
 }
 
 function renderMessage(item) {
@@ -1810,7 +1810,7 @@ function renderMessage(item) {
       <div class="max-w-full">
         <div class="message-meta ${self ? "text-right" : ""}">${escapeHtml(self ? "You" : item.sender)} - ${escapeHtml(formatTime(item.time))}</div>
         <p class="bubble">${escapeHtml(item.body)}</p>
-        ${renderChainMeta(item, self)}
+        <div class="message-delivery ${self ? "right" : ""}">${escapeHtml(renderMessageDelivery(item))}</div>
       </div>
     </article>
   `;
@@ -2230,13 +2230,6 @@ function bindEvents() {
       return;
     }
 
-    const messageMode = event.target.closest("[data-message-mode]");
-    if (messageMode) {
-      state.messageMode = messageMode.dataset.messageMode;
-      renderMessageMode();
-      return;
-    }
-
     if (event.target.closest("[data-connect-wallet]")) {
       connectWallet({ goToInbox: state.screen === "unlock" });
       return;
@@ -2264,7 +2257,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-new-conversation]")) {
-      showToast("New conversation ready.");
+      showToast("New channel ready.");
       return;
     }
 

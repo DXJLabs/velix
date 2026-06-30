@@ -37,8 +37,8 @@
             <div class="unlock-layout">
               <div class="unlock-copy">
                 <p class="home-label">Private Deal Workspace</p>
-                <h1>Private deals. Secure conversations. On Starknet.</h1>
-                <p>End-to-end encrypted chat, escrow coordination, and verifiable actions built on Starknet Privacy Pool.</p>
+                <h1>Private deal channels. Secure settlement. On Starknet.</h1>
+                <p>ECDH encrypted messages, offers, escrow, payments, memos, proofs, and settlement in one on-chain channel.</p>
                 <div class="unlock-actions">
                   <button class="primary-action" type="button" data-connect-wallet>
                     <i data-lucide="wallet-cards" class="size-5"></i>
@@ -53,7 +53,7 @@
 
               <div class="home-visual" aria-hidden="true">
                 <div class="visual-card visual-chat">
-                  <i data-lucide="message-square" class="size-5"></i>
+                  <i data-lucide="network" class="size-5"></i>
                 </div>
                 <div class="visual-card visual-proof">
                   <i data-lucide="file-check-2" class="size-5"></i>
@@ -70,9 +70,9 @@
 
             <div id="home-features" class="home-capabilities" aria-label="Product capabilities">
               <article class="capability-card">
-              <span class="capability-icon"><i data-lucide="messages-square" class="size-5"></i></span>
-              <h2>Encrypted Chat</h2>
-              <p>Always end-to-end encrypted. Only participants can read messages.</p>
+              <span class="capability-icon"><i data-lucide="network" class="size-5"></i></span>
+              <h2>Encrypted Channels</h2>
+              <p>Each channel keeps private messages, offers, escrow, memos, proofs, and settlement together.</p>
               </article>
               <article class="capability-card">
               <span class="capability-icon"><i data-lucide="shield" class="size-5"></i></span>
@@ -121,15 +121,16 @@
                 <div class="flex items-center justify-between gap-3">
                   <div class="min-w-0">
                     <p class="eyebrow">VEIL</p>
-                    <h1 class="page-title">Conversations</h1>
+                    <h1 class="page-title">Channels</h1>
+                    <p class="page-subtitle">Secure on-chain deal channels</p>
                   </div>
-                  <button class="icon-button" type="button" data-new-conversation aria-label="New conversation">
-                    <i data-lucide="square-pen" class="size-5"></i>
+                  <button class="icon-button" type="button" data-new-conversation aria-label="New channel">
+                    <i data-lucide="plus" class="size-5"></i>
                   </button>
                 </div>
                 <label class="search-field">
                   <i data-lucide="search" class="size-4"></i>
-                  <input id="conversation-search" type="search" placeholder="Search private deals" autocomplete="off" />
+                  <input id="conversation-search" type="search" placeholder="Search channels" autocomplete="off" />
                 </label>
               </header>
 
@@ -138,13 +139,13 @@
               </div>
             </div>
 
-            <aside class="conversation-inspector" aria-label="Selected deal">
+            <aside class="conversation-inspector" aria-label="Selected channel">
               <div class="inspector-top">
                 <div>
-                  <p class="eyebrow">Active deal</p>
+                  <p class="eyebrow">Active channel</p>
                   <h2>Rights Transfer</h2>
                 </div>
-                <span class="status-pill private">Private</span>
+                <span class="status-pill deal-status">Settlement Ready</span>
               </div>
               <div class="inspector-amount">
                 <span>Accepted offer</span>
@@ -158,8 +159,8 @@
                 <div><i data-lucide="file-check-2" class="size-4"></i><span>Proof export next</span></div>
               </div>
               <button class="primary-action w-full" type="button" data-open-channel="20260625">
-                <i data-lucide="message-circle" class="size-5"></i>
-                <span>Open Conversation</span>
+                <i data-lucide="arrow-right" class="size-5"></i>
+                <span>Open Channel</span>
               </button>
             </aside>
           </div>
@@ -172,13 +173,13 @@
           </header>
           <div class="content-with-nav space-y-5 px-4 pt-4">
             <section class="focus-list" aria-labelledby="continue-heading">
-              <h2 id="continue-heading">Continue conversation</h2>
+              <h2 id="continue-heading">Resume channel</h2>
               <button class="task-row primary" type="button" data-open-channel="20260625">
                 <span>
                   <strong>Rights Transfer</strong>
                   <small>Bob accepted 450 STRK. Send memo next.</small>
                 </span>
-                <i data-lucide="message-circle" class="size-5"></i>
+                <i data-lucide="arrow-right" class="size-5"></i>
               </button>
             </section>
 
@@ -308,10 +309,7 @@
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <button class="min-w-0 flex-1 text-left" type="button" data-open-route="deal">
-              <div class="flex min-w-0 items-center gap-2">
-                <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
-                <span id="channel-mode" class="status-pill private">Private</span>
-              </div>
+              <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
               <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob - Offer accepted</p>
             </button>
             <button class="icon-button ghost" type="button" data-open-route="deal" aria-label="Deal menu">
@@ -324,11 +322,10 @@
           <form id="composer-form" class="composer">
             <div class="composer-actions" aria-label="Quick actions">
               <button type="button" data-composer-action="attach" aria-label="Attachment"><i data-lucide="paperclip" class="size-5"></i></button>
-              <button type="button" data-open-route="payment" aria-label="Payment"><i data-lucide="badge-dollar-sign" class="size-5"></i></button>
               <button type="button" data-open-route="deal" aria-label="Offer"><i data-lucide="handshake" class="size-5"></i></button>
+              <button type="button" data-open-route="payment" aria-label="Payment"><i data-lucide="badge-dollar-sign" class="size-5"></i></button>
+              <button type="button" data-open-route="escrow" aria-label="Escrow"><i data-lucide="shield-check" class="size-5"></i></button>
               <button type="button" data-composer-action="memo" aria-label="Memo"><i data-lucide="file-text" class="size-5"></i></button>
-              <button class="active" type="button" data-message-mode="unshield">Unshield</button>
-              <button type="button" data-message-mode="shield">Shield</button>
             </div>
             <div class="composer-input">
               <textarea id="message-input" rows="1" placeholder="Message"></textarea>
@@ -450,7 +447,7 @@
             <h1>Settlement complete.</h1>
             <p>Proof generated and attached to the deal.</p>
             <button class="primary-action w-full" type="button" data-open-route="proof">View Proof</button>
-            <button class="secondary-action w-full" type="button" data-nav="channel">Back to Conversation</button>
+            <button class="secondary-action w-full" type="button" data-nav="channel">Back to Channel</button>
           </div>
         </section>
 
@@ -488,8 +485,8 @@
 
       <nav class="bottom-nav" aria-label="Primary navigation">
         <button class="bottom-nav-item active" type="button" data-top-nav="conversations">
-          <i data-lucide="messages-square" class="size-5"></i>
-          <span>Conversation</span>
+          <i data-lucide="network" class="size-5"></i>
+          <span>Channels</span>
         </button>
         <button class="bottom-nav-item" type="button" data-top-nav="activity">
           <i data-lucide="bell" class="size-5"></i>

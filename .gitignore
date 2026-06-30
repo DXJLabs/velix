@@ -6,6 +6,7 @@ packages/veil-sdk/dist/
 .env
 .env.local
 .env.*.local
+.codex-remote-attachments/
 target/
 .snfoundry_cache/
 snfoundry_trace/

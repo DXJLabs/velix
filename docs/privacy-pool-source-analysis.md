@@ -1,163 +1,38 @@
-# Privacy Pool Source Analysis
+# Privacy Pool Source Notes
 
-This note is based on the mainnet Cairo source shared by the team.
+These notes summarize the protocol constraints that affect VEIL integration. The Cairo source is used as protocol reference material only.
 
-## Biggest Integration Finding
+## Client Actions
 
-`ClientAction.InvokeExternal` alone is not enough.
+The Privacy Pool action order is phase-based:
 
-The source enforces:
+1. `SetViewingKey`
+2. `OpenChannel`
+3. `OpenSubchannel`
+4. `Deposit`
+5. `UseNote`
+6. `CreateEncNote` / `CreateOpenNote`
+7. `Withdraw`
+8. `InvokeExternal`
 
-```text
-assert(has_replay_protection, errors::NO_REPLAY_PROTECTION)
-```
+`InvokeExternal` can appear at most once in a transaction.
 
-Replay protection is set only when a generated server action includes:
+## Replay Protection
 
-```text
-ServerAction::WriteOnce
-```
+The contract requires at least one action that produces a `WriteOnce` server action. A standalone `InvokeExternal` batch is not enough.
 
-`InvokeExternal` compiles to:
+VEIL implements an SDK-side guard for this in Shield mode.
 
-```text
-ServerAction::Invoke(InvokeInput { contract_address, calldata })
-```
+## External Invocation
 
-It does not create `WriteOnce`.
+`InvokeExternal` calls an external contract selector compatible with `privacy_invoke`. VEIL's helper uses this shape for timeline metadata and returns an empty deposit span for metadata-only messages.
 
-So a standalone VEIL message sent only as `InvokeExternal` likely fails `NO_REPLAY_PROTECTION`.
+## Fees
 
-## Client Action Phase Ordering
+The contract fee is collected in `apply_actions()` when `fee_amount` is non-zero. The configured token in the reference is STRK.
 
-The README confirms phase ordering:
+VEIL therefore treats Privacy Pool fees as applicable only to Privacy Pool transaction paths, not direct helper transactions.
 
-| Phase | Action |
-| --- | --- |
-| 0 | `SetViewingKey` |
-| 1 | `OpenChannel` |
-| 2 | `OpenSubchannel` |
-| 3 | `Deposit` |
-| 4 | `UseNote` |
-| 5 | `CreateEncNote` |
-| 5 | `CreateOpenNote` |
-| 6 | `Withdraw` |
-| 7 | `InvokeExternal` |
+## Proofs
 
-`InvokeExternal` is the last phase and is allowed at most once per transaction.
-
-This matters for VEIL: message metadata can be appended after privacy actions, but it cannot appear before them or multiple times in the same Privacy Pool transaction.
-
-## Correct Mental Model
-
-VEIL helper invocation must be part of a Privacy Pool action batch that also includes a WriteOnce-producing privacy action.
-
-Examples of client actions that generate `WriteOnce`:
-
-- `SetViewingKey`
-- `OpenChannel`
-- `OpenSubchannel`
-- `CreateEncNote`
-- `CreateOpenNote`
-- `UseNote`
-
-This means the final Privacy Pool flow is not:
-
-```text
-InvokeExternal only
-```
-
-It is:
-
-```text
-Privacy action with WriteOnce replay protection
-+
-InvokeExternal to VeilChannelHelper
-```
-
-## Confirmed Invoke Shape
-
-Source path:
-
-```text
-ClientAction::InvokeExternal(input)
-  -> invoke_external(input)
-  -> ServerAction::Invoke(InvokeInput { contract_address, calldata })
-  -> _apply_invoke(input)
-  -> call contract_address with INVOKE_SELECTOR
-```
-
-The external helper must expose:
-
-```text
-privacy_invoke(calldata: Span<felt252>) -> Span<OpenNoteDeposit>
-```
-
-This matches the helper pattern seen in Privacy Pool-compatible examples such as `VesuLendingHelper.privacy_invoke`. VEIL's `VeilChannelHelper.privacy_invoke` matches this shape and returns an empty deposit array for MVP. `VeilChannelHelper.invoke` remains as a legacy/direct-call alias for older local demos.
-
-The README also mentions `deposit_to_open_note`, which fills a pre-created open note and emits `OpenNoteDeposited`. VEIL does not need this for chat-only metadata, but payment/escrow settlement flows should account for it later.
-
-## Proof Requirement
-
-`apply_actions` runs:
-
-```text
-validate_proof(actions)
-collect_fee()
-_apply_actions(actions)
-```
-
-`validate_proof` checks proof facts and a message hash. This confirms production submission depends on Privacy Pool's proof flow. VEIL should not fake this in the SDK.
-
-## Account Contract Behavior
-
-The Privacy Pool contract is marked:
-
-```text
-#[starknet::contract(account)]
-```
-
-`__execute__`:
-
-1. extracts `user_addr`, `user_private_key`, and `client_actions`
-2. compiles client actions into server actions
-3. validates the user signature
-4. sends a message to the server/apply-actions path
-
-The source also requires zero tip/resource price in validation.
-
-## Channel Key Derivation
-
-The source computes channel keys with:
-
-```text
-compute_channel_key(
-  sender_addr,
-  sender_private_key,
-  recipient_addr,
-  recipient_public_key
-)
-```
-
-This confirms why VEIL must not invent ECDH behavior from ABI alone. The actual hash/encryption implementation lives in Privacy Pool source/utils and official SDK.
-
-## Impact On VEIL
-
-What remains correct:
-
-- `VeilChannelHelper` is the right helper shape.
-- Returning an empty `Span<OpenNoteDeposit>` is valid for message-only MVP.
-- SDK transport boundaries are correct.
-- Direct helper mode remains useful for testnet proof of onchain timeline events.
-- The Starknet Privacy SDK provides the production route for Shield mode: build a valid private transfer/swap/action with client-side proof construction, then include VEIL's helper call as the external invoke. AVNU Paymaster can execute or sponsor the resulting transaction.
-
-What changes for full Privacy Pool mode:
-
-- `RealPrivacyPoolAdapter` must build a full Privacy Pool client action batch.
-- Message-only `InvokeExternal` needs a replay-protection strategy.
-- `InvokeExternal` must be placed at phase 7 and appear at most once.
-- The production-safe path is to attach VEIL messages to a real Starknet Privacy SDK action such as private transfer/swap/action proof construction. Metadata-only Shield messages must not fake replay protection.
-
-## Interview Explanation
-
-The source confirms the extension point but also reveals an important constraint: Privacy Pool requires a `WriteOnce` replay-protection action in every client action batch. VEIL's helper invocation is compatible, but a standalone message-only Privacy Pool transaction is not enough. Our architecture keeps `DirectHelperTransport` for immediate testnet proof and isolates `RealPrivacyPoolAdapter` for the official Privacy Pool SDK/proof flow.
+`apply_actions()` validates proof facts before applying server actions. VEIL does not implement that proof system. Production Shield execution requires an external SDK/prover.

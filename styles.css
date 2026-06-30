@@ -396,6 +396,14 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   letter-spacing: 0;
 }
 
+.page-subtitle {
+  margin-top: .12rem;
+  color: rgb(71 85 105);
+  font-size: .86rem;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
 .detail-title {
   color: rgb(15 23 42);
   font-size: 1.05rem;
@@ -522,6 +530,11 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .status-pill.public {
   background: rgb(241 245 249);
   color: rgb(71 85 105);
+}
+
+.status-pill.deal-status {
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
 }
 
 .status-dot {
@@ -832,6 +845,18 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 850;
 }
 
+.message-delivery {
+  margin-top: .26rem;
+  padding-inline: .2rem;
+  color: rgb(148 163 184);
+  font-size: .68rem;
+  font-weight: 850;
+}
+
+.message-delivery.right {
+  text-align: right;
+}
+
 .chain-meta {
   display: flex;
   flex-wrap: wrap;
@@ -962,7 +987,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .composer-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .45rem;
   margin-bottom: .5rem;
 }
@@ -975,18 +1000,6 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   border-radius: .65rem;
   background: rgb(241 245 249);
   color: rgb(30 41 59);
-}
-
-.composer-actions [data-message-mode] {
-  grid-column: span 2;
-  padding-inline: .7rem;
-  font-size: .72rem;
-  font-weight: 950;
-}
-
-.composer-actions [data-message-mode].active {
-  background: rgb(15 23 42);
-  color: white;
 }
 
 .composer-input {

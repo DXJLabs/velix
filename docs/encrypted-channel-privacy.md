@@ -1,87 +1,46 @@
-# VEIL Encrypted Channel Privacy
+# Encrypted Channel Payloads
 
-VEIL chat is blockchain-backed, but the readable message body must stay off public chain state.
+VEIL encrypts application payloads before writing timeline references onchain. This document covers application-layer encryption only.
 
-The current production-safe unshield model is:
+## Implemented
 
-```mermaid
-flowchart TD
-  A["User A writes message"] --> B["Privacy Pool secret -> HKDF message key"]
-  B --> C["Encrypt on device with AES-256-GCM"]
-  C --> D["Store ciphertext envelope in payload store/indexer"]
-  C --> E["Submit encryptedPayload ref + payloadHash"]
-  E --> F["VeilChannelHelper timeline event"]
-  F --> G["User B discovers event"]
-  D --> H["User B loads ciphertext envelope"]
-  G --> I["User B recovers Privacy Pool secret locally"]
-  H --> J["User B decrypts locally"]
-  I --> J
-```
+- `ChannelEncryptionAdapter` supports AES-GCM with supplied key material.
+- `PrivacyPoolChannelEncryptionAdapter` derives an application encryption key from supplied Privacy Pool secret material using HKDF.
+- `encryptMessage()` and `decryptMessage()` support AES-GCM payload envelopes.
+- Payload chunks can store ciphertext envelopes as felts for helper transport.
+- Transports store ciphertext and metadata only.
 
-Observers can see that a blockchain event exists. They cannot read the message unless they can derive the conversation key and load the ciphertext envelope.
+## Not Implemented In This Repository
 
-## What Is Stored Onchain
+- STRK20 Stark-curve ECDH.
+- Privacy Pool channel key recovery.
+- Poseidon hashing.
+- Privacy Pool note encryption.
+- Official proof generation.
 
-`VeilChannelHelper` stores:
+The SDK expects official Privacy Pool secret material to be supplied by the Privacy Pool flow or external SDK. HKDF is only an application-layer derivation step after that material exists.
 
-- `channel_id`
-- `event_type`
-- `encrypted_payload`
-- `payload_hash`
-- `created_at`
+## Direct Helper Mode
 
-For the current helper MVP, `encrypted_payload` is a felt reference to an encrypted payload envelope. It is not plaintext.
+Direct helper mode writes encrypted timeline references directly to `VeilChannelHelper`.
 
-## What Is Stored Offchain
+It provides:
 
-`EncryptedPayloadStore` or onchain payload chunks store:
+- onchain ordering,
+- transaction hash,
+- receipt confirmation,
+- ciphertext availability.
 
-- ciphertext
-- nonce
-- payload hash
-- key id
-- channel/event metadata
+It does not provide Privacy Pool anonymity.
 
-The default browser implementation uses IndexedDB for local development. Production apps should replace it with a discovery indexer or encrypted blob service that returns ciphertext envelopes for users who can decrypt them.
+## Shield Mode
 
-## Why Not Store Plaintext Onchain
+Shield mode is prepared through `StarknetPrivacyPoolTransport`.
 
-Public chains are readable by everyone. If chat content is stored as plaintext, it is not private. VEIL therefore stores only encrypted references and commitments onchain.
+It requires an external SDK/prover to:
 
-## Why Not Claim Full Privacy Yet
+- compile ClientActions,
+- generate proof data,
+- construct or execute `apply_actions`.
 
-Direct helper mode does not hide sender metadata. It is useful for Starknet testnet proof because chat events are onchain and transaction hashes are real.
-
-Full Shield path:
-
-```mermaid
-flowchart TD
-  A["Client-side encrypted payload"] --> B["Starknet Privacy SDK action/proof builder"]
-  B --> C["Transaction: apply_action / invoke_and_apply_action"]
-  C --> D["AVNU Paymaster Forwarder, optional"]
-  D --> E["Privacy Pool apply_actions"]
-  E --> F["InvokeExternal to VeilChannelHelper"]
-  F --> G["Encrypted timeline event"]
-```
-
-`StarknetPrivacyPoolTransport` supplies the VEIL transport boundary. The app-provided Starknet Privacy SDK builder must supply STRK20 note encryption, proof construction, and InvokeExternal submission. AVNU Paymaster is used only to execute or sponsor the built transaction.
-
-## SDK Files
-
-- `packages/veil-sdk/src/ecdh.ts`
-- `packages/veil-sdk/src/channel-encryption.ts`
-- `packages/veil-sdk/src/encrypted-payload-store.ts`
-- `packages/veil-sdk/src/client.ts`
-- `packages/veil-sdk/src/direct_helper_transport.ts`
-
-## Security Notes
-
-- VEIL SDK uses Privacy Pool-derived secret material, HKDF-SHA-256, and AES-256-GCM for messaging payload confidentiality and integrity.
-- STRK20 note encryption remains delegated to the Starknet Privacy SDK.
-- AES-GCM additional authenticated data binds ciphertext to `channelId` and `eventType`.
-- Missing ciphertext envelope means the event remains visible but cannot be decrypted.
-- Wrong key, wrong channel, wrong event type, or tampered ciphertext fails decryption.
-
-## Interview Explanation
-
-VEIL stores encrypted channel timeline events onchain. The chain proves ordering and availability of event references. Only participants with the channel key can decrypt the ciphertext envelopes. Direct helper mode proves the onchain part now; Privacy Pool mode later hides sender/recipient metadata through `InvokeExternal`.
+VEIL does not claim Shield payloads are submitted through Privacy Pool unless that external integration is configured and succeeds.
