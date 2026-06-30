@@ -9,10 +9,17 @@ import { OnboardStrategy } from "starkzap-onboard";
 
 const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
-const privyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,wallet,google")
+const configuredPrivyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,google")
   .split(",")
   .map((method) => method.trim())
   .filter(Boolean);
+const privyLoginMethods = configuredPrivyLoginMethods
+  .filter((method) => !(timelineMode === "direct-helper" && method === "wallet"));
+if (!privyLoginMethods.length && privyAppId) {
+  privyLoginMethods.push("google");
+}
+const removedPrivyLoginMethods = configuredPrivyLoginMethods
+  .filter((method) => !privyLoginMethods.includes(method));
 const LEGACY_CHANNEL_HELPER_ADDRESS = "0x0333e805547d0e91cec741045bf7305e8ff58e8b7d1e9f70ecb3ca559712ef6c";
 const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x018b25f0b870610e9d28a764c432dd17c18cad7d3c09aebb6e61b4efdef4efd7";
 const configuredHelperAddress = import.meta.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
@@ -424,7 +431,9 @@ async function mountPrivy() {
   veilLog("info", "auth.privy.mount.start", {
     where: "mountPrivy",
     appIdConfigured: Boolean(privyAppId),
+    configuredLoginMethods: configuredPrivyLoginMethods,
     loginMethods: privyLoginMethods,
+    removedLoginMethods: removedPrivyLoginMethods.length ? removedPrivyLoginMethods : undefined,
     currentOrigin: currentOrigin(),
     howToFix: privyLoginMethods.includes("google")
       ? "For Google OAuth, add this origin to Privy Allowed OAuth Redirect URLs and Google Authorized JavaScript Origins."
