@@ -45,7 +45,7 @@ await veil.acceptOffer({
 await veil.sendPaymentMemo({
   channelId: channel.channelId,
   amount: "450 STRK",
-  mode: "Shield",
+  mode: "shield",
   memo: "Settlement metadata added.",
 });
 

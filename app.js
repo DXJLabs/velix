@@ -7,7 +7,7 @@ import { accountPresets } from "starkzap-account-presets";
 import { ChainId } from "starkzap-config";
 import { OnboardStrategy } from "starkzap-onboard";
 
-const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "mock";
+const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
 const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
 const privyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,wallet,google")
   .split(",")
@@ -166,7 +166,8 @@ const messages = {
 const state = {
   screen: "unlock",
   channelId: activeDealId,
-  paymentMode: "Private",
+  paymentMode: "shield",
+  messageMode: "unshield",
   walletConnected: false,
   walletAddress: "",
   walletNetwork: expectedChainId,
@@ -208,15 +209,58 @@ const toast = document.querySelector("#toast");
 const privyAuthRoot = document.querySelector("#privy-auth-root");
 
 function createClient(transport) {
+  const encryption = channelKey
+    ? new ChannelEncryptionAdapter({ channelKey, keyId: "veil-env-channel" })
+    : timelineMode === "mock"
+      ? undefined
+      : createFailClosedEncryptionAdapter()
+  ;
+  const activeTransport = transport || (timelineMode === "mock" ? undefined : createFailClosedTransport());
+  if (timelineMode !== "mock" && !channelKey) {
+    veilLog("warn", "encryption.config.missing", {
+      where: "createClient",
+      howToFix: "Configure Privacy Pool-derived message encryption in production. VITE_VEIL_CHANNEL_KEY remains a legacy testnet fallback only.",
+    });
+  }
+
   return new VeilClient({
     privacyPoolAddress,
     helperAddress: helperAddress || "mock-veil-helper",
     rpcUrl,
-    ...(channelKey
-      ? { encryption: new ChannelEncryptionAdapter({ channelKey, keyId: "veil-env-channel" }) }
-      : {}),
-    ...(transport ? { transport } : {}),
+    ...(encryption ? { encryption } : {}),
+    ...(activeTransport ? { transport: activeTransport } : {}),
+    allowMock: timelineMode === "mock",
   });
+}
+
+function createFailClosedEncryptionAdapter() {
+  return {
+    async encryptPayload() {
+      throw new Error("Production messaging requires Privacy Pool-derived encryption before submitting onchain messages.");
+    },
+    async decryptPayload() {
+      return null;
+    },
+  };
+}
+
+function createFailClosedTransport() {
+  const error = () => new Error("Connect a Starknet account before submitting or reading production onchain messages.");
+  return {
+    supportedModes: ["unshield"],
+    async invokeExternal() {
+      throw error();
+    },
+    async getEventCount() {
+      throw error();
+    },
+    async getEvent() {
+      throw error();
+    },
+    async getTimeline() {
+      throw error();
+    },
+  };
 }
 
 function veilLog(level, event, details = {}) {
@@ -553,6 +597,7 @@ function isWalletInitializationPending(status = state.walletInitState) {
 
 function renderWalletInitializationState() {
   refreshConnectLabels();
+  renderHomeStatus();
   if (state.screen === "wallet") renderWallet();
 }
 
@@ -639,6 +684,10 @@ function refreshConnectLabels() {
 
   document.querySelectorAll("[data-wallet-label]").forEach((node) => {
     node.textContent = label;
+  });
+
+  document.querySelectorAll("[data-connect-wallet]").forEach((button) => {
+    button.toggleAttribute("aria-busy", isWalletInitializationPending());
   });
 }
 
@@ -1544,6 +1593,42 @@ function formatTime(timestamp) {
   return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
 }
 
+function messageModeLabel(mode) {
+  return mode === "shield" ? "Shield" : "Unshield";
+}
+
+function messageStatusLabel(status) {
+  return status || "confirmed";
+}
+
+function starkscanUrl(txHash) {
+  if (!txHash || String(txHash).startsWith("mock-")) return "";
+  const network = expectedChainId === "SN_MAIN" ? "" : "sepolia.";
+  return `https://${network}starkscan.co/tx/${encodeURIComponent(txHash)}`;
+}
+
+function shortHash(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  return text.length > 18 ? `${text.slice(0, 10)}...${text.slice(-6)}` : text;
+}
+
+function renderChainMeta(item, alignRight = false) {
+  const txUrl = starkscanUrl(item.txHash);
+  const parts = [
+    `<span class="mode-badge ${item.mode === "shield" ? "shield" : "unshield"}">${escapeHtml(messageModeLabel(item.mode))}</span>`,
+    `<span>${escapeHtml(messageStatusLabel(item.status))}</span>`,
+  ];
+  if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
+  if (item.txHash) {
+    parts.push(txUrl
+      ? `<a href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer">${escapeHtml(shortHash(item.txHash))}</a>`
+      : `<span>${escapeHtml(shortHash(item.txHash))}</span>`);
+  }
+
+  return `<div class="chain-meta ${alignRight ? "right" : ""}">${parts.join("")}</div>`;
+}
+
 function showScreen(screen, options = {}) {
   state.screen = screen;
   screens.forEach((panel) => panel.classList.toggle("hidden", panel.dataset.screen !== screen));
@@ -1553,6 +1638,7 @@ function showScreen(screen, options = {}) {
   navItems.forEach((item) => item.classList.toggle("active", item.dataset.topNav === screen));
 
   if (screen === "conversations") renderConversationList();
+  if (screen === "unlock") renderHomeStatus();
   if (screen === "channel") renderChannel();
   if (screen === "deal") renderDeal();
   if (screen === "escrow") renderEscrow();
@@ -1617,7 +1703,13 @@ async function loadIndexedChannelTimeline(channelId) {
 
 function timelinePayloadToFeedItem(item, payload) {
   const sender = payload.sender === "you" ? "You" : payload.sender || "Peer";
-  const base = { time: item.timestamp };
+  const base = {
+    time: item.timestamp,
+    txHash: item.transactionHash,
+    blockNumber: item.blockNumber,
+    status: item.status || "confirmed",
+    mode: item.mode || "unshield",
+  };
 
   if (payload.kind === "chat") {
     return {
@@ -1695,7 +1787,14 @@ function renderChannel() {
     <div class="inline-event"><strong>Today</strong></div>
     ${channelMessages().map(renderFeedItem).join("")}
   `;
+  renderMessageMode();
   iconRefresh();
+}
+
+function renderMessageMode() {
+  document.querySelectorAll("[data-message-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.messageMode === state.messageMode);
+  });
 }
 
 function renderFeedItem(item) {
@@ -1711,6 +1810,7 @@ function renderMessage(item) {
       <div class="max-w-full">
         <div class="message-meta ${self ? "text-right" : ""}">${escapeHtml(self ? "You" : item.sender)} - ${escapeHtml(formatTime(item.time))}</div>
         <p class="bubble">${escapeHtml(item.body)}</p>
+        ${renderChainMeta(item, self)}
       </div>
     </article>
   `;
@@ -1723,6 +1823,7 @@ function renderOfferCard(item) {
         <strong>${escapeHtml(item.title)}</strong>
         <b>${escapeHtml(item.amount)}</b>
         <small>${escapeHtml(item.subtitle)}</small>
+        ${renderChainMeta(item)}
       </span>
       <button type="button" data-open-route="deal">Open</button>
     </article>
@@ -1734,6 +1835,7 @@ function renderInlineEvent(item) {
     <article class="inline-event">
       <strong>${escapeHtml(item.title)}</strong>
       <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
+      ${renderChainMeta(item)}
     </article>
   `;
 }
@@ -1752,6 +1854,65 @@ function renderPayment() {
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
+}
+
+function expectedNetworkName() {
+  const normalized = normalizeChainId(expectedChainId);
+  if (normalized === "SN_SEPOLIA") return "Starknet Sepolia";
+  if (normalized === "SN_MAIN") return "Starknet Mainnet";
+  return networkLabel(expectedChainId);
+}
+
+function expectedNetworkStatus() {
+  const normalized = normalizeChainId(expectedChainId);
+  if (normalized === "SN_SEPOLIA") return "Testnet";
+  if (normalized === "SN_MAIN") return "Mainnet";
+  return "Configured network";
+}
+
+function walletFailureCategory() {
+  const message = `${state.walletInitError || ""} ${state.walletInitMessage || ""}`.toLowerCase();
+  if (!message.trim()) return "Unable to connect";
+  if (message.includes("not connected to") || message.includes("different starknet network")) return "Wrong network";
+  if (message.includes("does not expose execute") || message.includes("no privy starknet account") || message.includes("no starknet provider")) {
+    return "Unsupported wallet";
+  }
+  if (message.includes("helper") || message.includes("rpc") || message.includes("network")) return "Network unavailable";
+  return "Unable to connect";
+}
+
+function homeAccessLabel() {
+  if (isWalletInitializationPending()) return "Connecting";
+  if (state.walletInitState === "failed") return walletFailureCategory();
+  if (state.walletConnected) return "Wallet connected";
+  if (privyAppId && !state.privyReady) return "Loading";
+  return "Wallet not connected";
+}
+
+function homeNetworkStatusLabel() {
+  const access = homeAccessLabel();
+  if (access === "Wrong network" || access === "Network unavailable") return access;
+  return expectedNetworkStatus();
+}
+
+function homeExecutionLabel() {
+  if (timelineMode !== "direct-helper") return "Local demo";
+  if (!helperAddress) return "Network unavailable";
+  return expectedChainId === "SN_SEPOLIA" ? "Helper Contract (Testnet)" : "Helper Contract";
+}
+
+function renderHomeStatus() {
+  const homeNetwork = document.querySelector("#home-network");
+  const homeNetworkStatus = document.querySelector("#home-network-status");
+  const homePrivacy = document.querySelector("#home-privacy");
+  const homeExecution = document.querySelector("#home-execution");
+  const homeAccess = document.querySelector("#home-access");
+
+  if (homeNetwork) homeNetwork.textContent = expectedNetworkName();
+  if (homeNetworkStatus) homeNetworkStatus.textContent = homeNetworkStatusLabel();
+  if (homePrivacy) homePrivacy.textContent = "Built on Starknet Privacy Pool";
+  if (homeExecution) homeExecution.textContent = homeExecutionLabel();
+  if (homeAccess) homeAccess.textContent = homeAccessLabel();
 }
 
 function renderWallet() {
@@ -1802,6 +1963,7 @@ function renderWallet() {
   if (walletHelper) walletHelper.textContent = helperText;
 
   refreshConnectLabels();
+  renderHomeStatus();
 }
 
 function renderSettlement() {}
@@ -1809,12 +1971,22 @@ function renderSettlement() {}
 function renderProof() {}
 
 async function safeSubmit(action, localItem, success) {
+  const pendingItem = {
+    ...localItem,
+    status: "encrypting",
+    mode: localItem.mode || "unshield",
+  };
+  addLocalItem(pendingItem);
   try {
     if (timelineMode === "direct-helper" && !directTransport) {
       const connected = await connectWallet();
-      if (!connected) return;
+      if (!connected) {
+        updateLocalItem(pendingItem, { status: "failed" });
+        return;
+      }
     }
     if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
+      updateLocalItem(pendingItem, { status: "failed" });
       return;
     }
     veilLog("info", "transaction.submit.start", {
@@ -1823,6 +1995,7 @@ async function safeSubmit(action, localItem, success) {
       helperAddress,
       eventType: localItem?.type,
     });
+    updateLocalItem(pendingItem, { status: "signing" });
     const result = await action();
     veilLog("info", "transaction.submit.success", {
       where: "safeSubmit",
@@ -1830,7 +2003,13 @@ async function safeSubmit(action, localItem, success) {
       transactionHash: result?.transactionHash,
       eventId: result?.eventId,
     });
-    addLocalItem(localItem);
+    updateLocalItem(pendingItem, {
+      txHash: result?.transactionHash,
+      blockNumber: result?.blockNumber,
+      status: result?.status || "pending",
+      mode: result?.mode || pendingItem.mode,
+      time: result?.timestamp || pendingItem.time,
+    });
     showToast(success);
   } catch (error) {
     veilError("transaction.submit.failed", error, {
@@ -1839,12 +2018,8 @@ async function safeSubmit(action, localItem, success) {
       helperAddress,
       howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
     });
-    if (timelineMode === "direct-helper") {
-      showToast("Onchain action failed. Check Sepolia.");
-      return;
-    }
-    addLocalItem(localItem);
-    showToast(success);
+    updateLocalItem(pendingItem, { status: "failed" });
+    showToast(timelineMode === "direct-helper" ? "Onchain action failed. Check Sepolia." : success);
   }
 }
 
@@ -1861,15 +2036,21 @@ function addLocalItem(item) {
   requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
 }
 
+function updateLocalItem(item, updates) {
+  Object.assign(item, updates);
+  renderChannel();
+}
+
 async function sendChat(message) {
   await safeSubmit(
-    () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message }),
+    () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message, mode: state.messageMode }),
     {
       type: "message",
       sender: "You",
       body: message,
       self: true,
       time: Date.now(),
+      mode: state.messageMode,
     },
     "Message sent.",
   );
@@ -1930,6 +2111,7 @@ async function sendPayment() {
       title: "Payment memo attached",
       subtitle: `${amount} ${asset}`,
       time: Date.now(),
+      mode: state.paymentMode,
     },
     "Payment sent.",
   );
@@ -1998,6 +2180,7 @@ function bindEvents() {
       state.walletAddress = detail.user.wallet.address;
     }
     renderWallet();
+    renderHomeStatus();
     refreshConnectLabels();
   });
 
@@ -2044,6 +2227,13 @@ function bindEvents() {
     if (paymentMode) {
       state.paymentMode = paymentMode.dataset.paymentMode;
       renderPayment();
+      return;
+    }
+
+    const messageMode = event.target.closest("[data-message-mode]");
+    if (messageMode) {
+      state.messageMode = messageMode.dataset.messageMode;
+      renderMessageMode();
       return;
     }
 
@@ -2120,6 +2310,7 @@ function init() {
     showToast("Privy SDK failed to load.");
   });
   renderConversationList();
+  renderHomeStatus();
   refreshConnectLabels();
   showScreen("unlock", { keepScroll: true });
   iconRefresh();

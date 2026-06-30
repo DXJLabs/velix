@@ -2,7 +2,7 @@
 
 TypeScript SDK for building VEIL-powered private channel apps on top of Privacy Pool and `VeilChannelHelper`.
 
-The SDK does not implement cryptography or private transfer logic. Payloads are encrypted through an adapter before being passed into the Privacy Pool `InvokeExternal` phase. The default adapter is a mock for local development.
+The SDK implements the messaging-layer boundary: Privacy Pool-derived message encryption, scoped session keys, direct helper transport, a Starknet Privacy SDK transport boundary, and an AVNU Paymaster execution hook. It does not implement STRK20 ECDH, note encryption, Poseidon hashing, or ZK proof construction itself; Shield mode must use Starknet Privacy SDK primitives. AVNU is only the Paymaster/Forwarder layer.
 
 ## Install
 
@@ -19,6 +19,8 @@ const veil = new VeilClient({
   privacyPoolAddress: process.env.VITE_PRIVACY_POOL_ADDRESS!,
   helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
   rpcUrl: process.env.VITE_STARKNET_RPC_URL!,
+  encryption,
+  transport,
 });
 
 await veil.createChannel({ channelId: "rights-transfer", title: "Rights Transfer" });
@@ -52,7 +54,7 @@ await sendMessage({ message: "Ready to settle.", sender: "you" });
 
 ## Session Keys
 
-VEIL supports session-key authorization so users do not approve every message, offer, memo, or escrow update with the main wallet.
+VEIL supports session-key authorization so users do not approve every message, reply, offer, counter offer, memo, or negotiation metadata update with the main wallet.
 
 ```ts
 import {
@@ -69,7 +71,7 @@ const sessionManager = new VeilSessionKeyManager({
 
 await sessionManager.createSession({
   duration: "12h",
-  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "OFFER_ACCEPT", "MEMO_SEND", "TIMELINE_APPEND"],
+  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "MEMO_SEND", "NEGOTIATION_METADATA"],
   channelIds: ["rights-transfer"],
   walletAddress: wallet.address,
   chainId: "SN_SEPOLIA",
@@ -95,7 +97,7 @@ Session metadata is stored in IndexedDB by `BrowserSessionKeyStore`. The SDK nev
 
 Privy belongs in the frontend wallet/auth layer. Use Privy to connect the wallet and sign the transaction that calls Privacy Pool. The SDK prepares encrypted timeline payloads and the `InvokeExternal` calldata for `VeilChannelHelper`.
 
-Production apps should provide a custom `transport` that submits transactions through Privacy Pool. The default transport is an in-memory mock for demos and tests.
+Production apps must provide both a production encryption adapter and a transport. Mock encryption/transport is available only when `allowMock: true` is set explicitly for local demos and tests.
 
 ## Onchain Chat Testnet Mode
 
@@ -110,6 +112,7 @@ const veil = new VeilClient({
   privacyPoolAddress: process.env.VITE_PRIVACY_POOL_ADDRESS!,
   helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
   rpcUrl: process.env.VITE_STARKNET_RPC_URL!,
+  encryption,
   transport: new DirectHelperTransport({
     helperAddress: process.env.VITE_VEIL_CHANNEL_HELPER_ADDRESS!,
     account,
@@ -126,51 +129,56 @@ const sent = await veil.sendMessage({
 console.log(sent.transactionHash);
 ```
 
-## Channel Encryption
+## Privacy Pool Message Encryption
 
-Use `ChannelEncryptionAdapter` for client-side AES-GCM payload encryption. The helper contract receives only `encryptedPayload` and `payloadHash` felts; the ciphertext envelope is stored through an `EncryptedPayloadStore`.
+Use `PrivacyPoolChannelEncryptionAdapter` after the official STRK20 Privacy Pool flow has recovered a channel key or shared x-coordinate. The SDK uses that canonical protocol output as HKDF input for VEIL application payload encryption. It does not perform browser P-256 ECDH.
 
 ```ts
 import {
   BrowserEncryptedPayloadStore,
-  ChannelEncryptionAdapter,
+  PrivacyPoolChannelEncryptionAdapter,
   VeilClient,
-  generateChannelKey,
 } from "@dxjlabs/veil-sdk";
 
-const channelKey = await generateChannelKey();
 const payloadStore = new BrowserEncryptedPayloadStore();
+const privacyPoolSharedSecret = await officialPrivacyPoolSdk.recoverChannelSecret(...);
 
 const veil = new VeilClient({
   privacyPoolAddress,
   helperAddress,
   rpcUrl,
-  encryption: new ChannelEncryptionAdapter({
-    channelKey,
+  transport,
+  encryption: new PrivacyPoolChannelEncryptionAdapter({
+    privacyPoolSharedSecret,
+    channelId: "rights-transfer",
     payloadStore,
-    keyId: "rights-transfer-channel",
+    keyId: "rights-transfer-privacy-pool",
   }),
 });
 ```
 
-In production, the channel key should come from Privacy Pool channel key derivation or the wallet/session layer. The SDK does not fake Privacy Pool ECDH.
+`EcdhChannelEncryptionAdapter`, `generateEcdhKeyPair`, and `exportEcdhPublicKey` remain exported for compatibility but fail closed for production because browser ECDH is not STRK20 Privacy Pool-compatible. `ChannelEncryptionAdapter` remains available only as a legacy AES-GCM testnet fallback for pre-shared channel keys.
 
 ## Privacy Pool adapters
 
-The official STRK20 Privacy Pool SDK is private, so VEIL exposes adapters instead of inventing the SDK behavior.
+VEIL exposes adapters instead of inventing STRK20 note encryption, key agreement, or proof behavior. Shield mode should be wired to the Starknet Privacy SDK flow for ClientAction construction, proof generation, and Privacy Pool submission. AVNU Paymaster may execute or sponsor the transaction after it is built.
 
 ```ts
 import {
+  AvnuPrivacyPoolTransport,
   MockPrivacyPoolAdapter,
   RealPrivacyPoolAdapter,
   ResearchPrivacyPoolAdapter,
+  StarknetPrivacyPoolTransport,
 } from "@dxjlabs/veil-sdk";
 ```
 
-- `MockPrivacyPoolAdapter`: default local/demo adapter.
+- `MockPrivacyPoolAdapter`: local/demo adapter, never the production default.
 - `DirectHelperTransport`: direct testnet writes to `VeilChannelHelper` for onchain timeline proof.
+- `StarknetPrivacyPoolTransport`: Shield transport boundary. The app supplies a Starknet Privacy SDK action builder that creates the private transfer/swap/action proof and includes `VeilChannelHelper.privacy_invoke`; AVNU Paymaster is optional execution infrastructure.
+- `AvnuPrivacyPoolTransport`: deprecated compatibility alias for `StarknetPrivacyPoolTransport`.
 - `ResearchPrivacyPoolAdapter`: read-only tx/event/calldata analyzer using the known ABI.
-- `RealPrivacyPoolAdapter`: placeholder that throws `Waiting for official Privacy Pool SDK`.
+- `RealPrivacyPoolAdapter`: placeholder that throws `Waiting for official Starknet Privacy SDK`.
 
 Use the research adapter to inspect real transactions without submitting anything:
 

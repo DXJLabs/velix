@@ -1,5 +1,6 @@
 const FELT_MODULUS = 2n ** 251n + 17n * 2n ** 192n + 1n;
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 function env(name, fallback = "") {
   return process.env[name] || fallback;
@@ -33,6 +34,29 @@ function channelIdToFelt(channelId) {
 function normalizeFelt(value) {
   if (value === undefined || value === null) return "";
   return BigInt(value).toString();
+}
+
+function hexToBytes(hex) {
+  const normalized = hex.length % 2 === 0 ? hex : `0${hex}`;
+  return Uint8Array.from(normalized.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || []);
+}
+
+function feltChunksToString(chunks) {
+  const bytes = chunks.flatMap((chunk) => [...hexToBytes(BigInt(chunk).toString(16))]);
+  return textDecoder.decode(Uint8Array.from(bytes));
+}
+
+function tryReadEnvelope(chunks) {
+  if (!chunks?.length) return {};
+  try {
+    const envelope = JSON.parse(feltChunksToString(chunks));
+    return {
+      nonce: typeof envelope.nonce === "string" ? envelope.nonce : undefined,
+      algorithm: typeof envelope.algorithm === "string" ? envelope.algorithm : undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 async function rpc(rpcUrl, method, params) {
@@ -103,10 +127,17 @@ function parseEvents(events, channelFelt) {
   }
 
   return [...timeline.values()]
-    .map((item) => ({
-      ...item,
-      payloadChunks: chunks.get(item.eventId) || [],
-    }))
+    .map((item) => {
+      const payloadChunks = chunks.get(item.eventId) || [];
+      const envelope = tryReadEnvelope(payloadChunks);
+      return {
+        ...item,
+        ...envelope,
+        mode: "unshield",
+        status: "confirmed",
+        payloadChunks,
+      };
+    })
     .sort((first, second) => Number(first.eventId) - Number(second.eventId));
 }
 

@@ -218,7 +218,7 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
     }
 
     await this.#payloadStore.saveEnvelope(envelope);
-    return { encryptedPayload, payloadHash, payloadChunks: stringToFeltChunks(JSON.stringify(envelope)) };
+    return { encryptedPayload, payloadHash, nonce: nonceValue, payloadChunks: stringToFeltChunks(JSON.stringify(envelope)) };
   }
 
   async decryptPayload(item: TimelineItem, context?: EncryptionContext): Promise<VeilTimelinePayload | null> {
@@ -241,8 +241,13 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
       throw new Error("Encrypted payload hash mismatch.");
     }
 
+    const nonce = base64ToBytes(envelope.nonce);
+    if (nonce.byteLength !== NONCE_BYTES) {
+      throw new Error("Invalid AES-GCM nonce length.");
+    }
+
     const plaintext = await globalThis.crypto.subtle.decrypt(
-      aesGcmParams(base64ToBytes(envelope.nonce), context),
+      aesGcmParams(nonce, context),
       await this.#keyPromise,
       bytesToArrayBuffer(base64ToBytes(envelope.ciphertext)),
     );

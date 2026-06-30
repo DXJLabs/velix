@@ -1,6 +1,6 @@
 # VEIL Session Key Architecture
 
-VEIL uses session keys so users do not sign every chat message, offer, memo, or escrow action with their main wallet.
+VEIL uses session keys so users do not sign every chat message, reply, offer, counter offer, payment memo, or negotiation metadata update with their main wallet.
 
 The main wallet authorizes once. After that, a delegated session account/key can perform scoped VEIL actions until the session expires or is revoked.
 
@@ -57,13 +57,10 @@ Supported permissions:
 
 - `MESSAGE_SEND`
 - `OFFER_CREATE`
-- `OFFER_ACCEPT`
 - `MEMO_SEND`
-- `ESCROW_CREATE`
-- `ESCROW_UPDATE`
-- `TIMELINE_APPEND`
+- `NEGOTIATION_METADATA`
 
-Each SDK write action checks for the required permission before the transport submits or signs anything.
+Session keys never authorize transfers, escrow release, shield/unshield asset operations, withdrawals, or any financial transaction. Those actions must use explicit wallet approval outside the session key path.
 
 ## Expiration
 
@@ -101,7 +98,7 @@ const sessionManager = new VeilSessionKeyManager({
 
 await sessionManager.createSession({
   duration: "12h",
-  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "OFFER_ACCEPT", "MEMO_SEND", "TIMELINE_APPEND"],
+  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "MEMO_SEND", "NEGOTIATION_METADATA"],
   channelIds: ["rights-transfer"],
   walletAddress: wallet.address,
   chainId: "SN_SEPOLIA",
@@ -150,6 +147,7 @@ const label = session ? `Session Active · ${formatSessionExpiresIn(session.expi
 
 - Main wallet signs once to authorize a scoped session.
 - Session permissions are explicit and individually configurable.
+- Session permissions intentionally exclude escrow and financial actions.
 - Session channel scope is explicit. Use exact channel ids for production.
 - Expired or revoked sessions cannot execute SDK write actions.
 - VEIL SDK stores metadata only. It never stores raw private keys.

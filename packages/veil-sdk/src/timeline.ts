@@ -1,4 +1,5 @@
 import { VeilEventType, type TimelineItem, type VeilEventGroup, type VeilTimelinePayload } from "./types";
+import type { DecodedPrivacyPoolEvent } from "./event_decoder";
 
 export function encodeInvokeCalldata(item: TimelineItem): readonly string[] {
   const payloadChunks = item.payloadChunks ?? [];
@@ -69,6 +70,8 @@ export function createOptimisticTimelineItem(input: {
     eventType: input.eventType,
     encryptedPayload: "pending",
     payloadHash: "pending",
+    mode: "unshield",
+    status: "encrypting",
     timestamp,
     payload: input.payload,
     optimistic: true,
@@ -77,6 +80,83 @@ export function createOptimisticTimelineItem(input: {
 
 export function sortTimeline(items: readonly TimelineItem[]): TimelineItem[] {
   return [...items].sort((a, b) => Number(a.eventId) - Number(b.eventId));
+}
+
+export function mergeTimelineItems(...sources: readonly TimelineItem[][]): TimelineItem[] {
+  const merged = new Map<string, TimelineItem>();
+  for (const item of sources.flat()) {
+    const key = item.transactionHash
+      ? `${item.channelId}:${item.eventId}:${item.transactionHash}`
+      : `${item.channelId}:${item.eventId}`;
+    const previous = merged.get(key);
+    const mergedItem: TimelineItem = { ...previous, ...item };
+    if (!item.payloadChunks && previous?.payloadChunks) mergedItem.payloadChunks = previous.payloadChunks;
+    if (!item.payload && previous?.payload) mergedItem.payload = previous.payload;
+    merged.set(key, mergedItem);
+  }
+  return sortTimeline([...merged.values()]);
+}
+
+export function timelineItemsFromDecodedEvents(
+  events: readonly DecodedPrivacyPoolEvent[],
+  options: { channelId?: string; mode?: TimelineItem["mode"] } = {},
+): TimelineItem[] {
+  const items = new Map<string, TimelineItem>();
+  const chunks = new Map<string, string[]>();
+
+  for (const event of events) {
+    if (event.category !== "timeline") continue;
+    const channelId = fieldValue(event, "channel_id");
+    if (!channelId || (options.channelId && channelId !== options.channelId)) continue;
+
+    if (event.name === "TimelinePayloadChunkStored") {
+      const eventId = fieldValue(event, "event_id");
+      const chunkIndex = numberField(event, "chunk_index");
+      const chunk = fieldValue(event, "chunk");
+      if (eventId && chunkIndex !== undefined && chunk) {
+        const bucket = chunks.get(eventId) ?? [];
+        bucket[chunkIndex] = chunk;
+        chunks.set(eventId, bucket);
+      }
+      continue;
+    }
+
+    if (event.name !== "TimelineEventStored") continue;
+    const eventId = fieldValue(event, "event_id");
+    const eventType = numberField(event, "event_type");
+    const encryptedPayload = fieldValue(event, "encrypted_payload");
+    const payloadHash = fieldValue(event, "payload_hash");
+    const timestamp = timestampMs(numberField(event, "created_at"));
+    if (!eventId || eventType === undefined || !encryptedPayload || !payloadHash || timestamp === undefined) {
+      continue;
+    }
+
+    const item: TimelineItem = {
+      eventId,
+      channelId,
+      eventType,
+      encryptedPayload,
+      payloadHash,
+      timestamp,
+      mode: options.mode ?? "shield",
+      status: "confirmed",
+      optimistic: false,
+    };
+    const payloadChunkCount = numberField(event, "payload_chunk_count");
+    if (payloadChunkCount && payloadChunkCount > 0) item.payloadChunkCount = payloadChunkCount;
+    if (event.raw.transaction_hash) item.transactionHash = event.raw.transaction_hash;
+    if (event.raw.block_number !== undefined) item.blockNumber = event.raw.block_number;
+    items.set(eventId, item);
+  }
+
+  for (const [eventId, payloadChunks] of chunks) {
+    const item = items.get(eventId);
+    if (!item) continue;
+    item.payloadChunks = payloadChunks;
+    item.payloadChunkCount = payloadChunks.length;
+  }
+
+  return sortTimeline([...items.values()]);
 }
 
 export function getEventLabel(item: TimelineItem): string {
@@ -106,4 +186,24 @@ export function getEventLabel(item: TimelineItem): string {
     default:
       return "Channel event";
   }
+}
+
+function fieldValue(event: DecodedPrivacyPoolEvent, name: string): string | undefined {
+  return event.fields.find((field) => field.name === name)?.value;
+}
+
+function numberField(event: DecodedPrivacyPoolEvent, name: string): number | undefined {
+  const value = fieldValue(event, name);
+  if (value === undefined) return undefined;
+  try {
+    const parsed = Number(BigInt(value));
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function timestampMs(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  return value > 1_000_000_000_000 ? value : value * 1000;
 }
