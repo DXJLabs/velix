@@ -798,7 +798,8 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 }
 
 .wallet-card h2,
-.wallet-section h2 {
+.wallet-section h2,
+.settings-list h2 {
   color: rgb(15 23 42);
   font-size: 1rem;
   font-weight: 950;
@@ -829,7 +830,8 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   background: white;
 }
 
-.wallet-section h2 {
+.wallet-section h2,
+.settings-list h2 {
   border-bottom: 1px solid rgb(241 245 249);
   padding: .85rem 1rem;
   background: rgb(248 250 252);
@@ -939,6 +941,12 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(100 116 139);
   font-size: .84rem;
   font-weight: 650;
+}
+
+.settings-page {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1rem calc(5.8rem + env(safe-area-inset-bottom));
 }
 
 .settings-list {

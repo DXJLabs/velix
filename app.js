@@ -585,7 +585,7 @@ function walletInitLabel(status = state.walletInitState) {
     case "connecting_paymaster":
       return "Connecting Paymaster...";
     case "ready":
-      return "Wallet Ready";
+      return "Connected";
     case "failed":
       return "Retry";
     default:
@@ -601,6 +601,7 @@ function renderWalletInitializationState() {
   refreshConnectLabels();
   renderHomeStatus();
   if (state.screen === "wallet") renderWallet();
+  if (state.screen === "settings") renderSettings();
 }
 
 function setWalletInitializationState(nextState, details = {}) {
@@ -655,7 +656,7 @@ function updateWalletInitialization(step, traceId, details = {}) {
 
 function completeWalletInitialization(traceId) {
   clearTimeout(walletInitTimer);
-  setWalletInitializationState("ready", { traceId, message: "Wallet Ready" });
+  setWalletInitializationState("ready", { traceId, message: "Wallet connected" });
 }
 
 function failWalletInitialization(error, traceId, details = {}) {
@@ -679,7 +680,7 @@ function refreshConnectLabels() {
   const label = isWalletInitializationPending() || state.walletInitState === "failed"
     ? walletInitLabel()
     : state.walletConnected
-    ? "Wallet Ready"
+    ? "Connected"
     : privyAppId && !state.privyReady
       ? "Loading Privy"
       : "Connect Wallet";
@@ -1372,7 +1373,7 @@ async function connectWallet(options = {}) {
     completeWalletInitialization(traceId);
     renderWallet();
     refreshConnectLabels();
-    showToast("Wallet Ready");
+    showToast("Wallet connected.");
     if (goToInbox) showScreen("conversations");
     tracePrivyStarkZap(traceId, "connect.success", {
       where: "connectWallet",
@@ -1558,7 +1559,7 @@ async function connectWallet(options = {}) {
   completeWalletInitialization(traceId);
   renderWallet();
   refreshConnectLabels();
-  showToast("Wallet Ready");
+  showToast("Wallet connected.");
   if (goToInbox) showScreen("conversations");
   tracePrivyStarkZap(traceId, "connect.success", {
     where: "connectWallet",
@@ -1648,6 +1649,7 @@ function showScreen(screen, options = {}) {
   if (screen === "escrow") renderEscrow();
   if (screen === "payment") renderPayment();
   if (screen === "wallet") renderWallet();
+  if (screen === "settings") renderSettings();
   if (screen === "settlement") renderSettlement();
   if (screen === "proof") renderProof();
 
@@ -1998,9 +2000,27 @@ function renderWallet() {
   document.querySelectorAll("[data-auto-shield]").forEach((input) => {
     input.checked = state.autoShield;
   });
+  renderSettings();
 
   refreshConnectLabels();
   renderHomeStatus();
+}
+
+function renderSettings() {
+  const walletAddress = walletAddressValue();
+  const settingsWalletAddress = document.querySelector("#settings-wallet-address");
+  const settingsWalletStatus = document.querySelector("#settings-wallet-status");
+  if (settingsWalletAddress) {
+    settingsWalletAddress.textContent = shortAddress(walletAddress);
+    settingsWalletAddress.title = walletAddress || "";
+  }
+  if (settingsWalletStatus) {
+    settingsWalletStatus.textContent = state.walletConnected ? "Connected" : "Disconnected";
+    settingsWalletStatus.className = `status-pill ${state.walletConnected ? "private" : "public"}`;
+  }
+  document.querySelectorAll("[data-default-privacy]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
+  });
 }
 
 function walletAddressValue() {
@@ -2403,6 +2423,12 @@ function bindEvents() {
       return;
     }
 
+    const settingsInfo = event.target.closest("[data-settings-info]");
+    if (settingsInfo) {
+      showToast(settingsInfo.dataset.settingsInfo === "terms" ? "Terms ready." : "Privacy policy ready.");
+      return;
+    }
+
     if (event.target.closest("[data-connect-wallet]")) {
       connectWallet({ goToInbox: state.screen === "unlock" });
       return;
@@ -2446,9 +2472,16 @@ function bindEvents() {
 
   document.addEventListener("change", (event) => {
     const autoShield = event.target.closest("[data-auto-shield]");
-    if (!autoShield) return;
-    state.autoShield = autoShield.checked;
-    showToast(state.autoShield ? "Auto Shield enabled." : "Auto Shield disabled.");
+    if (autoShield) {
+      state.autoShield = autoShield.checked;
+      showToast(state.autoShield ? "Auto Shield enabled." : "Auto Shield disabled.");
+      return;
+    }
+
+    const settingToggle = event.target.closest("[data-setting-toggle]");
+    if (settingToggle) {
+      showToast(settingToggle.checked ? "Setting enabled." : "Setting disabled.");
+    }
   });
 
   conversationSearch?.addEventListener("input", renderConversationList);
