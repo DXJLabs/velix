@@ -597,6 +597,7 @@ function isWalletInitializationPending(status = state.walletInitState) {
 
 function renderWalletInitializationState() {
   refreshConnectLabels();
+  renderHomeStatus();
   if (state.screen === "wallet") renderWallet();
 }
 
@@ -683,6 +684,10 @@ function refreshConnectLabels() {
 
   document.querySelectorAll("[data-wallet-label]").forEach((node) => {
     node.textContent = label;
+  });
+
+  document.querySelectorAll("[data-connect-wallet]").forEach((button) => {
+    button.toggleAttribute("aria-busy", isWalletInitializationPending());
   });
 }
 
@@ -1633,6 +1638,7 @@ function showScreen(screen, options = {}) {
   navItems.forEach((item) => item.classList.toggle("active", item.dataset.topNav === screen));
 
   if (screen === "conversations") renderConversationList();
+  if (screen === "unlock") renderHomeStatus();
   if (screen === "channel") renderChannel();
   if (screen === "deal") renderDeal();
   if (screen === "escrow") renderEscrow();
@@ -1850,6 +1856,65 @@ function renderPayment() {
   });
 }
 
+function expectedNetworkName() {
+  const normalized = normalizeChainId(expectedChainId);
+  if (normalized === "SN_SEPOLIA") return "Starknet Sepolia";
+  if (normalized === "SN_MAIN") return "Starknet Mainnet";
+  return networkLabel(expectedChainId);
+}
+
+function expectedNetworkStatus() {
+  const normalized = normalizeChainId(expectedChainId);
+  if (normalized === "SN_SEPOLIA") return "Testnet";
+  if (normalized === "SN_MAIN") return "Mainnet";
+  return "Configured network";
+}
+
+function walletFailureCategory() {
+  const message = `${state.walletInitError || ""} ${state.walletInitMessage || ""}`.toLowerCase();
+  if (!message.trim()) return "Unable to connect";
+  if (message.includes("not connected to") || message.includes("different starknet network")) return "Wrong network";
+  if (message.includes("does not expose execute") || message.includes("no privy starknet account") || message.includes("no starknet provider")) {
+    return "Unsupported wallet";
+  }
+  if (message.includes("helper") || message.includes("rpc") || message.includes("network")) return "Network unavailable";
+  return "Unable to connect";
+}
+
+function homeAccessLabel() {
+  if (isWalletInitializationPending()) return "Connecting";
+  if (state.walletInitState === "failed") return walletFailureCategory();
+  if (state.walletConnected) return "Wallet connected";
+  if (privyAppId && !state.privyReady) return "Loading";
+  return "Wallet not connected";
+}
+
+function homeNetworkStatusLabel() {
+  const access = homeAccessLabel();
+  if (access === "Wrong network" || access === "Network unavailable") return access;
+  return expectedNetworkStatus();
+}
+
+function homeExecutionLabel() {
+  if (timelineMode !== "direct-helper") return "Local demo";
+  if (!helperAddress) return "Network unavailable";
+  return expectedChainId === "SN_SEPOLIA" ? "Helper Contract (Testnet)" : "Helper Contract";
+}
+
+function renderHomeStatus() {
+  const homeNetwork = document.querySelector("#home-network");
+  const homeNetworkStatus = document.querySelector("#home-network-status");
+  const homePrivacy = document.querySelector("#home-privacy");
+  const homeExecution = document.querySelector("#home-execution");
+  const homeAccess = document.querySelector("#home-access");
+
+  if (homeNetwork) homeNetwork.textContent = expectedNetworkName();
+  if (homeNetworkStatus) homeNetworkStatus.textContent = homeNetworkStatusLabel();
+  if (homePrivacy) homePrivacy.textContent = "Built on Starknet Privacy Pool";
+  if (homeExecution) homeExecution.textContent = homeExecutionLabel();
+  if (homeAccess) homeAccess.textContent = homeAccessLabel();
+}
+
 function renderWallet() {
   const connected = state.walletConnected;
   const pending = isWalletInitializationPending();
@@ -1898,6 +1963,7 @@ function renderWallet() {
   if (walletHelper) walletHelper.textContent = helperText;
 
   refreshConnectLabels();
+  renderHomeStatus();
 }
 
 function renderSettlement() {}
@@ -2114,6 +2180,7 @@ function bindEvents() {
       state.walletAddress = detail.user.wallet.address;
     }
     renderWallet();
+    renderHomeStatus();
     refreshConnectLabels();
   });
 
@@ -2243,6 +2310,7 @@ function init() {
     showToast("Privy SDK failed to load.");
   });
   renderConversationList();
+  renderHomeStatus();
   refreshConnectLabels();
   showScreen("unlock", { keepScroll: true });
   iconRefresh();

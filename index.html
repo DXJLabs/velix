@@ -15,60 +15,72 @@
         <section class="screen unlock-screen" data-screen="unlock">
           <div class="unlock-layout">
             <div class="unlock-copy">
-              <div class="brand-row">
+              <div class="brand-row" aria-label="VEIL">
                 <div class="brand-mark">V</div>
-                <div>
-                  <p class="eyebrow">VEIL</p>
-                  <strong>Private deal workspace</strong>
-                </div>
+                <strong>VEIL</strong>
               </div>
-              <h1>Private negotiation and escrow, ready for Starknet.</h1>
-              <p>Encrypted deal channels, settlement context, and wallet-gated access in one focused workspace.</p>
+              <p class="home-label">Private Deal Workspace</p>
+              <h1>Private communication and secure digital deals on Starknet.</h1>
+              <p>Coordinate secure digital deals with encrypted messaging and optional private transactions.</p>
               <div class="unlock-actions">
                 <button class="primary-action" type="button" data-connect-wallet>
                   <i data-lucide="wallet-cards" class="size-5"></i>
                   <span data-wallet-label>Connect Wallet</span>
                 </button>
-                <span class="unlock-network">
-                  <i data-lucide="shield-check" class="size-4"></i>
-                  Sepolia direct helper
-                </span>
-              </div>
-              <div class="unlock-stats" aria-label="Workspace status">
-                <div><span>Mode</span><strong>Private</strong></div>
-                <div><span>Escrow</span><strong>Ready</strong></div>
-                <div><span>Proof</span><strong>Linked</strong></div>
               </div>
             </div>
 
-            <div class="unlock-preview" aria-label="Deal preview">
-              <div class="preview-header">
+            <aside class="home-network-panel" aria-labelledby="home-network-heading">
+              <div class="home-panel-header">
+                <span class="home-panel-icon">
+                  <i data-lucide="radio-tower" class="size-5"></i>
+                </span>
                 <div>
-                  <p class="eyebrow">Rights Transfer</p>
-                  <strong>Bob accepted 450 STRK</strong>
-                </div>
-                <span class="status-pill private">Encrypted</span>
-              </div>
-              <div class="preview-thread">
-                <div class="preview-message">
-                  <span>Bob</span>
-                  <p>Counter accepted. Escrow can move next.</p>
-                </div>
-                <div class="preview-message self">
-                  <span>You</span>
-                  <p>Memo attached. Preparing settlement proof.</p>
+                  <p class="eyebrow">Network</p>
+                  <h2 id="home-network-heading">Current environment</h2>
                 </div>
               </div>
-              <div class="preview-deal">
-                <span>Active escrow</span>
-                <strong>450 STRK</strong>
-                <small>Buyer and seller deposits confirmed</small>
+              <div class="home-network-list">
+                <div>
+                  <span>Network</span>
+                  <strong id="home-network">Starknet Sepolia</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong id="home-network-status">Testnet</strong>
+                </div>
+                <div>
+                  <span>Privacy</span>
+                  <strong id="home-privacy">Built on Starknet Privacy Pool</strong>
+                </div>
+                <div>
+                  <span>Execution</span>
+                  <strong id="home-execution">Helper Contract (Testnet)</strong>
+                </div>
+                <div>
+                  <span>Access</span>
+                  <strong id="home-access">Wallet not connected</strong>
+                </div>
               </div>
-              <div class="preview-checks">
-                <span><i data-lucide="lock-keyhole" class="size-4"></i> Channel locked</span>
-                <span><i data-lucide="file-check-2" class="size-4"></i> Proof trail ready</span>
-              </div>
-            </div>
+            </aside>
+          </div>
+
+          <div class="home-capabilities" aria-label="Product capabilities">
+            <article class="capability-card">
+              <span class="capability-icon"><i data-lucide="messages-square" class="size-5"></i></span>
+              <h2>Encrypted Chat</h2>
+              <p>Always end-to-end encrypted. Only participants can read messages.</p>
+            </article>
+            <article class="capability-card">
+              <span class="capability-icon"><i data-lucide="shield" class="size-5"></i></span>
+              <h2>Secure Escrow</h2>
+              <p>Coordinate digital asset exchanges safely. Transfers, escrow, and offers can use Shield or Unshield; payment memos follow the associated transaction.</p>
+            </article>
+            <article class="capability-card">
+              <span class="capability-icon"><i data-lucide="badge-check" class="size-5"></i></span>
+              <h2>On-chain Verification</h2>
+              <p>Transactions and proofs are verifiable on Starknet.</p>
+            </article>
           </div>
         </section>
 
