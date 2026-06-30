@@ -168,63 +168,106 @@
 
         <section class="screen hidden" data-screen="activity">
           <header class="surface-header">
-            <p class="eyebrow">Today</p>
-            <h1 class="page-title">What requires attention?</h1>
+            <p class="eyebrow">VEIL</p>
+            <h1 class="page-title">Activity</h1>
+            <p class="page-subtitle">Actions and history across deal channels</p>
           </header>
-          <div class="content-with-nav space-y-5 px-4 pt-4">
-            <section class="focus-list" aria-labelledby="continue-heading">
-              <h2 id="continue-heading">Resume channel</h2>
-              <button class="task-row primary" type="button" data-open-channel="20260625">
-                <span>
-                  <strong>Rights Transfer</strong>
-                  <small>Bob accepted 450 STRK. Send memo next.</small>
-                </span>
-                <i data-lucide="arrow-right" class="size-5"></i>
-              </button>
+          <div class="content-with-nav activity-dashboard">
+            <section class="activity-section" aria-labelledby="pending-actions-heading">
+              <div class="activity-section-header">
+                <div>
+                  <p class="eyebrow">Pending Actions</p>
+                  <h2 id="pending-actions-heading">What needs attention</h2>
+                </div>
+                <span class="status-pill waiting-deposit">6 open</span>
+              </div>
+
+              <div class="activity-actions">
+                <button class="task-row primary" type="button" data-open-route="deal">
+                  <span class="action-icon"><i data-lucide="handshake" class="size-5"></i></span>
+                  <span>
+                    <strong>Review Counter Offer</strong>
+                    <small>Rights Transfer - 450 STRK awaiting decision</small>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-5"></i>
+                </button>
+                <button class="task-row" type="button" data-open-route="escrow">
+                  <span class="action-icon"><i data-lucide="shield-check" class="size-5"></i></span>
+                  <span>
+                    <strong>Release Escrow</strong>
+                    <small>Buyer and seller deposits confirmed</small>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-5"></i>
+                </button>
+                <button class="task-row" type="button" data-open-route="payment">
+                  <span class="action-icon"><i data-lucide="send" class="size-5"></i></span>
+                  <span>
+                    <strong>Send Payment</strong>
+                    <small>450 STRK to Bob from Escrow Active channel</small>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-5"></i>
+                </button>
+                <button class="task-row" type="button" data-open-route="escrow">
+                  <span class="action-icon"><i data-lucide="check" class="size-5"></i></span>
+                  <span>
+                    <strong>Confirm Deposit</strong>
+                    <small>Northline Goods waiting for deposit confirmation</small>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-5"></i>
+                </button>
+                <button class="task-row" type="button" data-open-route="payment">
+                  <span class="action-icon"><i data-lucide="file-text" class="size-5"></i></span>
+                  <span>
+                    <strong>Sign Memo</strong>
+                    <small>Design Milestone needs payment memo signature</small>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-5"></i>
+                </button>
+                <button class="task-row" type="button" data-open-route="proof">
+                  <span class="action-icon"><i data-lucide="file-check-2" class="size-5"></i></span>
+                  <span>
+                    <strong>Export Proof</strong>
+                    <small>Settlement proof is ready for archive</small>
+                  </span>
+                  <i data-lucide="chevron-right" class="size-5"></i>
+                </button>
+              </div>
             </section>
 
-            <section class="focus-list" aria-labelledby="offer-heading">
-              <h2 id="offer-heading">Pending offers</h2>
-              <button class="task-row" type="button" data-open-route="deal">
-                <span>
-                  <strong>Review counter offer</strong>
-                  <small>450 STRK awaiting final action</small>
-                </span>
-                <i data-lucide="chevron-right" class="size-5"></i>
-              </button>
-            </section>
+            <section class="activity-section" aria-labelledby="recent-activity-heading">
+              <div class="activity-section-header">
+                <div>
+                  <p class="eyebrow">Recent Activity</p>
+                  <h2 id="recent-activity-heading">Channel history</h2>
+                </div>
+              </div>
 
-            <section class="focus-list" aria-labelledby="escrow-heading">
-              <h2 id="escrow-heading">Pending escrows</h2>
-              <button class="task-row" type="button" data-open-route="escrow">
-                <span>
-                  <strong>Release escrow</strong>
-                  <small>Buyer and seller deposits confirmed</small>
-                </span>
-                <i data-lucide="shield-check" class="size-5 text-emerald-700"></i>
-              </button>
-            </section>
+              <div class="activity-history">
+                <section class="history-day" aria-labelledby="history-today">
+                  <h3 id="history-today">Today</h3>
+                  <ol>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Counter Offer Accepted</span><strong>Rights Transfer</strong></li>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Escrow Funded</span><strong>Northline Goods</strong></li>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Payment Sent</span><strong>Design Milestone</strong></li>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Memo Attached</span><strong>Rights Transfer</strong></li>
+                  </ol>
+                </section>
 
-            <section class="focus-list" aria-labelledby="payment-heading">
-              <h2 id="payment-heading">Pending payments</h2>
-              <button class="task-row" type="button" data-open-route="payment">
-                <span>
-                  <strong>Send settlement payment</strong>
-                  <small>450 STRK to Bob</small>
-                </span>
-                <i data-lucide="send" class="size-5"></i>
-              </button>
-            </section>
+                <section class="history-day" aria-labelledby="history-yesterday">
+                  <h3 id="history-yesterday">Yesterday</h3>
+                  <ol>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Channel Created</span><strong>Greylock Ops</strong></li>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Proof Generated</span><strong>Rights Transfer</strong></li>
+                  </ol>
+                </section>
 
-            <section class="focus-list" aria-labelledby="proof-heading">
-              <h2 id="proof-heading">Waiting proof</h2>
-              <button class="task-row" type="button" data-open-route="proof">
-                <span>
-                  <strong>Export proof</strong>
-                  <small>Settlement complete, proof generated</small>
-                </span>
-                <i data-lucide="file-check-2" class="size-5"></i>
-              </button>
+                <section class="history-day" aria-labelledby="history-mon">
+                  <h3 id="history-mon">Mon</h3>
+                  <ol>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Settlement Completed</span><strong>Product Supply</strong></li>
+                  </ol>
+                </section>
+              </div>
             </section>
           </div>
         </section>

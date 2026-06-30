@@ -583,9 +583,45 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 950;
 }
 
+.activity-dashboard {
+  display: grid;
+  gap: 1.4rem;
+  padding: 1rem 1rem calc(5.8rem + env(safe-area-inset-bottom));
+}
+
+.activity-section {
+  display: grid;
+  gap: .8rem;
+}
+
+.activity-section + .activity-section {
+  border-top: 1px solid rgb(226 232 240);
+  padding-top: 1.15rem;
+}
+
+.activity-section-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.activity-section-header h2 {
+  margin-top: .15rem;
+  color: rgb(15 23 42);
+  font-size: 1.1rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.activity-actions {
+  display: grid;
+  gap: .65rem;
+}
+
 .task-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   width: 100%;
   align-items: center;
   gap: .8rem;
@@ -600,6 +636,21 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   border-color: rgb(203 213 225);
 }
 
+.action-icon {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: .65rem;
+  background: rgb(241 245 249);
+  color: rgb(15 23 42);
+}
+
+.task-row.primary .action-icon {
+  background: rgb(15 23 42);
+  color: white;
+}
+
 .task-row strong,
 .task-row small {
   display: block;
@@ -610,6 +661,78 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(100 116 139);
   font-size: .86rem;
   font-weight: 650;
+}
+
+.activity-history {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+}
+
+.history-day {
+  display: grid;
+  gap: 0;
+}
+
+.history-day + .history-day {
+  border-top: 1px solid rgb(241 245 249);
+}
+
+.history-day h3 {
+  background: rgb(248 250 252);
+  padding: .65rem .9rem;
+  color: rgb(71 85 105);
+  font-size: .76rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.history-day ol {
+  display: grid;
+}
+
+.history-day li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 3.25rem;
+  align-items: center;
+  gap: .65rem;
+  border-top: 1px solid rgb(241 245 249);
+  padding: .75rem .9rem;
+}
+
+.history-check {
+  display: grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+  color: rgb(22 101 52);
+}
+
+.history-day li > span:not(.history-check) {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-day li strong {
+  max-width: 8rem;
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(100 116 139);
+  font-size: .78rem;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plain-panel,
