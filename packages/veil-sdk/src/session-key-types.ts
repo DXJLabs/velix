@@ -1,11 +1,8 @@
 export const VEIL_SESSION_PERMISSIONS = [
   "MESSAGE_SEND",
   "OFFER_CREATE",
-  "OFFER_ACCEPT",
   "MEMO_SEND",
-  "ESCROW_CREATE",
-  "ESCROW_UPDATE",
-  "TIMELINE_APPEND",
+  "NEGOTIATION_METADATA",
 ] as const;
 
 export type VeilSessionPermission = (typeof VEIL_SESSION_PERMISSIONS)[number];
@@ -107,6 +104,8 @@ export interface VeilSessionPermissionCheck {
 
 export interface VeilSessionManagerLike {
   getActiveSession(): Promise<VeilSessionRecord | null>;
+  createSession?(input: CreateVeilSessionInput): Promise<VeilSessionRecord>;
+  revokeSession?(sessionId?: string): Promise<void>;
   requirePermission(
     permission: VeilSessionPermission,
     input?: VeilSessionPermissionCheck,

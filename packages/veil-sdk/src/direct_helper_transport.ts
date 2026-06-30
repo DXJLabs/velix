@@ -8,6 +8,7 @@ import {
   type StarknetAccountLike,
   type StarknetContractCall,
   type StarknetProviderLike,
+  type StarknetTransactionReceiptLike,
   type TimelineItem,
   type VeilTransport,
 } from "./types";
@@ -70,6 +71,20 @@ function extractTransactionHash(result: Awaited<ReturnType<StarknetAccountLike["
   return result.transaction_hash ?? result.transactionHash;
 }
 
+function extractBlockNumber(receipt: StarknetTransactionReceiptLike): number | undefined {
+  return receipt.block_number ?? receipt.blockNumber;
+}
+
+function isAcceptedReceipt(receipt: StarknetTransactionReceiptLike): boolean {
+  const status = receipt.status ?? receipt.finality_status;
+  const executionStatus = receipt.execution_status;
+  if (executionStatus === "REVERTED" || status === "REJECTED" || status === "REVERTED") {
+    return false;
+  }
+
+  return status === "ACCEPTED_ON_L2" || status === "ACCEPTED_ON_L1" || extractBlockNumber(receipt) !== undefined;
+}
+
 function timestampFromChain(value: FeltLike): number {
   const timestamp = feltToNumber(value, "created_at");
   return timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000;
@@ -101,6 +116,7 @@ export function channelIdToFelt(channelId: string): string {
 }
 
 export class DirectHelperTransport implements VeilTransport {
+  readonly supportedModes = ["unshield"] as const;
   readonly #helperAddress: string;
   readonly #entrypoint: string;
   readonly #account: StarknetAccountLike | undefined;
@@ -109,6 +125,9 @@ export class DirectHelperTransport implements VeilTransport {
   readonly #sessionAccountResolver: DirectHelperTransportConfig["sessionAccountResolver"];
   readonly #now: () => number;
   readonly #channelIdEncoder: (channelId: string) => string;
+  readonly #waitForConfirmation: boolean;
+  readonly #confirmationTimeoutMs: number;
+  readonly #confirmationPollMs: number;
 
   constructor(config: DirectHelperTransportConfig) {
     this.#helperAddress = config.helperAddress;
@@ -119,6 +138,9 @@ export class DirectHelperTransport implements VeilTransport {
     this.#sessionAccountResolver = config.sessionAccountResolver;
     this.#now = config.now ?? (() => Date.now());
     this.#channelIdEncoder = config.channelIdEncoder ?? channelIdToFelt;
+    this.#waitForConfirmation = config.waitForConfirmation ?? true;
+    this.#confirmationTimeoutMs = config.confirmationTimeoutMs ?? 120_000;
+    this.#confirmationPollMs = config.confirmationPollMs ?? 2_500;
   }
 
   async createChannel(input: CreateChannelInput = {}): Promise<CreateChannelResult> {
@@ -134,14 +156,23 @@ export class DirectHelperTransport implements VeilTransport {
   }
 
   async invokeExternal(input: InvokeExternalInput): Promise<TimelineItem> {
+    if (input.mode !== "unshield") {
+      throw new Error("DirectHelperTransport only supports unshield messages. Use a Privacy Pool transport for shield mode.");
+    }
+
     const account = this.#sessionAccountResolver?.(input.session) ?? this.#account;
     if (!account) {
       throw new Error("DirectHelperTransport needs a Starknet account to submit helper transactions.");
     }
+    if (this.#waitForConfirmation && !this.#provider) {
+      throw new Error("DirectHelperTransport confirmation mode needs a Starknet provider.");
+    }
 
     const channelFelt = this.#channelIdEncoder(input.item.channelId);
     const eventCount = this.#provider
-      ? await this.getEventCount(input.item.channelId).catch(() => undefined)
+      ? this.#waitForConfirmation
+        ? await this.getEventCount(input.item.channelId)
+        : await this.getEventCount(input.item.channelId).catch(() => undefined)
       : undefined;
     const calldata = [
       channelFelt,
@@ -160,13 +191,35 @@ export class DirectHelperTransport implements VeilTransport {
       createSpanHelperCall(input.helperAddress || this.#helperAddress, this.#entrypoint, calldata),
     ]);
     const transactionHash = extractTransactionHash(result);
+    if (!transactionHash) {
+      throw new Error("DirectHelperTransport submission did not return a transaction hash.");
+    }
     const item: TimelineItem = {
       ...input.item,
       eventId: eventCount === undefined ? input.item.eventId : String(eventCount + 1),
+      status: "pending",
       optimistic: true,
     };
-    if (transactionHash) {
-      item.transactionHash = transactionHash;
+    item.transactionHash = transactionHash;
+    if (this.#waitForConfirmation) {
+      const receipt = await this.#waitForReceipt(transactionHash);
+      const blockNumber = extractBlockNumber(receipt);
+      if (eventCount === undefined) {
+        throw new Error("DirectHelperTransport could not determine the helper event index for confirmation.");
+      }
+      const confirmedItem = await this.getEvent(input.item.channelId, eventCount);
+      const resolvedBlockNumber = blockNumber ?? confirmedItem.blockNumber;
+      const returnedItem: TimelineItem = {
+        ...confirmedItem,
+        transactionHash,
+        mode: input.mode,
+        status: "confirmed",
+        optimistic: false,
+      };
+      if (resolvedBlockNumber !== undefined) {
+        returnedItem.blockNumber = resolvedBlockNumber;
+      }
+      return returnedItem;
     }
 
     return item;
@@ -208,6 +261,8 @@ export class DirectHelperTransport implements VeilTransport {
       payloadHash: toFeltString(result[4] as FeltLike, "payload_hash"),
       ...payloadChunkFields,
       timestamp: timestampFromChain(result[hasPayloadChunkCount ? 6 : 5] as FeltLike),
+      mode: "unshield",
+      status: "confirmed",
       optimistic: false,
     };
   }
@@ -241,5 +296,44 @@ export class DirectHelperTransport implements VeilTransport {
       throw new Error("get_payload_chunk returned no data.");
     }
     return toFeltString(chunk, "payload_chunk");
+  }
+
+  async #waitForReceipt(transactionHash: string): Promise<StarknetTransactionReceiptLike> {
+    if (!this.#provider) {
+      throw new Error("DirectHelperTransport needs a Starknet provider to confirm transactions.");
+    }
+
+    if (this.#provider.waitForTransaction) {
+      const receipt = await this.#provider.waitForTransaction(transactionHash);
+      if (!isAcceptedReceipt(receipt)) {
+        throw new Error(`Starknet transaction was not accepted: ${transactionHash}`);
+      }
+      return receipt;
+    }
+
+    if (!this.#provider.getTransactionReceipt) {
+      throw new Error("Starknet provider cannot wait for transaction confirmation.");
+    }
+
+    const deadline = Date.now() + this.#confirmationTimeoutMs;
+    let lastError: unknown;
+    while (Date.now() < deadline) {
+      try {
+        const receipt = await this.#provider.getTransactionReceipt(transactionHash);
+        if (isAcceptedReceipt(receipt)) {
+          return receipt;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, this.#confirmationPollMs));
+    }
+
+    throw new Error(
+      `Timed out waiting for Starknet transaction confirmation: ${transactionHash}${
+        lastError instanceof Error ? ` (${lastError.message})` : ""
+      }`,
+    );
   }
 }

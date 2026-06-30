@@ -1,4 +1,15 @@
 import type { VeilSession, VeilSessionManagerLike } from "./session-key-types";
+import type {
+  BuildPrivacyPoolChannelActionsInput,
+  BuildPrivacyPoolMessageActionsInput,
+  PrivacyPoolClientAction,
+  PrivacyPoolClientActionBatchAnalysis,
+} from "./privacy_pool_actions";
+import type {
+  PrivacyPoolFeeMode,
+  PrivacyPoolTotalCostEstimate,
+  StarknetFeeEstimatorLike,
+} from "./privacy_pool_fees";
 
 export enum VeilEventType {
   CHAT = 1,
@@ -16,6 +27,16 @@ export enum VeilEventType {
 
 export type VeilEventGroup = "messages" | "events";
 export type VeilActor = "buyer" | "seller" | "you" | "assistant" | "system";
+export type VeilMessageMode = "shield" | "unshield";
+export type VeilMessageStatus = "encrypting" | "signing" | "pending" | "confirmed" | "failed";
+
+export interface VeilChannelParticipant {
+  participantId: string;
+  walletAddress?: string;
+  privacyPoolPublicKey?: string;
+  /** @deprecated Browser ECDH keys are not Privacy Pool-compatible. */
+  ecdhPublicKey?: JsonWebKey;
+}
 
 export interface TimelineItem {
   eventId: string;
@@ -23,11 +44,15 @@ export interface TimelineItem {
   eventType: number;
   encryptedPayload: string;
   payloadHash: string;
+  nonce?: string;
+  mode?: VeilMessageMode;
+  status?: VeilMessageStatus;
   payloadChunkCount?: number;
   payloadChunks?: string[];
   timestamp: number;
   payload?: VeilTimelinePayload;
   transactionHash?: string;
+  blockNumber?: number;
   optimistic?: boolean;
 }
 
@@ -84,6 +109,7 @@ export interface ProofPayload extends BasePayload {
 export interface EncryptedPayload {
   encryptedPayload: string;
   payloadHash: string;
+  nonce?: string;
   payloadChunks?: string[];
 }
 
@@ -105,6 +131,13 @@ export interface VeilClientConfig {
   transport?: VeilTransport;
   sessionManager?: VeilSessionManagerLike;
   requireSession?: boolean;
+  allowMock?: boolean;
+  provider?: StarknetProviderLike;
+  feeMode?: PrivacyPoolFeeMode;
+  feeTokenAddress?: FeltLike;
+  privateFeeBalance?: FeltLike;
+  feeEstimator?: StarknetFeeEstimatorLike;
+  gasEstimate?: FeltLike;
   now?: () => number;
 }
 
@@ -113,10 +146,13 @@ export interface InvokeExternalInput {
   helperAddress: string;
   calldata: readonly string[];
   item: TimelineItem;
+  mode: VeilMessageMode;
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
   session?: VeilSession;
 }
 
 export interface VeilTransport {
+  supportedModes?: readonly VeilMessageMode[];
   createChannel?(input: CreateChannelInput): Promise<CreateChannelResult>;
   invokeExternal(input: InvokeExternalInput): Promise<TimelineItem>;
   getEventCount(channelId: string): Promise<number>;
@@ -148,6 +184,16 @@ export interface StarknetCallResult {
 
 export interface StarknetProviderLike {
   callContract(call: StarknetContractCall): Promise<readonly FeltLike[] | StarknetCallResult>;
+  getTransactionReceipt?(transactionHash: string): Promise<StarknetTransactionReceiptLike>;
+  waitForTransaction?(transactionHash: string, options?: Record<string, unknown>): Promise<StarknetTransactionReceiptLike>;
+}
+
+export interface StarknetTransactionReceiptLike {
+  block_number?: number;
+  blockNumber?: number;
+  status?: string;
+  finality_status?: string;
+  execution_status?: string;
 }
 
 export interface DirectHelperTransportConfig {
@@ -159,15 +205,159 @@ export interface DirectHelperTransportConfig {
   sessionAccountResolver?: (session: VeilSession | undefined) => StarknetAccountLike | undefined;
   now?: () => number;
   channelIdEncoder?: (channelId: string) => string;
+  waitForConfirmation?: boolean;
+  confirmationTimeoutMs?: number;
+  confirmationPollMs?: number;
 }
+
+export interface AvnuPaymasterLike {
+  executeTransaction(transaction: unknown): Promise<StarknetExecuteResult | string>;
+}
+
+export interface StarknetPrivacyMessageActionInput {
+  privacyPoolAddress: string;
+  helperAddress: string;
+  helperCall: StarknetContractCall;
+  helperCalldata: readonly string[];
+  clientActions: readonly PrivacyPoolClientAction[];
+  encodedClientActions: readonly string[];
+  actionBatch: PrivacyPoolClientActionBatchAnalysis;
+  feeMode: PrivacyPoolFeeMode;
+  feeTokenAddress: string;
+  feeEstimate: PrivacyPoolTotalCostEstimate;
+  item: TimelineItem;
+  session?: VeilSession;
+}
+
+export interface StarknetPrivacyChannelActionInput {
+  privacyPoolAddress: string;
+  channelId: string;
+  title?: string;
+  participants?: readonly VeilChannelParticipant[];
+  clientActions: readonly PrivacyPoolClientAction[];
+  encodedClientActions: readonly string[];
+  actionBatch: PrivacyPoolClientActionBatchAnalysis;
+  feeMode: PrivacyPoolFeeMode;
+  feeTokenAddress: string;
+  feeEstimate: PrivacyPoolTotalCostEstimate;
+}
+
+export interface StarknetPrivacyMessageAction {
+  transaction?: unknown;
+  execute?: () => Promise<StarknetExecuteResult | string>;
+}
+
+export type StarknetPrivacySdkActionKind = "message" | "channel" | "subchannel";
+
+export interface StarknetPrivacySdkExecutionInput {
+  kind: StarknetPrivacySdkActionKind;
+  privacyPoolAddress: string;
+  helperAddress?: string;
+  helperCall?: StarknetContractCall;
+  helperCalldata?: readonly string[];
+  channelId?: string;
+  title?: string;
+  participants?: readonly VeilChannelParticipant[];
+  clientActions: readonly PrivacyPoolClientAction[];
+  encodedClientActions: readonly string[];
+  actionBatch: PrivacyPoolClientActionBatchAnalysis;
+  feeMode: PrivacyPoolFeeMode;
+  feeTokenAddress: string;
+  feeEstimate: PrivacyPoolTotalCostEstimate;
+  item?: TimelineItem;
+  session?: VeilSession;
+}
+
+export interface StarknetPrivacyCompiledActions {
+  serverActions?: unknown;
+  serverActionsCalldata?: readonly FeltLike[];
+  raw?: unknown;
+}
+
+export interface StarknetPrivacyProofResult {
+  proof?: unknown;
+  proofFacts?: readonly FeltLike[];
+  raw?: unknown;
+}
+
+export interface StarknetPrivacyApplyActionsTransactionInput extends StarknetPrivacySdkExecutionInput {
+  compiledActions: StarknetPrivacyCompiledActions;
+  proof: StarknetPrivacyProofResult;
+  applyActionsCall?: StarknetContractCall;
+}
+
+export interface StarknetPrivacySdkLike {
+  compileActions(input: StarknetPrivacySdkExecutionInput): Promise<StarknetPrivacyCompiledActions>;
+  generateProof?(input: StarknetPrivacySdkExecutionInput & {
+    compiledActions: StarknetPrivacyCompiledActions;
+  }): Promise<StarknetPrivacyProofResult>;
+  prove?(input: StarknetPrivacySdkExecutionInput & {
+    compiledActions: StarknetPrivacyCompiledActions;
+  }): Promise<StarknetPrivacyProofResult>;
+  buildApplyActionsTransaction?(
+    input: StarknetPrivacyApplyActionsTransactionInput,
+  ): Promise<StarknetPrivacyMessageAction | unknown>;
+  invokeAndApplyAction?(
+    input: StarknetPrivacyApplyActionsTransactionInput,
+  ): Promise<StarknetExecuteResult | string>;
+  applyAction?(
+    input: StarknetPrivacyApplyActionsTransactionInput,
+  ): Promise<StarknetExecuteResult | string>;
+}
+
+export interface StarknetPrivacyActionBuilderLike {
+  buildVeilMessageAction(input: StarknetPrivacyMessageActionInput): Promise<StarknetPrivacyMessageAction>;
+  buildVeilChannelAction?(input: StarknetPrivacyChannelActionInput): Promise<StarknetPrivacyMessageAction>;
+}
+
+export interface StarknetPrivacyPoolTransportConfig {
+  privacyPoolAddress: string;
+  helperAddress: string;
+  privacySdk?: StarknetPrivacySdkLike;
+  actionBuilder?: StarknetPrivacyActionBuilderLike;
+  paymaster?: AvnuPaymasterLike;
+  provider?: StarknetProviderLike;
+  readTransport: VeilTransport;
+  feeMode?: PrivacyPoolFeeMode;
+  feeTokenAddress?: FeltLike;
+  privateFeeBalance?: FeltLike;
+  feeEstimator?: StarknetFeeEstimatorLike;
+  gasEstimate?: FeltLike;
+  now?: () => number;
+  channelIdEncoder?: (channelId: string) => string;
+  waitForConfirmation?: boolean;
+  confirmationTimeoutMs?: number;
+  confirmationPollMs?: number;
+}
+
+/** @deprecated Use AvnuPaymasterLike. */
+export type AvnuPrivacyPaymasterLike = AvnuPaymasterLike;
+
+/** @deprecated Use StarknetPrivacyMessageActionInput. */
+export type AvnuPrivacyMessageActionInput = StarknetPrivacyMessageActionInput;
+
+/** @deprecated Use StarknetPrivacyMessageAction. */
+export type AvnuPrivacyMessageAction = StarknetPrivacyMessageAction;
+
+/** @deprecated Use StarknetPrivacyChannelActionInput. */
+export type AvnuPrivacyChannelActionInput = StarknetPrivacyChannelActionInput;
+
+/** @deprecated Use StarknetPrivacyActionBuilderLike. */
+export type AvnuPrivacyActionBuilderLike = StarknetPrivacyActionBuilderLike;
+
+/** @deprecated Use StarknetPrivacyPoolTransportConfig. */
+export type AvnuPrivacyPoolTransportConfig = StarknetPrivacyPoolTransportConfig;
 
 export type PrivacyPoolAdapterMode = "mock" | "research" | "real";
 
 export interface PrivacyPoolAdapterActionResult {
   adapterMode: PrivacyPoolAdapterMode;
-  action: "OpenChannel" | "OpenSubchannel" | "CreateEncNote" | "InvokeExternal";
+  action: "SetViewingKey" | "OpenChannel" | "OpenSubchannel" | "CreateEncNote" | "InvokeExternal";
   calldata: readonly string[];
   notes: readonly string[];
+  clientActions?: readonly PrivacyPoolClientAction[];
+  encodedClientActions?: readonly string[];
+  hasReplayProtection?: boolean;
 }
 
 export interface PrivacyPoolOpenChannelInput {
@@ -211,26 +401,51 @@ export interface PrivacyPoolAdapter {
 export interface CreateChannelInput {
   channelId?: string;
   title?: string;
+  participants?: readonly VeilChannelParticipant[];
+  privacyPool?: BuildPrivacyPoolChannelActionsInput;
 }
 
 export interface CreateChannelResult {
   channelId: string;
   title?: string;
   createdAt: number;
+  participants?: readonly VeilChannelParticipant[];
+  transactionHash?: string;
+  status?: VeilMessageStatus;
+  optimistic?: boolean;
+  privacyPoolClientActions?: readonly PrivacyPoolClientAction[];
+  encodedPrivacyPoolClientActions?: readonly string[];
+}
+
+export interface OpenSubchannelInput extends PrivacyPoolOpenSubchannelInput {
+  channelId?: string;
+}
+
+export interface OpenSubchannelResult {
+  channelId: string;
+  openedAt: number;
+  transactionHash?: string;
+  status?: VeilMessageStatus;
+  optimistic?: boolean;
+  privacyPoolClientActions?: readonly PrivacyPoolClientAction[];
+  encodedPrivacyPoolClientActions?: readonly string[];
 }
 
 export interface SendMessageInput {
   channelId: string;
   message: string;
   sender?: VeilActor | string;
+  mode?: VeilMessageMode;
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
 export interface SendPaymentMemoInput {
   channelId: string;
   memo: string;
   amount?: string;
-  mode?: "Shield" | "Unshield" | string;
+  mode?: VeilMessageMode;
   sender?: VeilActor | string;
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
 export interface OfferInput {
@@ -239,6 +454,8 @@ export interface OfferInput {
   currency?: string;
   terms?: string;
   sender?: VeilActor | string;
+  mode?: VeilMessageMode;
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
 export interface OfferDecisionInput {
@@ -246,6 +463,8 @@ export interface OfferDecisionInput {
   offerId?: string;
   reason?: string;
   sender?: VeilActor | string;
+  mode?: VeilMessageMode;
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
 export interface EscrowStatusInput {
@@ -260,6 +479,8 @@ export interface AttachProofInput {
   proofRef: string;
   label?: string;
   sender?: VeilActor | string;
+  mode?: VeilMessageMode;
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
 export interface TimelineQuery {

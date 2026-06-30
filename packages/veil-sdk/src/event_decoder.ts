@@ -24,6 +24,8 @@ export interface RawStarknetEvent {
   from_address?: Felt;
   keys?: Felt[];
   data?: Felt[];
+  transaction_hash?: Felt;
+  block_number?: number;
 }
 
 export interface DecodedEventField {
@@ -91,7 +93,7 @@ export function decodeInvokeExternalEvent(
   const keys = event.keys ?? [];
   const data = event.data ?? [];
   const fromHelper = options.helperAddress ? sameFelt(event.from_address, options.helperAddress) : false;
-  if ((fromHelper || keys.length >= 4) && keys.length >= 4 && data.length >= 2) {
+  if ((fromHelper || keys.length >= 4) && keys.length >= 4 && data.length >= 4) {
     const eventType = feltToDecimal(keys[2] ?? "");
     const eventTypeName = eventType ? TIMELINE_EVENT_TYPE_NAMES[eventType] : undefined;
     const fields: DecodedEventField[] = [
@@ -99,14 +101,35 @@ export function decodeInvokeExternalEvent(
       { name: "channel_id", value: keys[1] ?? "", source: "key", type: "felt252" },
       { name: "event_type", value: keys[2] ?? "", source: "key", type: eventTypeName ?? "felt252" },
       { name: "event_id", value: keys[3] ?? "", source: "key", type: "felt252" },
-      { name: "payload_hash", value: data[0] ?? "", source: "data", type: "felt252" },
-      { name: "created_at", value: data[1] ?? "", source: "data", type: "u64" },
+      { name: "encrypted_payload", value: data[0] ?? "", source: "data", type: "felt252" },
+      { name: "payload_hash", value: data[1] ?? "", source: "data", type: "felt252" },
+      { name: "payload_chunk_count", value: data[2] ?? "", source: "data", type: "u64" },
+      { name: "created_at", value: data[3] ?? "", source: "data", type: "u64" },
     ];
 
     const decoded: DecodedPrivacyPoolEvent = {
       name: "TimelineEventStored",
       category: "timeline",
       fields,
+      raw: event,
+      confidence: fromHelper ? "helper-shape" : "heuristic",
+    };
+    if (event.from_address) decoded.contractAddress = event.from_address;
+    if (keys[0]) decoded.selector = keys[0];
+    return decoded;
+  }
+
+  if ((fromHelper || keys.length >= 4) && keys.length >= 4 && data.length === 1) {
+    const decoded: DecodedPrivacyPoolEvent = {
+      name: "TimelinePayloadChunkStored",
+      category: "timeline",
+      fields: [
+        { name: "event_selector", value: keys[0] ?? "", source: "selector" },
+        { name: "channel_id", value: keys[1] ?? "", source: "key", type: "felt252" },
+        { name: "event_id", value: keys[2] ?? "", source: "key", type: "felt252" },
+        { name: "chunk_index", value: keys[3] ?? "", source: "key", type: "u64" },
+        { name: "chunk", value: data[0] ?? "", source: "data", type: "felt252" },
+      ],
       raw: event,
       confidence: fromHelper ? "helper-shape" : "heuristic",
     };
