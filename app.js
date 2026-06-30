@@ -28,7 +28,27 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
+const homeResourceLinks = {
+  docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
+  github: import.meta.env.VITE_VEIL_GITHUB_URL || "https://github.com/DXJLabs/velix",
+  x: import.meta.env.VITE_VEIL_X_URL || import.meta.env.VITE_VEIL_TWITTER_URL || "#",
+  community: import.meta.env.VITE_VEIL_DISCORD_URL || import.meta.env.VITE_VEIL_TELEGRAM_URL || "#",
+  changelog: import.meta.env.VITE_VEIL_CHANGELOG_URL || "#",
+  issues: import.meta.env.VITE_VEIL_ISSUES_URL || "https://github.com/DXJLabs/velix/issues",
+  privacy: import.meta.env.VITE_VEIL_PRIVACY_URL || "#",
+  terms: import.meta.env.VITE_VEIL_TERMS_URL || "#",
+  license: import.meta.env.VITE_VEIL_LICENSE_URL || "#",
+};
 const walletAssetConfig = [
+  {
+    id: "strk",
+    symbol: "STRK",
+    name: "Starknet Token",
+    detail: "Network fees and settlement",
+    contractAddress: import.meta.env.VITE_VEIL_STRK_TOKEN_ADDRESS || import.meta.env.VITE_STRK_TOKEN_ADDRESS || "",
+    decimals: readAssetDecimals(import.meta.env.VITE_VEIL_STRK_DECIMALS || import.meta.env.VITE_STRK_DECIMALS, 18),
+    defaultDisplay: "0.0000",
+  },
   {
     id: "usdt",
     symbol: "USDT",
@@ -202,14 +222,13 @@ const state = {
   privyProvider: null,
   privyAccountDeployed: false,
   walletInitState: "idle",
-  walletInitMessage: "Connect Wallet",
+  walletInitMessage: "Connect Wallet / Deploy Account",
   walletInitError: "",
   walletInitStartedAt: 0,
   walletInitTraceId: "",
   walletAssetBalances: createDefaultWalletAssetBalances(),
   walletAssetSyncKey: "",
   walletAssetSyncStatus: "idle",
-  walletDepositAsset: "usdt",
   paymentSent: false,
   escrowReleased: false,
   proofExported: false,
@@ -626,7 +645,7 @@ function formatAssetBalance(rawAmount, asset) {
   const scale = 10n ** BigInt(decimals);
   const whole = rawAmount / scale;
   const fraction = rawAmount % scale;
-  const displayDecimals = asset.id === "strkbtc" ? Math.min(decimals, 8) : Math.min(decimals, 2);
+  const displayDecimals = asset.id === "strkbtc" ? Math.min(decimals, 8) : asset.id === "strk" ? Math.min(decimals, 4) : Math.min(decimals, 2);
   const fractionText = fraction
     .toString()
     .padStart(decimals, "0")
@@ -654,7 +673,7 @@ function walletInitLabel(status = state.walletInitState) {
     case "failed":
       return "Retry";
     default:
-      return privyAppId && !state.privyReady ? "Loading Privy" : "Connect Wallet";
+      return privyAppId && !state.privyReady ? "Loading Privy" : "Connect Wallet / Deploy Account";
   }
 }
 
@@ -748,7 +767,7 @@ function refreshConnectLabels() {
     ? "Connected"
     : privyAppId && !state.privyReady
       ? "Loading Privy"
-      : "Connect Wallet";
+      : "Connect Wallet / Deploy Account";
 
   document.querySelectorAll("[data-wallet-label]").forEach((node) => {
     node.textContent = label;
@@ -2056,38 +2075,51 @@ function walletFailureCategory() {
   return "Unable to connect";
 }
 
-function homeAccessLabel() {
-  if (isWalletInitializationPending()) return "Connecting";
-  if (state.walletInitState === "failed") return walletFailureCategory();
-  if (state.walletConnected) return "Wallet connected";
-  if (privyAppId && !state.privyReady) return "Loading";
-  return "Wallet not connected";
-}
-
-function homeNetworkStatusLabel() {
-  const access = homeAccessLabel();
-  if (access === "Wrong network" || access === "Network unavailable") return access;
-  return expectedNetworkStatus();
-}
-
-function homeExecutionLabel() {
+function homeHelperContractLabel() {
   if (timelineMode !== "direct-helper") return "Local demo";
   if (!helperAddress) return "Network unavailable";
-  return expectedChainId === "SN_SEPOLIA" ? "Helper Contract (Testnet)" : "Helper Contract";
+  if (state.walletInitState === "failed" && walletFailureCategory() === "Network unavailable") return "Network unavailable";
+  return "Verified";
+}
+
+function homePrivacyPoolLabel() {
+  if (privacyPoolAddress && privacyPoolAddress !== "mock-privacy-pool") return "Connected";
+  return timelineMode === "mock" ? "Demo" : "Connected";
 }
 
 function renderHomeStatus() {
   const homeNetwork = document.querySelector("#home-network");
-  const homeNetworkStatus = document.querySelector("#home-network-status");
-  const homePrivacy = document.querySelector("#home-privacy");
-  const homeExecution = document.querySelector("#home-execution");
-  const homeAccess = document.querySelector("#home-access");
+  const homePrivacyPool = document.querySelector("#home-privacy-pool");
+  const homeHelperContract = document.querySelector("#home-helper-contract");
+  const homeEnvironment = document.querySelector("#home-environment");
 
   if (homeNetwork) homeNetwork.textContent = expectedNetworkName();
-  if (homeNetworkStatus) homeNetworkStatus.textContent = homeNetworkStatusLabel();
-  if (homePrivacy) homePrivacy.textContent = "Built on Starknet Privacy Pool";
-  if (homeExecution) homeExecution.textContent = homeExecutionLabel();
-  if (homeAccess) homeAccess.textContent = homeAccessLabel();
+  if (homePrivacyPool) homePrivacyPool.textContent = homePrivacyPoolLabel();
+  if (homeHelperContract) homeHelperContract.textContent = homeHelperContractLabel();
+  if (homeEnvironment) homeEnvironment.textContent = expectedNetworkStatus();
+}
+
+function applyHomeResourceLinks() {
+  document.querySelectorAll("[data-home-link]").forEach((link) => {
+    const href = homeResourceLinks[link.dataset.homeLink] || "#";
+    link.setAttribute("href", href);
+    if (href === "#") {
+      link.setAttribute("aria-disabled", "true");
+      link.removeAttribute("target");
+      link.removeAttribute("rel");
+      return;
+    }
+    link.removeAttribute("aria-disabled");
+    link.setAttribute("target", "_blank");
+    link.setAttribute("rel", "noreferrer");
+  });
+}
+
+function closeHomeMenu() {
+  const panel = document.querySelector("[data-home-menu-panel]");
+  const toggle = document.querySelector("[data-home-menu-toggle]");
+  if (panel) panel.hidden = true;
+  if (toggle) toggle.setAttribute("aria-expanded", "false");
 }
 
 function renderWallet() {
@@ -2160,7 +2192,6 @@ function renderWallet() {
   if (walletConnectRow) walletConnectRow.hidden = connected;
   if (walletSettingsRow) walletSettingsRow.hidden = !connected;
   renderWalletAssets();
-  renderWalletDeposit();
   void refreshWalletAssets();
   document.querySelectorAll("[data-default-privacy]").forEach((button) => {
     button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
@@ -2193,71 +2224,6 @@ function renderWalletAssets() {
         : "Connect wallet";
     }
   });
-}
-
-function selectedWalletDepositAsset() {
-  return walletAssetConfig.find((asset) => asset.id === state.walletDepositAsset) || walletAssetConfig[0];
-}
-
-function renderWalletDeposit() {
-  const selectedAsset = selectedWalletDepositAsset();
-  const assetLabel = document.querySelector("#wallet-deposit-asset-label");
-  if (assetLabel) assetLabel.textContent = selectedAsset.symbol;
-  document.querySelectorAll("[data-wallet-deposit-asset]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.walletDepositAsset === selectedAsset.id);
-  });
-}
-
-function openWalletDeposit() {
-  if (!requireConnectedWallet()) return;
-  const depositForm = document.querySelector("[data-wallet-deposit-form]");
-  if (depositForm) depositForm.hidden = false;
-  renderWalletDeposit();
-}
-
-function validateDepositInput() {
-  const selectedAsset = selectedWalletDepositAsset();
-  const amountInput = document.querySelector("#wallet-deposit-amount");
-  const amount = amountInput?.value.trim() || "";
-  const normalized = amount.replace(",", ".");
-  const numericAmount = Number(normalized);
-  if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
-    showToast("Enter deposit amount.");
-    return null;
-  }
-  return { amount: normalized, asset: selectedAsset };
-}
-
-function reviewWalletDeposit() {
-  if (!requireConnectedWallet()) return;
-  const deposit = validateDepositInput();
-  if (!deposit) return;
-  showToast(`Review ${deposit.amount} ${deposit.asset.symbol} deposit.`);
-}
-
-async function submitWalletDeposit(event) {
-  event.preventDefault();
-  if (!requireConnectedWallet()) return;
-  const deposit = validateDepositInput();
-  if (!deposit) return;
-  await safeSubmit(
-    () => veilClient.recordEscrowStatus({
-      channelId: state.channelId,
-      status: "deposit_pending",
-      details: `${deposit.amount} ${deposit.asset.symbol} deposit initiated from wallet.`,
-      sender: "you",
-    }),
-    {
-      type: "inline",
-      title: `${deposit.asset.symbol} deposit initiated`,
-      subtitle: `${deposit.amount} ${deposit.asset.symbol}`,
-      time: Date.now(),
-    },
-    "Deposit initiated.",
-  );
-  const depositForm = document.querySelector("[data-wallet-deposit-form]");
-  if (depositForm) depositForm.hidden = true;
-  showScreen("activity");
 }
 
 function renderSettings() {
@@ -2312,7 +2278,7 @@ function resetWalletConnection() {
   state.walletAssetBalances = createDefaultWalletAssetBalances();
   state.walletAssetSyncKey = "";
   state.walletAssetSyncStatus = "idle";
-  setWalletInitializationState("idle", { message: "Connect Wallet" });
+  setWalletInitializationState("idle", { message: "Connect Wallet / Deploy Account" });
 }
 
 function requireConnectedWallet() {
@@ -2580,6 +2546,25 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const homeMenuToggle = event.target.closest("[data-home-menu-toggle]");
+    if (homeMenuToggle) {
+      const panel = document.querySelector("[data-home-menu-panel]");
+      const expanded = homeMenuToggle.getAttribute("aria-expanded") === "true";
+      if (panel) panel.hidden = expanded;
+      homeMenuToggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+      return;
+    }
+
+    const homeLink = event.target.closest("[data-home-link]");
+    if (homeLink) {
+      if (homeLink.getAttribute("href") === "#") {
+        event.preventDefault();
+        showToast("Official link not configured.");
+      }
+      closeHomeMenu();
+      return;
+    }
+
     const topNav = event.target.closest("[data-top-nav]");
     if (topNav) {
       showScreen(topNav.dataset.topNav);
@@ -2660,20 +2645,8 @@ function bindEvents() {
       return;
     }
 
-    if (event.target.closest("[data-wallet-deposit-open]")) {
-      openWalletDeposit();
-      return;
-    }
-
-    const depositAsset = event.target.closest("[data-wallet-deposit-asset]");
-    if (depositAsset) {
-      state.walletDepositAsset = depositAsset.dataset.walletDepositAsset;
-      renderWalletDeposit();
-      return;
-    }
-
-    if (event.target.closest("[data-wallet-deposit-review]")) {
-      reviewWalletDeposit();
+    if (event.target.closest("[data-wallet-deposit-copy]")) {
+      copyWalletAddress();
       return;
     }
 
@@ -2780,11 +2753,11 @@ function bindEvents() {
     await sendPayment();
   });
 
-  document.querySelector("[data-wallet-deposit-form]")?.addEventListener("submit", submitWalletDeposit);
 }
 
 function init() {
   bindEvents();
+  applyHomeResourceLinks();
   mountPrivy().catch((error) => {
     veilError("auth.privy.sdk.load.failed", error, {
       where: "init",

@@ -21,28 +21,39 @@
               </div>
               <nav class="home-nav-links" aria-label="Product sections">
                 <a href="#home-features">Features</a>
-                <a href="#home-network-heading">Network</a>
-                <a href="#home-features">How it works</a>
-                <a href="#home-network-heading">SDK</a>
+                <a href="#home-protocol-heading">Protocol</a>
+                <a href="#home-resources-heading">Resources</a>
+                <a href="#home-community-heading">Community</a>
               </nav>
               <button class="home-nav-action" type="button" data-connect-wallet>
                 <i data-lucide="wallet-cards" class="size-4"></i>
                 <span data-wallet-label>Connect Wallet</span>
               </button>
-              <button class="home-menu-button" type="button" aria-label="Open menu">
+              <button class="home-menu-button" type="button" aria-label="Open menu" aria-expanded="false" data-home-menu-toggle>
                 <i data-lucide="menu" class="size-5"></i>
               </button>
+              <div class="home-menu-panel" data-home-menu-panel hidden>
+                <a href="#" data-home-link="docs">Documentation</a>
+                <a href="#" data-home-link="github">GitHub</a>
+                <a href="#" data-home-link="x">X (Twitter)</a>
+                <a href="#" data-home-link="community">Discord / Telegram</a>
+                <a href="#" data-home-link="changelog">Changelog</a>
+                <a href="#" data-home-link="issues">Report Issue</a>
+                <a href="#" data-home-link="privacy">Privacy Policy</a>
+                <a href="#" data-home-link="terms">Terms of Service</a>
+              </div>
             </header>
 
             <div class="unlock-layout">
               <div class="unlock-copy">
-                <p class="home-label">Private Deal Workspace</p>
-                <h1>Private deal channels. Secure settlement. On Starknet.</h1>
-                <p>ECDH encrypted messages, offers, escrow, payments, memos, proofs, and settlement in one on-chain channel.</p>
+                <p class="home-label">VEIL</p>
+                <h1>Private Deal Workspace</h1>
+                <p class="home-kicker">Private deal channels. Secure settlement. Built on Starknet.</p>
+                <p class="home-description">ECDH encrypted messages, offers, escrow, payments, memos, proofs, and settlement in one on-chain channel.</p>
                 <div class="unlock-actions">
                   <button class="primary-action" type="button" data-connect-wallet>
                     <i data-lucide="wallet-cards" class="size-5"></i>
-                    <span data-wallet-label>Connect Wallet</span>
+                    <span data-wallet-label>Connect Wallet / Deploy Account</span>
                   </button>
                 </div>
                 <p class="home-trust-line">
@@ -86,31 +97,61 @@
               </article>
             </div>
 
-            <aside class="home-network-panel" aria-labelledby="home-network-heading">
-              <h2 id="home-network-heading">Network</h2>
+            <aside class="home-network-panel" aria-labelledby="home-protocol-heading">
+              <h2 id="home-protocol-heading">Protocol</h2>
               <div class="home-network-list">
                 <div>
                   <span>Network</span>
                   <strong id="home-network">Starknet Sepolia</strong>
                 </div>
                 <div>
-                  <span>Status</span>
-                  <strong id="home-network-status">Testnet</strong>
+                  <span>Privacy Pool</span>
+                  <strong id="home-privacy-pool">Connected</strong>
                 </div>
                 <div>
-                  <span>Privacy</span>
-                  <strong id="home-privacy">Built on Starknet Privacy Pool</strong>
+                  <span>Helper Contract</span>
+                  <strong id="home-helper-contract">Verified</strong>
                 </div>
                 <div>
-                  <span>Execution</span>
-                  <strong id="home-execution">Helper Contract (Testnet)</strong>
-                </div>
-                <div>
-                  <span>Access</span>
-                  <strong id="home-access">Wallet not connected</strong>
+                  <span>Environment</span>
+                  <strong id="home-environment">Testnet</strong>
                 </div>
               </div>
             </aside>
+
+            <section class="home-resource-section" aria-labelledby="home-resources-heading">
+              <div class="home-section-heading">
+                <p class="home-label">Resources</p>
+                <h2 id="home-resources-heading">Official VEIL links</h2>
+              </div>
+              <div class="home-resource-grid">
+                <a href="#" data-home-link="docs"><i data-lucide="book-open" class="size-5"></i><span>Documentation</span></a>
+                <a href="#" data-home-link="github"><i data-lucide="github" class="size-5"></i><span>GitHub</span></a>
+                <a href="#" data-home-link="x"><i data-lucide="twitter" class="size-5"></i><span>X (Twitter)</span></a>
+                <a href="#" data-home-link="community"><i data-lucide="messages-square" class="size-5"></i><span>Telegram / Discord</span></a>
+              </div>
+            </section>
+
+            <section class="home-community-section" aria-labelledby="home-community-heading">
+              <div>
+                <p class="home-label">Community</p>
+                <h2 id="home-community-heading">Follow development</h2>
+              </div>
+              <div class="home-community-actions">
+                <a href="#" data-home-link="x">Latest updates</a>
+                <a href="#" data-home-link="issues">Report issues</a>
+                <a href="#" data-home-link="github">Contribute</a>
+              </div>
+            </section>
+
+            <footer class="home-footer">
+              <strong>VEIL</strong>
+              <span>Version v0.1.0</span>
+              <span>Built on Starknet Privacy Pool</span>
+              <a href="#" data-home-link="privacy">Privacy Policy</a>
+              <a href="#" data-home-link="terms">Terms</a>
+              <a href="#" data-home-link="license">License</a>
+            </footer>
           </div>
         </section>
 
@@ -315,6 +356,17 @@
 
             <section class="wallet-section wallet-assets" aria-labelledby="wallet-assets-heading">
               <h2 id="wallet-assets-heading">Assets</h2>
+              <div class="wallet-asset-row" data-wallet-asset="strk">
+                <span class="wallet-asset-icon navy">S</span>
+                <span class="wallet-asset-copy">
+                  <strong>STRK</strong>
+                  <small>Starknet Token</small>
+                </span>
+                <span class="wallet-asset-value">
+                  <strong id="wallet-asset-strk-balance">--</strong>
+                  <small id="wallet-asset-strk-detail">Connect wallet</small>
+                </span>
+              </div>
               <div class="wallet-asset-row" data-wallet-asset="usdt">
                 <span class="wallet-asset-icon">U</span>
                 <span class="wallet-asset-copy">
@@ -337,29 +389,11 @@
                   <small id="wallet-asset-strkbtc-detail">Connect wallet</small>
                 </span>
               </div>
-              <button class="wallet-action-row" type="button" data-wallet-deposit-open>
-                <span><i data-lucide="arrow-down-to-line" class="size-5"></i></span>
-                <strong>Deposit</strong>
+              <button class="wallet-action-row" type="button" data-wallet-deposit-copy>
+                <span><i data-lucide="copy" class="size-5"></i></span>
+                <strong>Copy Deposit Address</strong>
                 <i data-lucide="chevron-right" class="size-5"></i>
               </button>
-              <form class="wallet-deposit-card" data-wallet-deposit-form hidden>
-                <div class="wallet-deposit-head">
-                  <span>Deposit to VEIL</span>
-                  <strong id="wallet-deposit-asset-label">USDT</strong>
-                </div>
-                <div class="segmented compact wallet-deposit-assets" aria-label="Deposit asset">
-                  <button class="active" type="button" data-wallet-deposit-asset="usdt">USDT</button>
-                  <button type="button" data-wallet-deposit-asset="strkbtc">STRKBTC</button>
-                </div>
-                <label class="field wallet-deposit-field">
-                  <span>Amount</span>
-                  <input id="wallet-deposit-amount" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off" />
-                </label>
-                <div class="wallet-deposit-actions">
-                  <button class="secondary-action" type="button" data-wallet-deposit-review>Review Deposit</button>
-                  <button class="primary-action" type="submit">Deposit</button>
-                </div>
-              </form>
             </section>
 
             <section class="wallet-section" aria-labelledby="wallet-connection-heading">
