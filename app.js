@@ -1663,24 +1663,7 @@ async function connectWallet(options = {}) {
   let injectedWalletEntry = null;
   let injectedWallet = null;
   let privyAccountContext = null;
-  injectedWalletEntry = await waitForInjectedStarknetWallet(700);
-  injectedWallet = injectedWalletEntry?.wallet || null;
-  if (injectedWallet) {
-    tracePrivyStarkZap(traceId, "injected_wallet.detected", {
-      where: "connectWallet",
-      source: walletSourceLabel(injectedWallet),
-      providerKey: injectedWalletEntry?.key,
-      why: "A Starknet browser wallet was detected and will be connected before falling back to Privy embedded wallet.",
-    });
-    veilLog("info", "wallet.injected.detected", {
-      traceId,
-      where: "connectWallet",
-      source: walletSourceLabel(injectedWallet),
-      providerKey: injectedWalletEntry?.key,
-    });
-  }
-
-  if (privyAppId && !injectedWallet) {
+  if (privyAppId) {
     try {
       const bridge = await ensurePrivyAuthenticated(traceId);
       if (!bridge) {
@@ -1758,20 +1741,7 @@ async function connectWallet(options = {}) {
   }
 
   if (!wallet.account && typeof wallet.enable === "function") {
-    try {
-      await wallet.enable();
-    } catch (error) {
-      veilError("wallet.injected.enable.failed", error, {
-        traceId,
-        where: "connectWallet",
-        walletSource: walletSourceLabel(wallet),
-        howToFix: "Unlock the Starknet wallet extension, approve the dapp connection, and confirm it is set to the expected Starknet network.",
-      });
-      return failWalletInitialization(error, traceId, {
-        where: "connectWallet",
-        howToFix: "Unlock Argent X/Braavos, approve VEIL, and confirm the wallet network is Starknet Sepolia.",
-      });
-    }
+    await wallet.enable();
   }
 
   const account = wallet.account || wallet;
