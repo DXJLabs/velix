@@ -75,6 +75,7 @@ const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "d
 const now = Date.now();
 const minute = 60_000;
 const activeDealId = "20260625";
+const LOCAL_CHANNELS_KEY = "veil:local:channels:v1";
 
 const channels = [
   {
@@ -491,6 +492,94 @@ function currentChannel() {
 function channelMessages() {
   messages[state.channelId] ||= [];
   return messages[state.channelId];
+}
+
+function loadLocalChannels() {
+  try {
+    const payload = JSON.parse(window.localStorage.getItem(LOCAL_CHANNELS_KEY) || "[]");
+    if (!Array.isArray(payload)) return;
+    payload.forEach((entry) => {
+      if (!entry?.channel?.id || channels.some((channel) => channel.id === entry.channel.id)) return;
+      channels.unshift({ ...entry.channel, local: true });
+      messages[entry.channel.id] = Array.isArray(entry.messages) ? entry.messages : [];
+    });
+  } catch (error) {
+    veilError("channel.local.load.failed", error, {
+      where: "loadLocalChannels",
+      howToFix: "Clear local VEIL cache if local draft channels cannot be parsed.",
+    });
+  }
+}
+
+function saveLocalChannels() {
+  try {
+    const localChannels = channels
+      .filter((channel) => channel.local)
+      .map((channel) => ({
+        channel,
+        messages: messages[channel.id] || [],
+      }));
+    window.localStorage.setItem(LOCAL_CHANNELS_KEY, JSON.stringify(localChannels));
+  } catch (error) {
+    veilError("channel.local.save.failed", error, {
+      where: "saveLocalChannels",
+      howToFix: "Check browser storage availability before relying on local draft channels.",
+    });
+  }
+}
+
+function createLocalChannelModel() {
+  const channelNumber = channels.length + 1;
+  const channelId = `channel-${Date.now().toString(36)}`;
+  return {
+    id: channelId,
+    title: `Deal Channel #${channelNumber}`,
+    person: "Counterparty",
+    avatar: "C",
+    mode: "Private",
+    status: "Negotiating",
+    unread: 0,
+    time: "now",
+    last: "Channel created",
+    local: true,
+  };
+}
+
+async function createNewChannel() {
+  if (!state.walletConnected) {
+    const connected = await connectWallet({ goToInbox: false });
+    if (!connected) return;
+  }
+
+  const channel = createLocalChannelModel();
+  channels.unshift(channel);
+  messages[channel.id] = [
+    {
+      type: "event",
+      title: "Channel created",
+      subtitle: "Secure on-chain deal channel ready.",
+      time: Date.now(),
+    },
+  ];
+  if (conversationSearch) conversationSearch.value = "";
+  saveLocalChannels();
+  renderConversationList();
+  openChannel(channel.id);
+
+  try {
+    await veilClient.createChannel({
+      channelId: channel.id,
+      title: channel.title,
+    });
+    showToast("Channel created.");
+  } catch (error) {
+    veilError("channel.create.failed", error, {
+      where: "createNewChannel",
+      channelId: channel.id,
+      howToFix: "Confirm wallet connection and helper transport before creating a production on-chain channel.",
+    });
+    showToast("Channel created locally.");
+  }
 }
 
 function getWallet() {
@@ -2385,12 +2474,14 @@ function addLocalItem(item) {
     channel.last = item.title;
   }
   channel.time = "now";
+  saveLocalChannels();
   renderChannel();
   requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
 }
 
 function updateLocalItem(item, updates) {
   Object.assign(item, updates);
+  saveLocalChannels();
   renderChannel();
 }
 
@@ -2704,7 +2795,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-new-conversation]")) {
-      showToast("New channel ready.");
+      createNewChannel();
       return;
     }
 
@@ -2758,6 +2849,7 @@ function bindEvents() {
 function init() {
   bindEvents();
   applyHomeResourceLinks();
+  loadLocalChannels();
   mountPrivy().catch((error) => {
     veilError("auth.privy.sdk.load.failed", error, {
       where: "init",
