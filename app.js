@@ -28,6 +28,26 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
+const walletAssetConfig = [
+  {
+    id: "usdt",
+    symbol: "USDT",
+    name: "Tether USD",
+    detail: "Payments and escrow",
+    contractAddress: import.meta.env.VITE_VEIL_USDT_TOKEN_ADDRESS || import.meta.env.VITE_USDT_TOKEN_ADDRESS || "",
+    decimals: readAssetDecimals(import.meta.env.VITE_VEIL_USDT_DECIMALS || import.meta.env.VITE_USDT_DECIMALS, 6),
+    defaultDisplay: "0.00",
+  },
+  {
+    id: "strkbtc",
+    symbol: "STRKBTC",
+    name: "Starknet BTC",
+    detail: "Private settlement asset",
+    contractAddress: import.meta.env.VITE_VEIL_STRKBTC_TOKEN_ADDRESS || import.meta.env.VITE_STRKBTC_TOKEN_ADDRESS || "",
+    decimals: readAssetDecimals(import.meta.env.VITE_VEIL_STRKBTC_DECIMALS || import.meta.env.VITE_STRKBTC_DECIMALS, 8),
+    defaultDisplay: "0.00000000",
+  },
+];
 const avnuPaymasterEnabled = (import.meta.env.VITE_AVNU_PAYMASTER_ENABLED || "true").toLowerCase() !== "false";
 const WALLET_INIT_TIMEOUT_MS = 30_000;
 const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "deploying", "connecting_paymaster"]);
@@ -186,6 +206,10 @@ const state = {
   walletInitError: "",
   walletInitStartedAt: 0,
   walletInitTraceId: "",
+  walletAssetBalances: createDefaultWalletAssetBalances(),
+  walletAssetSyncKey: "",
+  walletAssetSyncStatus: "idle",
+  walletDepositAsset: "usdt",
   paymentSent: false,
   escrowReleased: false,
   proofExported: false,
@@ -568,6 +592,47 @@ function shortAddress(address) {
   if (!address) return "Not connected";
   if (address.length <= 14) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function readAssetDecimals(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function createDefaultWalletAssetBalances() {
+  return Object.fromEntries(
+    walletAssetConfig.map((asset) => [asset.id, { display: asset.defaultDisplay, status: "idle" }]),
+  );
+}
+
+function feltToBigInt(value) {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") return BigInt(value);
+  const text = String(value ?? "0");
+  return BigInt(text || "0");
+}
+
+function parseU256Balance(response) {
+  const result = Array.isArray(response) ? response : response?.result;
+  const low = feltToBigInt(result?.[0] ?? 0);
+  const high = feltToBigInt(result?.[1] ?? 0);
+  return low + (high << 128n);
+}
+
+function formatAssetBalance(rawAmount, asset) {
+  if (rawAmount === 0n) return asset.defaultDisplay;
+  const decimals = Math.max(asset.decimals, 0);
+  if (!decimals) return rawAmount.toString();
+  const scale = 10n ** BigInt(decimals);
+  const whole = rawAmount / scale;
+  const fraction = rawAmount % scale;
+  const displayDecimals = asset.id === "strkbtc" ? Math.min(decimals, 8) : Math.min(decimals, 2);
+  const fractionText = fraction
+    .toString()
+    .padStart(decimals, "0")
+    .slice(0, displayDecimals)
+    .replace(/0+$/, "");
+  return fractionText ? `${whole}.${fractionText}` : whole.toString();
 }
 
 function getPrivyBridge() {
@@ -959,6 +1024,87 @@ async function getStarknetReadProvider() {
   const { RpcProvider } = await loadStarknetSdk();
   starknetReadProvider = new RpcProvider({ nodeUrl: privyStarknetRpcUrl });
   return starknetReadProvider;
+}
+
+async function readWalletTokenBalance(provider, asset, walletAddress) {
+  const response = await provider.callContract({
+    contractAddress: asset.contractAddress,
+    entrypoint: "balance_of",
+    calldata: [walletAddress],
+  });
+  return parseU256Balance(response);
+}
+
+async function refreshWalletAssets(options = {}) {
+  const walletAddress = walletAddressValue();
+  const configuredAssets = walletAssetConfig.filter((asset) => asset.contractAddress);
+  if (!state.walletConnected || !walletAddress) {
+    state.walletAssetBalances = createDefaultWalletAssetBalances();
+    state.walletAssetSyncKey = "";
+    state.walletAssetSyncStatus = "idle";
+    renderWalletAssets();
+    return;
+  }
+
+  if (!configuredAssets.length) {
+    renderWalletAssets();
+    return;
+  }
+
+  const syncKey = [
+    walletAddress,
+    expectedChainId,
+    ...configuredAssets.map((asset) => `${asset.id}:${asset.contractAddress}`),
+  ].join(":");
+  if (!options.force && state.walletAssetSyncKey === syncKey && ["loading", "ready"].includes(state.walletAssetSyncStatus)) {
+    return;
+  }
+
+  state.walletAssetSyncKey = syncKey;
+  state.walletAssetSyncStatus = "loading";
+  configuredAssets.forEach((asset) => {
+    state.walletAssetBalances[asset.id] = { display: "Syncing", status: "loading" };
+  });
+  renderWalletAssets();
+
+  let results;
+  try {
+    const provider = await getStarknetReadProvider();
+    results = await Promise.allSettled(
+      configuredAssets.map(async (asset) => {
+        const balance = await readWalletTokenBalance(provider, asset, walletAddress);
+        return { asset, display: formatAssetBalance(balance, asset) };
+      }),
+    );
+  } catch (error) {
+    configuredAssets.forEach((asset) => {
+      state.walletAssetBalances[asset.id] = { display: asset.defaultDisplay, status: "error" };
+    });
+    state.walletAssetSyncStatus = "failed";
+    veilError("wallet.asset.sync.failed", error, {
+      where: "refreshWalletAssets",
+      howToFix: "Check Starknet RPC availability before relying on live wallet asset balances.",
+    });
+    renderWalletAssets();
+    return;
+  }
+
+  results.forEach((result, index) => {
+    const asset = configuredAssets[index];
+    if (result.status === "fulfilled") {
+      state.walletAssetBalances[asset.id] = { display: result.value.display, status: "ready" };
+      return;
+    }
+    state.walletAssetBalances[asset.id] = { display: asset.defaultDisplay, status: "error" };
+    veilError("wallet.asset.balance.failed", result.reason, {
+      where: "refreshWalletAssets",
+      asset: asset.symbol,
+      tokenAddress: asset.contractAddress,
+      howToFix: "Check the token contract address and RPC before relying on live wallet asset balances.",
+    });
+  });
+  state.walletAssetSyncStatus = results.some((result) => result.status === "fulfilled") ? "ready" : "failed";
+  renderWalletAssets();
 }
 
 function getStarkZapChainId() {
@@ -1979,7 +2125,19 @@ function renderWallet() {
   const walletNetwork = document.querySelector("#wallet-network");
   const walletProvider = document.querySelector("#wallet-provider");
   const walletHelper = document.querySelector("#wallet-helper");
+  const walletConnectionSummary = document.querySelector("#wallet-connection-summary");
+  const walletConnectionStatus = document.querySelector("#wallet-connection-status");
+  const walletConnectRow = document.querySelector("[data-wallet-connect-row]");
+  const walletSettingsRow = document.querySelector("[data-wallet-settings-row]");
   const walletAddress = state.walletAddress || state.privyWallet?.address;
+  const connectionSummary = pending
+    ? state.walletInitMessage
+    : failed
+      ? "Wallet connection failed"
+      : connected
+        ? `${state.walletSource} on ${expectedNetworkName()}`
+        : "Privy wallet not connected";
+  const connectionStatus = pending ? "Connecting" : failed ? "Failed" : connected ? "Active" : "Disconnected";
 
   if (walletTitle) walletTitle.textContent = title;
   if (walletSubtitle) walletSubtitle.textContent = subtitle;
@@ -1994,6 +2152,16 @@ function renderWallet() {
   if (walletNetwork) walletNetwork.textContent = expectedNetworkName();
   if (walletProvider) walletProvider.textContent = state.walletSource;
   if (walletHelper) walletHelper.textContent = helperText;
+  if (walletConnectionSummary) walletConnectionSummary.textContent = connectionSummary;
+  if (walletConnectionStatus) {
+    walletConnectionStatus.textContent = connectionStatus;
+    walletConnectionStatus.className = `status-pill ${connected || pending ? "private" : "public"}`;
+  }
+  if (walletConnectRow) walletConnectRow.hidden = connected;
+  if (walletSettingsRow) walletSettingsRow.hidden = !connected;
+  renderWalletAssets();
+  renderWalletDeposit();
+  void refreshWalletAssets();
   document.querySelectorAll("[data-default-privacy]").forEach((button) => {
     button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
   });
@@ -2004,6 +2172,92 @@ function renderWallet() {
 
   refreshConnectLabels();
   renderHomeStatus();
+}
+
+function renderWalletAssets() {
+  const connected = state.walletConnected && Boolean(walletAddressValue());
+  walletAssetConfig.forEach((asset) => {
+    const balance = document.querySelector(`#wallet-asset-${asset.id}-balance`);
+    const detail = document.querySelector(`#wallet-asset-${asset.id}-detail`);
+    const assetState = state.walletAssetBalances[asset.id] || { display: asset.defaultDisplay, status: "idle" };
+    if (balance) {
+      balance.textContent = connected ? assetState.display || asset.defaultDisplay : "--";
+    }
+    if (detail) {
+      detail.textContent = connected
+        ? assetState.status === "loading"
+          ? asset.symbol
+          : assetState.status === "error"
+            ? "Sync failed"
+            : asset.detail
+        : "Connect wallet";
+    }
+  });
+}
+
+function selectedWalletDepositAsset() {
+  return walletAssetConfig.find((asset) => asset.id === state.walletDepositAsset) || walletAssetConfig[0];
+}
+
+function renderWalletDeposit() {
+  const selectedAsset = selectedWalletDepositAsset();
+  const assetLabel = document.querySelector("#wallet-deposit-asset-label");
+  if (assetLabel) assetLabel.textContent = selectedAsset.symbol;
+  document.querySelectorAll("[data-wallet-deposit-asset]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.walletDepositAsset === selectedAsset.id);
+  });
+}
+
+function openWalletDeposit() {
+  if (!requireConnectedWallet()) return;
+  const depositForm = document.querySelector("[data-wallet-deposit-form]");
+  if (depositForm) depositForm.hidden = false;
+  renderWalletDeposit();
+}
+
+function validateDepositInput() {
+  const selectedAsset = selectedWalletDepositAsset();
+  const amountInput = document.querySelector("#wallet-deposit-amount");
+  const amount = amountInput?.value.trim() || "";
+  const normalized = amount.replace(",", ".");
+  const numericAmount = Number(normalized);
+  if (!amount || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    showToast("Enter deposit amount.");
+    return null;
+  }
+  return { amount: normalized, asset: selectedAsset };
+}
+
+function reviewWalletDeposit() {
+  if (!requireConnectedWallet()) return;
+  const deposit = validateDepositInput();
+  if (!deposit) return;
+  showToast(`Review ${deposit.amount} ${deposit.asset.symbol} deposit.`);
+}
+
+async function submitWalletDeposit(event) {
+  event.preventDefault();
+  if (!requireConnectedWallet()) return;
+  const deposit = validateDepositInput();
+  if (!deposit) return;
+  await safeSubmit(
+    () => veilClient.recordEscrowStatus({
+      channelId: state.channelId,
+      status: "deposit_pending",
+      details: `${deposit.amount} ${deposit.asset.symbol} deposit initiated from wallet.`,
+      sender: "you",
+    }),
+    {
+      type: "inline",
+      title: `${deposit.asset.symbol} deposit initiated`,
+      subtitle: `${deposit.amount} ${deposit.asset.symbol}`,
+      time: Date.now(),
+    },
+    "Deposit initiated.",
+  );
+  const depositForm = document.querySelector("[data-wallet-deposit-form]");
+  if (depositForm) depositForm.hidden = true;
+  showScreen("activity");
 }
 
 function renderSettings() {
@@ -2055,6 +2309,9 @@ function resetWalletConnection() {
   state.privyAccount = null;
   state.privyProvider = null;
   state.privyAccountDeployed = false;
+  state.walletAssetBalances = createDefaultWalletAssetBalances();
+  state.walletAssetSyncKey = "";
+  state.walletAssetSyncStatus = "idle";
   setWalletInitializationState("idle", { message: "Connect Wallet" });
 }
 
@@ -2070,6 +2327,7 @@ async function refreshWalletConnection() {
     return;
   }
   if (timelineMode === "direct-helper") await verifyHelperDeployment();
+  await refreshWalletAssets({ force: true });
   renderWallet();
   showToast("Connection refreshed.");
 }
@@ -2402,6 +2660,23 @@ function bindEvents() {
       return;
     }
 
+    if (event.target.closest("[data-wallet-deposit-open]")) {
+      openWalletDeposit();
+      return;
+    }
+
+    const depositAsset = event.target.closest("[data-wallet-deposit-asset]");
+    if (depositAsset) {
+      state.walletDepositAsset = depositAsset.dataset.walletDepositAsset;
+      renderWalletDeposit();
+      return;
+    }
+
+    if (event.target.closest("[data-wallet-deposit-review]")) {
+      reviewWalletDeposit();
+      return;
+    }
+
     if (event.target.closest("[data-disconnect-wallet]")) {
       resetWalletConnection();
       showToast("Wallet disconnected.");
@@ -2504,6 +2779,8 @@ function bindEvents() {
     event.preventDefault();
     await sendPayment();
   });
+
+  document.querySelector("[data-wallet-deposit-form]")?.addEventListener("submit", submitWalletDeposit);
 }
 
 function init() {

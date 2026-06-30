@@ -276,7 +276,7 @@
           <header class="surface-header">
             <p class="eyebrow">VEIL</p>
             <h1 class="page-title">Wallet</h1>
-            <p class="page-subtitle">Wallet identity and connection status</p>
+            <p class="page-subtitle">Wallet identity and Starknet connection</p>
           </header>
           <div class="content-with-nav wallet-page">
             <section class="wallet-card" aria-labelledby="wallet-status-heading">
@@ -313,16 +313,77 @@
               </div>
             </section>
 
+            <section class="wallet-section wallet-assets" aria-labelledby="wallet-assets-heading">
+              <h2 id="wallet-assets-heading">Assets</h2>
+              <div class="wallet-asset-row" data-wallet-asset="usdt">
+                <span class="wallet-asset-icon">U</span>
+                <span class="wallet-asset-copy">
+                  <strong>USDT</strong>
+                  <small>Tether USD</small>
+                </span>
+                <span class="wallet-asset-value">
+                  <strong id="wallet-asset-usdt-balance">--</strong>
+                  <small id="wallet-asset-usdt-detail">Connect wallet</small>
+                </span>
+              </div>
+              <div class="wallet-asset-row" data-wallet-asset="strkbtc">
+                <span class="wallet-asset-icon dark">B</span>
+                <span class="wallet-asset-copy">
+                  <strong>STRKBTC</strong>
+                  <small>Starknet BTC</small>
+                </span>
+                <span class="wallet-asset-value">
+                  <strong id="wallet-asset-strkbtc-balance">--</strong>
+                  <small id="wallet-asset-strkbtc-detail">Connect wallet</small>
+                </span>
+              </div>
+              <button class="wallet-action-row" type="button" data-wallet-deposit-open>
+                <span><i data-lucide="arrow-down-to-line" class="size-5"></i></span>
+                <strong>Deposit</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <form class="wallet-deposit-card" data-wallet-deposit-form hidden>
+                <div class="wallet-deposit-head">
+                  <span>Deposit to VEIL</span>
+                  <strong id="wallet-deposit-asset-label">USDT</strong>
+                </div>
+                <div class="segmented compact wallet-deposit-assets" aria-label="Deposit asset">
+                  <button class="active" type="button" data-wallet-deposit-asset="usdt">USDT</button>
+                  <button type="button" data-wallet-deposit-asset="strkbtc">STRKBTC</button>
+                </div>
+                <label class="field wallet-deposit-field">
+                  <span>Amount</span>
+                  <input id="wallet-deposit-amount" type="text" inputmode="decimal" placeholder="0.00" autocomplete="off" />
+                </label>
+                <div class="wallet-deposit-actions">
+                  <button class="secondary-action" type="button" data-wallet-deposit-review>Review Deposit</button>
+                  <button class="primary-action" type="submit">Deposit</button>
+                </div>
+              </form>
+            </section>
+
             <section class="wallet-section" aria-labelledby="wallet-connection-heading">
               <h2 id="wallet-connection-heading">Connection</h2>
-              <button class="wallet-action-row" type="button" data-connect-wallet>
+              <div class="wallet-setting-row">
+                <span>
+                  <strong>Current Connection</strong>
+                  <small id="wallet-connection-summary">Privy wallet not connected</small>
+                </span>
+                <span id="wallet-connection-status" class="status-pill public">Disconnected</span>
+              </div>
+              <button class="wallet-action-row" type="button" data-connect-wallet data-wallet-connect-row>
                 <span><i data-lucide="wallet-cards" class="size-5"></i></span>
-                <strong>Connect Wallet</strong>
+                <strong data-wallet-label>Connect Wallet</strong>
                 <i data-lucide="chevron-right" class="size-5"></i>
               </button>
               <button class="wallet-action-row" type="button" data-refresh-wallet>
                 <span><i data-lucide="refresh-cw" class="size-5"></i></span>
                 <strong>Refresh Connection</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row" type="button" data-nav="settings" data-wallet-settings-row hidden>
+                <span><i data-lucide="settings" class="size-5"></i></span>
+                <strong>Manage Wallet Settings</strong>
                 <i data-lucide="chevron-right" class="size-5"></i>
               </button>
             </section>

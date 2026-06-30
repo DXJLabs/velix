@@ -849,6 +849,14 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   text-align: left;
 }
 
+.wallet-action-row[hidden] {
+  display: none;
+}
+
+.wallet-deposit-card[hidden] {
+  display: none;
+}
+
 .wallet-action-row:last-child,
 .wallet-setting-row:last-child {
   border-bottom: 0;
@@ -899,6 +907,110 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .wallet-action-row.danger strong {
   color: rgb(153 27 27);
+}
+
+.wallet-asset-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 4.3rem;
+  align-items: center;
+  gap: .75rem;
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .9rem 1rem;
+}
+
+.wallet-asset-row:last-child {
+  border-bottom: 0;
+}
+
+.wallet-asset-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: .75rem;
+  background: rgb(236 253 245);
+  color: rgb(4 120 87);
+  font-size: .95rem;
+  font-weight: 950;
+}
+
+.wallet-asset-icon.dark {
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.wallet-asset-copy,
+.wallet-asset-value {
+  display: grid;
+  min-width: 0;
+  gap: .15rem;
+}
+
+.wallet-asset-copy strong,
+.wallet-asset-value strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-asset-copy small,
+.wallet-asset-value small {
+  color: rgb(100 116 139);
+  font-size: .78rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.wallet-asset-value {
+  text-align: right;
+}
+
+.wallet-deposit-card {
+  display: grid;
+  gap: .85rem;
+  border-top: 1px solid rgb(241 245 249);
+  padding: 1rem;
+}
+
+.wallet-deposit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.wallet-deposit-head span {
+  color: rgb(100 116 139);
+  font-size: .74rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.wallet-deposit-head strong {
+  color: rgb(15 23 42);
+  font-size: .95rem;
+  font-weight: 950;
+}
+
+.wallet-deposit-assets {
+  width: 100%;
+}
+
+.wallet-deposit-field {
+  margin: 0;
+}
+
+.wallet-deposit-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: .65rem;
 }
 
 .copy-value {
