@@ -767,6 +767,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .wallet-page {
   display: grid;
   gap: 1rem;
+  padding: 1rem 1rem calc(5.8rem + env(safe-area-inset-bottom));
 }
 
 .wallet-card {
@@ -783,7 +784,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: .85rem;
 }
 
 .wallet-icon {
@@ -796,7 +797,17 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: white;
 }
 
+.wallet-card h2,
+.wallet-section h2 {
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
 .wallet-card > strong {
+  display: block;
+  margin-top: .55rem;
   color: rgb(15 23 42);
   font-size: 1.25rem;
   font-weight: 950;
@@ -808,6 +819,100 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-size: .92rem;
   font-weight: 650;
   line-height: 1.45;
+}
+
+.wallet-section {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+}
+
+.wallet-section h2 {
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+  background: rgb(248 250 252);
+}
+
+.wallet-action-row,
+.wallet-setting-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 3.65rem;
+  align-items: center;
+  gap: .75rem;
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+  text-align: left;
+}
+
+.wallet-action-row:last-child,
+.wallet-setting-row:last-child {
+  border-bottom: 0;
+}
+
+.wallet-action-row > span:first-child {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: .65rem;
+  background: rgb(241 245 249);
+  color: rgb(15 23 42);
+}
+
+.wallet-action-row strong,
+.wallet-setting-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .95rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-setting-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.wallet-setting-row small {
+  display: block;
+  margin-top: .18rem;
+  color: rgb(100 116 139);
+  font-size: .8rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.wallet-action-row.danger {
+  color: rgb(153 27 27);
+}
+
+.wallet-action-row.danger > span:first-child {
+  background: rgb(254 226 226);
+  color: rgb(153 27 27);
+}
+
+.wallet-action-row.danger strong {
+  color: rgb(153 27 27);
+}
+
+.copy-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .45rem;
+  color: rgb(15 23 42);
+}
+
+.copy-value strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plain-list span,
@@ -1519,6 +1624,17 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   border-radius: .75rem;
   background: rgb(241 245 249);
   padding: .25rem;
+}
+
+.segmented.compact {
+  min-width: 11rem;
+  margin-top: 0;
+}
+
+.segmented.compact button {
+  min-height: 2.25rem;
+  padding-inline: .65rem;
+  font-size: .8rem;
 }
 
 .segmented button {

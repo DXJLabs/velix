@@ -274,42 +274,121 @@
 
         <section class="screen hidden" data-screen="wallet">
           <header class="surface-header">
-            <p class="eyebrow">Wallet</p>
-            <h1 class="page-title">Wallet connection</h1>
+            <p class="eyebrow">VEIL</p>
+            <h1 class="page-title">Wallet</h1>
+            <p class="page-subtitle">Identity, privacy keys, and connection controls</p>
           </header>
-          <div class="content-with-nav wallet-page px-4 pt-4">
-            <section class="wallet-card">
+          <div class="content-with-nav wallet-page">
+            <section class="wallet-card" aria-labelledby="wallet-status-heading">
               <div class="wallet-card-top">
                 <span class="wallet-icon">
                   <i data-lucide="wallet-cards" class="size-5"></i>
                 </span>
                 <span id="wallet-status-pill" class="status-pill public">Required</span>
               </div>
+              <h2 id="wallet-status-heading">Wallet Status</h2>
               <strong id="wallet-state-title">Connect wallet</strong>
               <small id="wallet-state-subtitle">Use Privy to unlock VEIL on this device.</small>
-              <button class="primary-action mt-5 w-full" type="button" data-connect-wallet>
-                <i data-lucide="wallet-cards" class="size-5"></i>
-                <span data-wallet-label>Connect Wallet</span>
-              </button>
             </section>
 
-            <section class="plain-list wallet-readiness mt-4">
+            <section class="plain-list wallet-readiness" aria-label="Wallet identity">
               <div>
                 <span>Provider</span>
                 <strong id="wallet-provider">Privy</strong>
               </div>
               <div>
-                <span>Account</span>
-                <strong id="wallet-account">Not connected</strong>
+                <span>Address</span>
+                <button class="copy-value" type="button" data-copy-wallet aria-label="Copy wallet address">
+                  <strong id="wallet-account">Not connected</strong>
+                  <i data-lucide="copy" class="size-4"></i>
+                </button>
               </div>
               <div>
                 <span>Network</span>
-                <strong id="wallet-network">Sepolia</strong>
+                <strong id="wallet-network">Starknet Sepolia</strong>
               </div>
               <div>
-                <span>Helper</span>
+                <span>Helper Status</span>
                 <strong id="wallet-helper">Check required</strong>
               </div>
+            </section>
+
+            <section class="wallet-section" aria-labelledby="wallet-security-heading">
+              <h2 id="wallet-security-heading">Security</h2>
+              <button class="wallet-action-row" type="button" data-export-viewing-key>
+                <span><i data-lucide="key-round" class="size-5"></i></span>
+                <strong>Export Viewing Key</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row" type="button" data-backup-recovery>
+                <span><i data-lucide="shield-check" class="size-5"></i></span>
+                <strong>Backup Recovery</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row" type="button" data-session-management>
+                <span><i data-lucide="monitor-check" class="size-5"></i></span>
+                <strong>Session Management</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+            </section>
+
+            <section class="wallet-section" aria-labelledby="wallet-privacy-heading">
+              <h2 id="wallet-privacy-heading">Privacy</h2>
+              <div class="wallet-setting-row">
+                <span>
+                  <strong>Default Privacy Mode</strong>
+                  <small>Start sensitive actions with Shield</small>
+                </span>
+                <div class="segmented compact">
+                  <button class="active" type="button" data-default-privacy="shield">Shield</button>
+                  <button type="button" data-default-privacy="unshield">Unshield</button>
+                </div>
+              </div>
+              <label class="wallet-setting-row">
+                <span>
+                  <strong>Auto Shield</strong>
+                  <small>Prefer shielded payment flow when available</small>
+                </span>
+                <input class="switch-input" type="checkbox" checked data-auto-shield />
+              </label>
+            </section>
+
+            <section class="wallet-section" aria-labelledby="wallet-connection-heading">
+              <h2 id="wallet-connection-heading">Connection</h2>
+              <button class="wallet-action-row" type="button" data-connect-wallet>
+                <span><i data-lucide="repeat-2" class="size-5"></i></span>
+                <strong>Switch Wallet</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row" type="button" data-refresh-wallet>
+                <span><i data-lucide="refresh-cw" class="size-5"></i></span>
+                <strong>Refresh Connection</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row" type="button" data-disconnect-wallet>
+                <span><i data-lucide="unlink" class="size-5"></i></span>
+                <strong>Disconnect Wallet</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+            </section>
+
+            <section class="wallet-section danger-zone" aria-labelledby="wallet-danger-heading">
+              <h2 id="wallet-danger-heading">Danger Zone</h2>
+              <button class="wallet-action-row danger" type="button" data-wallet-logout>
+                <span><i data-lucide="log-out" class="size-5"></i></span>
+                <strong>Log Out</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row danger" type="button" data-disconnect-sessions>
+                <span><i data-lucide="ban" class="size-5"></i></span>
+                <strong>Disconnect All Sessions</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <button class="wallet-action-row danger" type="button" data-clear-veil-cache>
+                <span><i data-lucide="trash-2" class="size-5"></i></span>
+                <strong>Clear Local VEIL Cache</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
             </section>
           </div>
         </section>

@@ -168,6 +168,8 @@ const state = {
   channelId: activeDealId,
   paymentMode: "shield",
   messageMode: "unshield",
+  defaultPrivacyMode: "shield",
+  autoShield: true,
   walletConnected: false,
   walletAddress: "",
   walletNetwork: expectedChainId,
@@ -1948,7 +1950,7 @@ function renderWallet() {
     ? walletInitLabel()
     : failed
       ? "Unable to connect wallet."
-      : connected ? "Wallet Ready" : "Connect wallet";
+      : connected ? "Connected" : "Not connected";
   const subtitle = pending
     ? "Preparing secure Starknet access."
     : failed
@@ -1956,9 +1958,9 @@ function renderWallet() {
       : state.privyAccount && !state.privyAccountDeployed
         ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
         : connected
-          ? "Private channels are unlocked for messages and deals."
-          : "Use Privy to unlock VEIL on this device.";
-  const statusText = pending ? "Connecting" : failed ? "Failed" : connected ? "Ready" : "Required";
+          ? "This wallet can access encrypted deal channels."
+          : "Connect with Privy to unlock VEIL on this device.";
+  const statusText = pending ? "Connecting" : failed ? "Failed" : connected ? "Connected" : "Disconnected";
   const helperText = pending
     ? state.walletInitMessage
     : failed
@@ -1975,6 +1977,7 @@ function renderWallet() {
   const walletNetwork = document.querySelector("#wallet-network");
   const walletProvider = document.querySelector("#wallet-provider");
   const walletHelper = document.querySelector("#wallet-helper");
+  const walletAddress = state.walletAddress || state.privyWallet?.address;
 
   if (walletTitle) walletTitle.textContent = title;
   if (walletSubtitle) walletSubtitle.textContent = subtitle;
@@ -1982,13 +1985,94 @@ function renderWallet() {
     walletStatus.textContent = statusText;
     walletStatus.className = `status-pill ${connected || pending ? "private" : "public"}`;
   }
-  if (walletAccount) walletAccount.textContent = shortAddress(state.walletAddress || state.privyWallet?.address);
-  if (walletNetwork) walletNetwork.textContent = networkLabel();
+  if (walletAccount) {
+    walletAccount.textContent = shortAddress(walletAddress);
+    walletAccount.title = walletAddress || "";
+  }
+  if (walletNetwork) walletNetwork.textContent = expectedNetworkName();
   if (walletProvider) walletProvider.textContent = state.walletSource;
   if (walletHelper) walletHelper.textContent = helperText;
+  document.querySelectorAll("[data-default-privacy]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
+  });
+  document.querySelectorAll("[data-auto-shield]").forEach((input) => {
+    input.checked = state.autoShield;
+  });
 
   refreshConnectLabels();
   renderHomeStatus();
+}
+
+function walletAddressValue() {
+  return state.walletAddress || state.privyWallet?.address || "";
+}
+
+async function copyWalletAddress() {
+  const address = walletAddressValue();
+  if (!address) {
+    showToast("No wallet address.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(address);
+    showToast("Address copied.");
+  } catch {
+    showToast("Copy unavailable.");
+  }
+}
+
+function resetWalletConnection() {
+  clearTimeout(walletInitTimer);
+  directTransport = undefined;
+  starkzapOnboardResult = undefined;
+  veilClient = createClient();
+  state.walletConnected = false;
+  state.walletAddress = "";
+  state.walletNetwork = expectedChainId;
+  state.walletSource = privyAppId ? "Privy" : "Demo";
+  state.helperVerified = false;
+  state.privyWallet = null;
+  state.privyAccount = null;
+  state.privyProvider = null;
+  state.privyAccountDeployed = false;
+  setWalletInitializationState("idle", { message: "Connect Wallet" });
+}
+
+function requireConnectedWallet() {
+  if (state.walletConnected || walletAddressValue()) return true;
+  showToast("Connect wallet first.");
+  return false;
+}
+
+async function refreshWalletConnection() {
+  if (!state.walletConnected) {
+    await connectWallet({ goToInbox: false });
+    return;
+  }
+  if (timelineMode === "direct-helper") await verifyHelperDeployment();
+  renderWallet();
+  showToast("Connection refreshed.");
+}
+
+async function logoutWallet(message = "Logged out.") {
+  const bridge = getPrivyBridge();
+  try {
+    if (bridge?.logout) await bridge.logout();
+  } finally {
+    state.privyAuthenticated = false;
+    resetWalletConnection();
+    showToast(message);
+  }
+}
+
+function clearLocalVeilCache() {
+  const keys = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith("veil:")) keys.push(key);
+  }
+  keys.forEach((key) => window.localStorage.removeItem(key));
+  showToast(keys.length ? "Local VEIL cache cleared." : "No local VEIL cache.");
 }
 
 function renderSettlement() {}
@@ -2263,6 +2347,62 @@ function bindEvents() {
       return;
     }
 
+    const defaultPrivacy = event.target.closest("[data-default-privacy]");
+    if (defaultPrivacy) {
+      state.defaultPrivacyMode = defaultPrivacy.dataset.defaultPrivacy;
+      state.paymentMode = state.defaultPrivacyMode;
+      renderWallet();
+      renderPayment();
+      showToast(`${state.defaultPrivacyMode === "shield" ? "Shield" : "Unshield"} set as default.`);
+      return;
+    }
+
+    if (event.target.closest("[data-copy-wallet]")) {
+      copyWalletAddress();
+      return;
+    }
+
+    if (event.target.closest("[data-export-viewing-key]")) {
+      if (requireConnectedWallet()) showToast("Viewing key export ready.");
+      return;
+    }
+
+    if (event.target.closest("[data-backup-recovery]")) {
+      if (requireConnectedWallet()) showToast("Recovery backup ready.");
+      return;
+    }
+
+    if (event.target.closest("[data-session-management]")) {
+      if (requireConnectedWallet()) showToast("Session management ready.");
+      return;
+    }
+
+    if (event.target.closest("[data-refresh-wallet]")) {
+      refreshWalletConnection();
+      return;
+    }
+
+    if (event.target.closest("[data-disconnect-wallet]")) {
+      resetWalletConnection();
+      showToast("Wallet disconnected.");
+      return;
+    }
+
+    if (event.target.closest("[data-wallet-logout]")) {
+      logoutWallet();
+      return;
+    }
+
+    if (event.target.closest("[data-disconnect-sessions]")) {
+      logoutWallet("Sessions disconnected.");
+      return;
+    }
+
+    if (event.target.closest("[data-clear-veil-cache]")) {
+      clearLocalVeilCache();
+      return;
+    }
+
     if (event.target.closest("[data-connect-wallet]")) {
       connectWallet({ goToInbox: state.screen === "unlock" });
       return;
@@ -2302,6 +2442,13 @@ function bindEvents() {
     if (composerAction) {
       showToast("Attachment ready.");
     }
+  });
+
+  document.addEventListener("change", (event) => {
+    const autoShield = event.target.closest("[data-auto-shield]");
+    if (!autoShield) return;
+    state.autoShield = autoShield.checked;
+    showToast(state.autoShield ? "Auto Shield enabled." : "Auto Shield disabled.");
   });
 
   conversationSearch?.addEventListener("input", renderConversationList);
