@@ -43,7 +43,7 @@ const channels = [
     person: "Bob",
     avatar: "B",
     mode: "Private",
-    status: "Settlement Ready",
+    status: "Escrow Active",
     unread: 2,
     time: "9:41 AM",
     last: "Counter offer accepted",
@@ -76,7 +76,7 @@ const channels = [
     person: "Ari",
     avatar: "G",
     mode: "Private",
-    status: "Settlement Ready",
+    status: "Settlement",
     unread: 0,
     time: "Yesterday",
     last: "Settlement proof generated",
@@ -87,7 +87,7 @@ const channels = [
     person: "Nadia",
     avatar: "P",
     mode: "Public",
-    status: "Completed",
+    status: "Settlement",
     unread: 0,
     time: "Mon",
     last: "Escrow completed",
@@ -1749,6 +1749,15 @@ function timelinePayloadToFeedItem(item, payload) {
   };
 }
 
+function statusPillClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("negotiating")) return "status-pill negotiating";
+  if (normalized.includes("escrow")) return "status-pill escrow-active";
+  if (normalized.includes("waiting")) return "status-pill waiting-deposit";
+  if (normalized.includes("settlement")) return "status-pill settlement";
+  return "status-pill deal-status";
+}
+
 function renderConversationList() {
   const query = conversationSearch?.value.trim().toLowerCase() || "";
   const rows = channels.filter((channel) => {
@@ -1762,7 +1771,7 @@ function renderConversationList() {
       <span class="min-w-0">
         <span class="flex min-w-0 items-center gap-2">
           <strong class="truncate text-[.98rem]">${escapeHtml(channel.title)}</strong>
-          <span class="status-pill deal-status">${escapeHtml(channel.status)}</span>
+          <span class="${statusPillClass(channel.status)}">${escapeHtml(channel.status)}</span>
         </span>
         <span class="mt-1 block truncate text-sm font-semibold text-slate-500">${escapeHtml(channel.last)}</span>
         <span class="mt-1 flex items-center gap-2 text-xs font-bold text-slate-400">
@@ -1783,6 +1792,15 @@ function renderChannel() {
   const channel = currentChannel();
   document.querySelector("#channel-title").textContent = channel.title;
   document.querySelector("#channel-meta").textContent = `${channel.person} - ${channel.status}`;
+  const contextTitle = document.querySelector("#channel-context-title");
+  const contextParty = document.querySelector("#channel-context-party");
+  const contextStatus = document.querySelector("#channel-context-status");
+  if (contextTitle) contextTitle.textContent = channel.title;
+  if (contextParty) contextParty.textContent = channel.person;
+  if (contextStatus) {
+    contextStatus.textContent = channel.status;
+    contextStatus.className = statusPillClass(channel.status);
+  }
   messageFeed.innerHTML = `
     <div class="inline-event"><strong>Today</strong></div>
     ${channelMessages().map(renderFeedItem).join("")}
@@ -1841,9 +1859,14 @@ function renderInlineEvent(item) {
 }
 
 function renderDeal() {
-  const currentStatus = state.paymentSent ? "Payment sent" : "Accepted";
-  document.querySelector("#deal-current-status").textContent = currentStatus;
-  document.querySelector("#deal-status").textContent = currentStatus;
+  const currentStatus = state.paymentSent ? "Settlement" : state.escrowReleased ? "Escrow Active" : "Negotiating";
+  const currentStatusEl = document.querySelector("#deal-current-status");
+  const dealStatusEl = document.querySelector("#deal-status");
+  if (currentStatusEl) currentStatusEl.textContent = currentStatus;
+  if (dealStatusEl) {
+    dealStatusEl.textContent = currentStatus;
+    dealStatusEl.className = statusPillClass(currentStatus);
+  }
 }
 
 function renderEscrow() {
@@ -1851,6 +1874,8 @@ function renderEscrow() {
 }
 
 function renderPayment() {
+  const paymentDealStatus = document.querySelector("#payment-deal-status");
+  if (paymentDealStatus) paymentDealStatus.textContent = state.paymentSent ? "Settlement" : "Escrow Active";
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
@@ -2057,6 +2082,8 @@ async function sendChat(message) {
 }
 
 async function counterOffer() {
+  currentChannel().status = "Negotiating";
+  renderDeal();
   await safeSubmit(
     () => veilClient.counterOffer({
       channelId: state.channelId,
@@ -2076,6 +2103,8 @@ async function counterOffer() {
 }
 
 async function acceptOffer() {
+  currentChannel().status = "Escrow Active";
+  renderDeal();
   await safeSubmit(
     () => veilClient.acceptOffer({
       channelId: state.channelId,
@@ -2098,6 +2127,8 @@ async function sendPayment() {
   const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
   const memo = document.querySelector("#payment-memo").value.trim() || "Payment for rights transfer";
   state.paymentSent = true;
+  currentChannel().status = "Settlement";
+  renderPayment();
   await safeSubmit(
     () => veilClient.sendPaymentMemo({
       channelId: state.channelId,
@@ -2120,6 +2151,8 @@ async function sendPayment() {
 
 async function releaseEscrow() {
   state.escrowReleased = true;
+  currentChannel().status = "Escrow Active";
+  renderEscrow();
   await safeSubmit(
     () => veilClient.recordEscrowStatus({
       channelId: state.channelId,
@@ -2246,7 +2279,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-payment-review]")) {
-      showToast("Payment reviewed.");
+      showToast("Transaction reviewed.");
       return;
     }
 

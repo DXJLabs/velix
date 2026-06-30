@@ -145,7 +145,7 @@
                   <p class="eyebrow">Active channel</p>
                   <h2>Rights Transfer</h2>
                 </div>
-                <span class="status-pill deal-status">Settlement Ready</span>
+                <span class="status-pill escrow-active">Escrow Active</span>
               </div>
               <div class="inspector-amount">
                 <span>Accepted offer</span>
@@ -317,6 +317,16 @@
             </button>
           </header>
 
+          <section class="channel-security-banner">
+            <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
+            <div class="min-w-0">
+              <strong>ECDH Encrypted</strong>
+              <small>On-chain Channel</small>
+              <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
+            </div>
+            <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
+          </section>
+
           <div id="message-feed" class="message-feed"></div>
 
           <form id="composer-form" class="composer">
@@ -340,37 +350,51 @@
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <p class="eyebrow">Deal</p>
-              <h1 class="detail-title">Current offer</h1>
+              <p class="eyebrow">Deal Proposal</p>
+              <h1 class="detail-title">Rights Transfer</h1>
             </div>
           </header>
           <div class="detail-content">
-            <section class="plain-panel">
-              <div class="deal-amount">
-                <span>Price</span>
-                <strong id="deal-price">450 STRK</strong>
-                <small id="deal-status">Accepted</small>
+            <section class="deal-proposal-card">
+              <div class="proposal-topline">
+                <span class="eyebrow">Deal</span>
+                <span id="deal-status" class="status-pill negotiating">Negotiating</span>
+              </div>
+              <h2>Rights Transfer</h2>
+              <div class="proposal-round">
+                <span>Current Round</span>
+                <strong>Counter Offer #2</strong>
+              </div>
+              <div class="proposal-amount" id="deal-price">450 STRK</div>
+              <div class="proposal-parties">
+                <span>Alice</span>
+                <i data-lucide="move-horizontal" class="size-4"></i>
+                <span>Bob</span>
               </div>
               <div class="split-list mt-5">
-                <div><span>Buyer</span><strong>Alice</strong></div>
-                <div><span>Seller</span><strong>Bob</strong></div>
+                <div><span>Channel</span><strong>On-chain</strong></div>
                 <div><span>Asset</span><strong>Rights package</strong></div>
-                <div><span>Status</span><strong id="deal-current-status">Accepted</strong></div>
-              </div>
-              <div class="mt-5 grid grid-cols-3 gap-2">
-                <button class="secondary-action" type="button" data-deal-action="reject">Reject</button>
-                <button class="secondary-action" type="button" data-deal-action="counter">Counter</button>
-                <button class="primary-action" type="button" data-deal-action="accept">Accept</button>
+                <div><span>Privacy</span><strong>ECDH</strong></div>
+                <div><span>Status</span><strong id="deal-current-status">Negotiating</strong></div>
               </div>
             </section>
 
             <section class="plain-panel">
-              <h2 class="section-title">History</h2>
-              <ol class="event-list">
-                <li><span>Offer</span><strong>500 STRK</strong></li>
-                <li><span>Counter</span><strong>450 STRK</strong></li>
-                <li><span>Accepted</span><strong>Today</strong></li>
+              <h2 class="section-title">Offer History</h2>
+              <ol class="price-timeline">
+                <li class="complete"><span>Offer</span><strong>500 STRK</strong><small>Initial proposal</small></li>
+                <li class="active"><span>Counter</span><strong>450 STRK</strong><small>Counter Offer #2</small></li>
+                <li><span>Accepted</span><strong>Pending</strong><small>Moves channel to escrow</small></li>
               </ol>
+            </section>
+
+            <section class="plain-panel">
+              <h2 class="section-title">Next Step</h2>
+              <p class="plain-note compact">Review the current counter offer inside this channel before opening escrow.</p>
+              <div class="proposal-actions">
+                <button class="secondary-action" type="button" data-deal-action="counter">Revise Counter</button>
+                <button class="primary-action" type="button" data-deal-action="accept">Accept Proposal</button>
+              </div>
             </section>
 
             <button class="primary-action w-full" type="button" data-open-route="escrow">
@@ -391,6 +415,15 @@
             </div>
           </header>
           <div class="detail-content">
+            <section class="channel-context-card">
+              <div>
+                <p class="eyebrow">Channel</p>
+                <h2>Rights Transfer</h2>
+                <small>Alice / Bob</small>
+              </div>
+              <span class="status-pill escrow-active">Escrow Active</span>
+            </section>
+
             <section class="plain-panel">
               <h2 class="section-title">Deposit progress</h2>
               <div class="escrow-checks">
@@ -416,26 +449,41 @@
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <p class="eyebrow">Payment</p>
-              <h1 class="detail-title">Send payment</h1>
+              <p class="eyebrow">Channel Payment</p>
+              <h1 class="detail-title">Rights Transfer</h1>
             </div>
           </header>
           <form id="payment-form" class="detail-content">
-            <label class="field"><span>Recipient</span><input id="payment-recipient" value="Bob" /></label>
-            <label class="field"><span>Asset</span><input id="payment-asset" value="STRK" /></label>
-            <label class="field"><span>Amount</span><input id="payment-amount" value="450" inputmode="decimal" /></label>
+            <section class="payment-summary-card">
+              <p class="eyebrow">Payment for</p>
+              <h2>Rights Transfer</h2>
+              <div class="payment-route">
+                <span>Alice</span>
+                <i data-lucide="move-right" class="size-4"></i>
+                <span>Bob</span>
+              </div>
+            </section>
+
+            <section class="plain-list">
+              <div><span>Recipient</span><strong>Bob</strong></div>
+              <div><span>Current Deal</span><strong id="payment-deal-status">Escrow Active</strong></div>
+              <div><span>Amount</span><strong>450 STRK</strong></div>
+            </section>
+            <input id="payment-recipient" type="hidden" value="Bob" />
+            <input id="payment-asset" type="hidden" value="STRK" />
+            <input id="payment-amount" type="hidden" value="450" />
             <div>
-              <span class="field-label">Privacy Mode</span>
+              <span class="field-label">Privacy</span>
               <div class="segmented">
                 <button class="active" type="button" data-payment-mode="shield">Shield</button>
                 <button type="button" data-payment-mode="unshield">Unshield</button>
               </div>
             </div>
             <label class="field"><span>Memo</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>
-            <button class="secondary-action w-full" type="button" data-payment-review>Review</button>
+            <button class="secondary-action w-full" type="button" data-payment-review>Review Transaction</button>
             <button class="primary-action w-full" type="submit">
               <i data-lucide="send" class="size-5"></i>
-              <span>Send</span>
+              <span>Send Payment</span>
             </button>
           </form>
         </section>

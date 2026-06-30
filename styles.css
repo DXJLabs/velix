@@ -537,6 +537,26 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(29 78 216);
 }
 
+.status-pill.negotiating {
+  background: rgb(254 243 199);
+  color: rgb(146 64 14);
+}
+
+.status-pill.escrow-active {
+  background: rgb(220 252 231);
+  color: rgb(22 101 52);
+}
+
+.status-pill.waiting-deposit {
+  background: rgb(224 242 254);
+  color: rgb(3 105 161);
+}
+
+.status-pill.settlement {
+  background: rgb(237 233 254);
+  color: rgb(91 33 182);
+}
+
 .status-dot {
   width: .5rem;
   height: .5rem;
@@ -804,7 +824,59 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .message-feed {
   min-height: calc(100dvh - 4.25rem);
-  padding: 1rem 1rem calc(9.8rem + env(safe-area-inset-bottom));
+  padding: .85rem 1rem calc(9.8rem + env(safe-area-inset-bottom));
+}
+
+.channel-security-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .75rem;
+  align-items: center;
+  margin: .85rem 1rem 0;
+  border: 1px solid rgb(203 213 225);
+  border-radius: .85rem;
+  background: white;
+  padding: .85rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.security-lock {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border-radius: .7rem;
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.channel-security-banner strong,
+.channel-security-banner small,
+.channel-security-banner p {
+  display: block;
+}
+
+.channel-security-banner strong {
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+}
+
+.channel-security-banner small {
+  margin-top: .06rem;
+  color: rgb(51 65 85);
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.channel-security-banner p {
+  margin-top: .18rem;
+  overflow: hidden;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message {
@@ -1034,6 +1106,167 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   padding: 1rem 1rem calc(1.4rem + env(safe-area-inset-bottom));
 }
 
+.channel-context-card,
+.deal-proposal-card,
+.payment-summary-card {
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.channel-context-card {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.channel-context-card h2,
+.deal-proposal-card h2,
+.payment-summary-card h2 {
+  margin-top: .15rem;
+  color: rgb(15 23 42);
+  font-size: 1.18rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.channel-context-card small {
+  display: block;
+  margin-top: .2rem;
+  color: rgb(100 116 139);
+  font-size: .86rem;
+  font-weight: 750;
+}
+
+.proposal-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.proposal-round {
+  display: grid;
+  gap: .18rem;
+  margin-top: 1rem;
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .85rem;
+}
+
+.proposal-round span,
+.proposal-parties,
+.payment-route {
+  color: rgb(100 116 139);
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.proposal-round span {
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.proposal-round strong {
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.proposal-amount {
+  margin-top: .85rem;
+  color: rgb(15 23 42);
+  font-size: 2.75rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.proposal-parties,
+.payment-route {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin-top: .65rem;
+}
+
+.price-timeline {
+  display: grid;
+  gap: .75rem;
+}
+
+.price-timeline li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .2rem 1rem;
+  border-left: 3px solid rgb(226 232 240);
+  padding-left: .75rem;
+}
+
+.price-timeline li.complete {
+  border-left-color: rgb(16 185 129);
+}
+
+.price-timeline li.active {
+  border-left-color: rgb(245 158 11);
+}
+
+.price-timeline span,
+.price-timeline small {
+  display: block;
+  color: rgb(100 116 139);
+  font-weight: 800;
+}
+
+.price-timeline strong {
+  color: rgb(15 23 42);
+  font-weight: 950;
+  text-align: right;
+}
+
+.price-timeline small {
+  grid-column: 1 / -1;
+  font-size: .78rem;
+}
+
+.plain-note.compact {
+  margin-top: 0;
+}
+
+.proposal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin-top: .85rem;
+}
+
+.payment-summary-card h2 {
+  font-size: 1.35rem;
+}
+
+.payment-route {
+  margin-top: .5rem;
+  color: rgb(51 65 85);
+}
+
+@media (max-width: 24rem) {
+  .channel-security-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .channel-security-banner .status-pill {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .proposal-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 .deal-amount span,
 .deal-amount small {
   display: block;
@@ -1181,6 +1414,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .primary-action,
 .secondary-action {
   display: inline-flex;
+  min-width: 0;
   min-height: 3rem;
   align-items: center;
   justify-content: center;
@@ -1188,6 +1422,8 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   border-radius: .75rem;
   padding-inline: 1rem;
   font-weight: 950;
+  line-height: 1.15;
+  text-align: center;
   transition: transform 140ms ease, background 140ms ease;
 }
 
