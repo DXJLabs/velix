@@ -222,7 +222,7 @@ const state = {
   privyProvider: null,
   privyAccountDeployed: false,
   walletInitState: "idle",
-  walletInitMessage: "Connect Wallet / Deploy Account",
+  walletInitMessage: "Connect Wallet",
   walletInitError: "",
   walletInitStartedAt: 0,
   walletInitTraceId: "",
@@ -663,9 +663,9 @@ function walletInitLabel(status = state.walletInitState) {
     case "connecting":
       return "Connecting wallet...";
     case "creating_account":
-      return "Creating Smart Account...";
+      return "Connecting wallet...";
     case "deploying":
-      return "Deploying Account...";
+      return "Connecting wallet...";
     case "connecting_paymaster":
       return "Connecting Paymaster...";
     case "ready":
@@ -673,7 +673,7 @@ function walletInitLabel(status = state.walletInitState) {
     case "failed":
       return "Retry";
     default:
-      return privyAppId && !state.privyReady ? "Loading Privy" : "Connect Wallet / Deploy Account";
+      return privyAppId && !state.privyReady ? "Loading Privy" : "Connect Wallet";
   }
 }
 
@@ -767,7 +767,7 @@ function refreshConnectLabels() {
     ? "Connected"
     : privyAppId && !state.privyReady
       ? "Loading Privy"
-      : "Connect Wallet / Deploy Account";
+      : "Connect Wallet";
 
   document.querySelectorAll("[data-wallet-label]").forEach((node) => {
     node.textContent = label;
@@ -1248,7 +1248,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
   }
 
   updateWalletInitialization("creating_account", traceId, {
-    message: "Creating Smart Account...",
+    message: "Connecting wallet...",
   });
   const wallet = await fetchPrivyStarknetWallet(bridge, traceId);
   const publicKey = ensureHex(wallet.publicKey || wallet.public_key);
@@ -1310,7 +1310,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
 
   try {
     updateWalletInitialization("deploying", traceId, {
-      message: "Deploying Account...",
+      message: "Connecting wallet...",
     });
     starkzapOnboardResult = await sdk.onboard({
       strategy: OnboardStrategy.Privy,
@@ -1364,11 +1364,11 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
           });
         } else if (progress.includes("deploy")) {
           updateWalletInitialization("deploying", traceId, {
-            message: "Deploying Account...",
+            message: "Connecting wallet...",
           });
         } else if (progress.includes("wallet") || progress.includes("account") || progress.includes("resolve")) {
           updateWalletInitialization("creating_account", traceId, {
-            message: "Creating Smart Account...",
+            message: "Connecting wallet...",
           });
         }
         tracePrivyStarkZap(traceId, "sdk_onboard.progress", {
@@ -1518,7 +1518,7 @@ async function connectWallet(options = {}) {
           });
         }
         updateWalletInitialization("creating_account", traceId, {
-          message: "Creating Smart Account...",
+          message: "Connecting wallet...",
         });
         await fetchPrivyStarknetWallet(bridge, traceId);
       } catch (error) {
@@ -1581,7 +1581,7 @@ async function connectWallet(options = {}) {
         });
       }
       updateWalletInitialization("creating_account", traceId, {
-        message: "Creating Smart Account...",
+        message: "Connecting wallet...",
       });
       privyAccountContext = await createPrivyStarknetAccount(bridge, traceId);
     } catch (error) {
@@ -2278,7 +2278,7 @@ function resetWalletConnection() {
   state.walletAssetBalances = createDefaultWalletAssetBalances();
   state.walletAssetSyncKey = "";
   state.walletAssetSyncStatus = "idle";
-  setWalletInitializationState("idle", { message: "Connect Wallet / Deploy Account" });
+  setWalletInitializationState("idle", { message: "Connect Wallet" });
 }
 
 function requireConnectedWallet() {
