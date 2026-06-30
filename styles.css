@@ -725,6 +725,47 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 850;
 }
 
+.chain-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .28rem;
+  align-items: center;
+  margin-top: .32rem;
+  color: rgb(100 116 139);
+  font-size: .68rem;
+  font-weight: 850;
+}
+
+.chain-meta.right {
+  justify-content: flex-end;
+}
+
+.chain-meta a {
+  color: rgb(37 99 235);
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.15rem;
+  border-radius: 999px;
+  padding: 0 .42rem;
+  color: rgb(15 23 42);
+  font-size: .63rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.mode-badge.shield {
+  background: rgb(220 252 231);
+  color: rgb(22 101 52);
+}
+
+.mode-badge.unshield {
+  background: rgb(219 234 254);
+  color: rgb(30 64 175);
+}
+
 .inline-event {
   display: grid;
   width: fit-content;
@@ -827,6 +868,18 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   border-radius: .65rem;
   background: rgb(241 245 249);
   color: rgb(30 41 59);
+}
+
+.composer-actions [data-message-mode] {
+  grid-column: span 2;
+  padding-inline: .7rem;
+  font-size: .72rem;
+  font-weight: 950;
+}
+
+.composer-actions [data-message-mode].active {
+  background: rgb(15 23 42);
+  color: white;
 }
 
 .composer-input {

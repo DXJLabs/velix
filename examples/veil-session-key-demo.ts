@@ -37,7 +37,7 @@ const sessionManager = new VeilSessionKeyManager({
 
 await sessionManager.createSession({
   duration: "12h",
-  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "OFFER_ACCEPT", "MEMO_SEND", "TIMELINE_APPEND"],
+  permissions: ["MESSAGE_SEND", "OFFER_CREATE", "MEMO_SEND", "NEGOTIATION_METADATA"],
   channelIds: ["rights-transfer"],
   walletAddress: window.veilSessionProvider.walletAddress,
   chainId: "SN_SEPOLIA",

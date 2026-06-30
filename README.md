@@ -23,14 +23,14 @@ private chat -> negotiation -> memo -> escrow workflow -> settlement proof
 - Not a Privacy Pool replacement.
 - Not a fake privacy layer.
 
-The current testnet path writes encrypted timeline references directly to VEIL contracts. The future production path routes the same workflow through Privacy Pool `InvokeExternal` once the official STRK20 Privacy Pool SDK is available.
+The current unshield path writes encrypted timeline references directly to VEIL contracts. Shield mode is isolated behind a Starknet Privacy SDK transport boundary so VEIL does not invent STRK20 note encryption or proof construction. AVNU is used only as the Paymaster/Forwarder layer for transaction execution and gas sponsorship.
 
 ## Current Implementation
 
 | Layer | Status | Location |
 | --- | --- | --- |
 | Channel Workspace UI | Chat-first mobile workspace with Conversation, Deal, and Assistant views. | `index.html`, `app.js`, `styles.css` |
-| VEIL SDK | Timeline client, encryption adapter, direct helper transport, session key layer, Privacy Pool research adapter. | `packages/veil-sdk` |
+| VEIL SDK | Privacy Pool-derived message encryption boundary, direct helper transport, Starknet Privacy SDK transport boundary, AVNU Paymaster execution hook, session key layer, Privacy Pool research adapter. | `packages/veil-sdk` |
 | Channel Helper Contract | Stores chat, offer, memo, escrow, and proof timeline events by channel. | `src/veil_channel_helper.cairo` |
 | Escrow Contract | Coordinates escrow lifecycle without assuming ERC20, STRK20, or Privacy Pool custody. | `src/veil_escrow.cairo` |
 | Research Adapter | Read-only tools for decoding Privacy Pool ABI, events, transactions, and invoke flows. | `docs/privacy-pool-research-adapter.md` |
@@ -137,16 +137,16 @@ VITE_VEIL_CHANNEL_HELPER_ADDRESS=
 VITE_VEIL_ESCROW_ADDRESS=
 VITE_DEMO_COUNTERPARTY_ADDRESS=
 VEIL_INDEXER_FROM_BLOCK=0
-VITE_VEIL_TIMELINE_MODE=mock
+VITE_VEIL_TIMELINE_MODE=direct-helper
 ```
 
 Timeline modes:
 
 | Mode | Purpose |
 | --- | --- |
-| `mock` | Local in-memory demo. |
+| `mock` | Local in-memory demo only. |
 | `direct-helper` | Testnet writes directly to `VeilChannelHelper.privacy_invoke` after wallet network and helper deployment checks pass. |
-| `privacy-pool` | Future path through Privacy Pool `InvokeExternal`. |
+| `privacy-pool` | Starknet Privacy SDK path through Privacy Pool `InvokeExternal`; AVNU Paymaster may submit the built transaction. |
 
 Wallet connection uses Privy on the frontend (`VITE_PRIVY_APP_ID`) and Vercel serverless endpoints for Starknet wallet creation/signing (`PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_VERIFICATION_KEY`). `VITE_PRIVY_LOGIN_METHODS=email,wallet,google` enables Google in the login modal; Google must also be enabled in the Privy dashboard for the app. The browser never receives a private key. For `direct-helper`, VEIL follows StarkZap's Privy server-signing model: `/api/wallet/starknet` creates a server-managed Starknet wallet without a Privy owner, maps it to the authenticated user with a stable `external_id`, and `/api/wallet/sign` signs with Privy `rawSign`. The JWT is still required to authenticate VEIL API requests and prevent signing a wallet mapped to another user. StarkZap handles account address derivation and `deploy: "if_needed"` with the ArgentX v0.5 account preset. When `VITE_AVNU_PAYMASTER_ENABLED=true`, StarkZap uses `feeMode: { type: "paymaster" }` and `/api/paymaster` proxies AVNU Paymaster requests with the server-side `AVNU_PAYMASTER_API_KEY`; never expose that key in frontend code. VEIL also checks that the wallet is on `VITE_STARKNET_CHAIN_ID` and that `VITE_VEIL_CHANNEL_HELPER_ADDRESS` is deployed before submitting chat, offer, memo, escrow, or proof events.
 
@@ -193,7 +193,7 @@ The helper stores metadata, stores each encrypted payload chunk, and emits recon
 GET /api/indexer/messages?channelId=20260625
 ```
 
-Decryption stays in the browser. `VITE_VEIL_CHANNEL_KEY` can be set to a 128/192/256-bit AES key for the current channel demo; production should derive this key from the Privacy Pool channel/viewing-key flow rather than trusting the backend.
+Decryption stays in the browser. Production messaging must use Privacy Pool-derived secret material supplied by the official Starknet Privacy SDK flow, then pass that material to `deriveSharedSecret` or `PrivacyPoolChannelEncryptionAdapter`. AVNU Paymaster is only used to execute or sponsor the already-built transaction. Browser ECDH exports remain compatibility shims that fail closed because they are not STRK20 Privacy Pool-compatible. `VITE_VEIL_CHANNEL_KEY` remains a legacy 128/192/256-bit AES testnet fallback only.
 
 Set `VITE_VEIL_ONCHAIN_PAYLOADS=true` only after deploying the upgraded `VeilChannelHelper` that supports payload chunks. Older helper deployments only accept the four-felt reference format.
 
@@ -211,6 +211,7 @@ SDK:
 ```bash
 npm run typecheck
 npm run build:sdk
+npm run test:sdk
 ```
 
 Cairo contracts:
@@ -226,11 +227,13 @@ scarb test
 | --- | --- |
 | Smart contract testnet proof | [src/README.md](src/README.md) |
 | Onchain chat mode | [docs/onchain-chat-testnet.md](docs/onchain-chat-testnet.md) |
+| Production onchain messaging | [docs/production-onchain-messaging.md](docs/production-onchain-messaging.md) |
 | Escrow V1 architecture | [docs/veil-escrow-v1.md](docs/veil-escrow-v1.md) |
 | Encrypted channel privacy | [docs/encrypted-channel-privacy.md](docs/encrypted-channel-privacy.md) |
 | Privacy Pool ABI analysis | [docs/privacy-pool-abi-analysis.md](docs/privacy-pool-abi-analysis.md) |
 | Privacy Pool source analysis | [docs/privacy-pool-source-analysis.md](docs/privacy-pool-source-analysis.md) |
 | Privacy Pool research adapter | [docs/privacy-pool-research-adapter.md](docs/privacy-pool-research-adapter.md) |
+| STRK20 migration report | [docs/privacy-pool-migration-report.md](docs/privacy-pool-migration-report.md) |
 | Session key architecture | [docs/session-key-architecture.md](docs/session-key-architecture.md) |
 
 ## Deploy Frontend
@@ -252,11 +255,13 @@ The printed Vercel URL can be opened from desktop or mobile.
 
 ## Implementation Note
 
-VEIL is being built before official Privacy Pool SDK access. The codebase keeps these paths separate:
+VEIL is being built before public Starknet Privacy SDK integration is wired. The codebase keeps these paths separate:
 
-- `MockPrivacyPoolAdapter` for local product development.
+- `MockPrivacyPoolAdapter` for explicit local product development only.
 - `DirectHelperTransport` for real testnet helper writes.
+- `StarknetPrivacyPoolTransport` for Shield mode through Starknet Privacy SDK action/proof builders.
+- `AvnuPrivacyPoolTransport` as a deprecated compatibility alias; AVNU remains the Paymaster/Forwarder layer.
 - `ResearchPrivacyPoolAdapter` for read-only Privacy Pool ABI research.
-- `RealPrivacyPoolAdapter` as a future integration boundary that intentionally waits for the official SDK.
+- `RealPrivacyPoolAdapter` as a future integration boundary for the official Starknet Privacy SDK.
 
 This keeps development fast without claiming undocumented Privacy Pool transaction submission is complete.

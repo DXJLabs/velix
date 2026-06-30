@@ -149,13 +149,14 @@ What remains correct:
 - Returning an empty `Span<OpenNoteDeposit>` is valid for message-only MVP.
 - SDK transport boundaries are correct.
 - Direct helper mode remains useful for testnet proof of onchain timeline events.
+- The Starknet Privacy SDK provides the production route for Shield mode: build a valid private transfer/swap/action with client-side proof construction, then include VEIL's helper call as the external invoke. AVNU Paymaster can execute or sponsor the resulting transaction.
 
 What changes for full Privacy Pool mode:
 
 - `RealPrivacyPoolAdapter` must build a full Privacy Pool client action batch.
 - Message-only `InvokeExternal` needs a replay-protection strategy.
 - `InvokeExternal` must be placed at phase 7 and appear at most once.
-- The easiest production-safe path is likely to attach VEIL messages to real privacy actions such as channel/subchannel/note usage until the official SDK clarifies the intended replay-protection pattern for metadata-only messages.
+- The production-safe path is to attach VEIL messages to a real Starknet Privacy SDK action such as private transfer/swap/action proof construction. Metadata-only Shield messages must not fake replay protection.
 
 ## Interview Explanation
 

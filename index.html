@@ -285,6 +285,8 @@
               <button type="button" data-open-route="payment" aria-label="Payment"><i data-lucide="badge-dollar-sign" class="size-5"></i></button>
               <button type="button" data-open-route="deal" aria-label="Offer"><i data-lucide="handshake" class="size-5"></i></button>
               <button type="button" data-composer-action="memo" aria-label="Memo"><i data-lucide="file-text" class="size-5"></i></button>
+              <button class="active" type="button" data-message-mode="unshield">Unshield</button>
+              <button type="button" data-message-mode="shield">Shield</button>
             </div>
             <div class="composer-input">
               <textarea id="message-input" rows="1" placeholder="Message"></textarea>
@@ -386,8 +388,8 @@
             <div>
               <span class="field-label">Privacy Mode</span>
               <div class="segmented">
-                <button class="active" type="button" data-payment-mode="Private">Private</button>
-                <button type="button" data-payment-mode="Public">Public</button>
+                <button class="active" type="button" data-payment-mode="shield">Shield</button>
+                <button type="button" data-payment-mode="unshield">Unshield</button>
               </div>
             </div>
             <label class="field"><span>Memo</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>
