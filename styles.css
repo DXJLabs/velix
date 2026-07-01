@@ -1420,13 +1420,15 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   justify-content: flex-end;
 }
 
-.chain-meta a {
+.chain-meta a,
+.chain-meta button {
   color: rgb(37 99 235);
 }
 
 .chain-meta > span,
 .chain-meta > time,
-.chain-meta > a {
+.chain-meta > a,
+.chain-meta > button {
   min-height: 1.45rem;
   border-radius: 999px;
   padding: .22rem .5rem;
@@ -1472,11 +1474,11 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(29 78 216);
   font-weight: 950;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.tx-link.disabled {
-  border-color: rgb(226 232 240);
-  color: rgb(148 163 184);
+.tx-link:active {
+  transform: scale(.98);
 }
 
 .mode-badge {
@@ -1631,6 +1633,15 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
 

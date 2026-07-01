@@ -269,6 +269,7 @@ const conversationSearch = document.querySelector("#conversation-search");
 const messageFeed = document.querySelector("#message-feed");
 const composerForm = document.querySelector("#composer-form");
 const messageInput = document.querySelector("#message-input");
+const attachmentInput = document.querySelector("#attachment-input");
 const toast = document.querySelector("#toast");
 const privyAuthRoot = document.querySelector("#privy-auth-root");
 
@@ -1935,11 +1936,9 @@ function transactionStatusInfo(item) {
 
 function renderTransactionLink(item) {
   const txUrl = transactionExplorerUrl(item.txHash);
-  if (!item.txHash) {
-    return `<span class="tx-link disabled">View Transaction</span>`;
-  }
   if (!txUrl) {
-    return `<span class="tx-link disabled" title="${escapeHtml(item.txHash)}">View Transaction</span>`;
+    const title = item.txHash ? `Transaction hash: ${item.txHash}` : "Transaction hash is not available yet";
+    return `<button class="tx-link" type="button" data-transaction-pending title="${escapeHtml(title)}">View Transaction</button>`;
   }
   return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.txHash)}">View Transaction</a>`;
 }
@@ -2068,7 +2067,7 @@ function timelinePayloadToFeedItem(item, payload) {
   const titles = {
     accept_offer: "Offer accepted",
     reject_offer: "Offer rejected",
-    payment_memo: "Payment memo attached",
+    payment_memo: "Memo attached",
     escrow: "Escrow updated",
     proof: "Proof attached",
   };
@@ -2628,6 +2627,30 @@ async function sendChat(message) {
   );
 }
 
+function formatFileSize(bytes) {
+  const value = Number(bytes) || 0;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
+async function sendAttachment(file) {
+  if (!file) return;
+  const fileType = file.type || "file";
+  await sendChat(`Attached file: ${file.name} (${fileType}; ${formatFileSize(file.size)})`);
+}
+
+function applyAiDraft() {
+  if (!messageInput) return;
+  if (!messageInput.value.trim()) {
+    messageInput.value = "Thanks. I will review the offer and confirm the next step shortly.";
+  }
+  messageInput.style.height = "";
+  messageInput.style.height = `${Math.min(messageInput.scrollHeight, 120)}px`;
+  messageInput.focus();
+  showToast("AI draft ready.");
+}
+
 async function counterOffer() {
   currentChannel().status = "Negotiating";
   renderDeal();
@@ -2672,7 +2695,7 @@ async function acceptOffer() {
 async function sendPayment() {
   const amount = document.querySelector("#payment-amount").value.trim() || "450";
   const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
-  const memo = document.querySelector("#payment-memo").value.trim() || "Payment for rights transfer";
+  const memo = document.querySelector("#payment-memo").value.trim() || "Final settlement for rights transfer.";
   state.paymentSent = true;
   currentChannel().status = "Settlement";
   renderPayment();
@@ -2686,8 +2709,8 @@ async function sendPayment() {
     }),
     {
       type: "inline",
-      title: "Payment memo attached",
-      subtitle: `${amount} ${asset}`,
+      title: "Payment completed",
+      subtitle: `${amount} ${asset} to Bob`,
       time: Date.now(),
       mode: state.paymentMode,
     },
@@ -2793,6 +2816,11 @@ function bindEvents() {
     const nav = event.target.closest("[data-nav]");
     if (nav) {
       showScreen(nav.dataset.nav);
+      return;
+    }
+
+    if (event.target.closest("[data-transaction-pending]")) {
+      showToast("Transaction hash belum tersedia. Tunggu status confirmed.");
       return;
     }
 
@@ -2928,12 +2956,12 @@ function bindEvents() {
     }
 
     const composerAction = event.target.closest("[data-composer-action]");
-    if (composerAction?.dataset.composerAction === "message") {
-      messageInput?.focus();
+    if (composerAction?.dataset.composerAction === "upload") {
+      attachmentInput?.click();
       return;
     }
-    if (composerAction?.dataset.composerAction === "memo") {
-      showScreen("payment");
+    if (composerAction?.dataset.composerAction === "ai") {
+      applyAiDraft();
       return;
     }
     if (composerAction) {
@@ -2953,6 +2981,13 @@ function bindEvents() {
     if (settingToggle) {
       showToast(settingToggle.checked ? "Setting enabled." : "Setting disabled.");
     }
+  });
+
+  attachmentInput?.addEventListener("change", async () => {
+    const file = attachmentInput.files?.[0];
+    attachmentInput.value = "";
+    if (!file) return;
+    await sendAttachment(file);
   });
 
   conversationSearch?.addEventListener("input", renderConversationList);
