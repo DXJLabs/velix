@@ -1274,9 +1274,9 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .channel-security-banner {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: .75rem;
-  align-items: start;
+  align-items: center;
   margin: .85rem 1rem 0;
   border: 1px solid rgb(203 213 225);
   border-radius: .85rem;
@@ -1295,25 +1295,23 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: white;
 }
 
-.channel-security-main,
 .channel-security-banner strong,
+.channel-security-banner small,
 .channel-security-banner p {
   display: block;
-  min-width: 0;
-}
-
-.channel-security-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: .65rem;
 }
 
 .channel-security-banner strong {
   color: rgb(15 23 42);
   font-size: .98rem;
   font-weight: 950;
+}
+
+.channel-security-banner small {
+  margin-top: .06rem;
+  color: rgb(51 65 85);
+  font-size: .82rem;
+  font-weight: 850;
 }
 
 .channel-security-banner p {
@@ -1324,44 +1322,6 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.channel-status-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: .45rem;
-  margin-top: .75rem;
-}
-
-.channel-status-grid div {
-  min-width: 0;
-  border: 1px solid rgb(226 232 240);
-  border-radius: .6rem;
-  background: rgb(248 250 252);
-  padding: .55rem .6rem;
-}
-
-.channel-status-grid span,
-.channel-status-grid strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.channel-status-grid span {
-  color: rgb(100 116 139);
-  font-size: .62rem;
-  font-weight: 950;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.channel-status-grid strong {
-  margin-top: .16rem;
-  color: rgb(15 23 42);
-  font-size: .78rem;
-  font-weight: 950;
 }
 
 .timeline-day {
@@ -1857,13 +1817,9 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .channel-security-title {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .channel-status-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .channel-security-banner .status-pill {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .timeline-event.offer-timeline {

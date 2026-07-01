@@ -2124,16 +2124,8 @@ function renderChannel() {
   const contextTitle = document.querySelector("#channel-context-title");
   const contextParty = document.querySelector("#channel-context-party");
   const contextStatus = document.querySelector("#channel-context-status");
-  const contextStatusLabel = document.querySelector("#channel-context-status-label");
-  const contextMode = document.querySelector("#channel-context-mode");
-  const contextCounterparty = document.querySelector("#channel-context-counterparty");
-  const contextNetwork = document.querySelector("#channel-context-network");
   if (contextTitle) contextTitle.textContent = channel.title;
   if (contextParty) contextParty.textContent = channel.person;
-  if (contextStatusLabel) contextStatusLabel.textContent = channel.status;
-  if (contextMode) contextMode.textContent = "Shielded";
-  if (contextCounterparty) contextCounterparty.textContent = channel.person;
-  if (contextNetwork) contextNetwork.textContent = expectedNetworkName();
   if (contextStatus) {
     contextStatus.textContent = channel.status;
     contextStatus.className = statusPillClass(channel.status);
