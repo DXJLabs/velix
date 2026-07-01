@@ -43,6 +43,8 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
+const CHAT_DISPLAY_MODE = "shield";
+const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
   github: import.meta.env.VITE_VEIL_GITHUB_URL || "https://github.com/DXJLabs/velix",
@@ -223,7 +225,7 @@ const state = {
   screen: "unlock",
   channelId: activeDealId,
   paymentMode: "shield",
-  messageMode: "unshield",
+  messageMode: CHAT_DISPLAY_MODE,
   defaultPrivacyMode: "shield",
   autoShield: true,
   walletConnected: false,
@@ -2039,12 +2041,13 @@ function timelinePayloadToFeedItem(item, payload) {
     txHash: item.transactionHash,
     blockNumber: item.blockNumber,
     status: item.status || "confirmed",
-    mode: item.mode || "unshield",
+    mode: item.mode || CHAT_DISPLAY_MODE,
   };
 
   if (payload.kind === "chat") {
     return {
       ...base,
+      mode: CHAT_DISPLAY_MODE,
       type: "message",
       sender,
       body: payload.message,
@@ -2492,11 +2495,15 @@ function renderSettlement() {}
 
 function renderProof() {}
 
+function chatTransportMode() {
+  return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : CHAT_DISPLAY_MODE;
+}
+
 async function safeSubmit(action, localItem, success) {
   const pendingItem = {
     ...localItem,
     status: "encrypting",
-    mode: localItem.mode || "unshield",
+    mode: localItem.mode || CHAT_DISPLAY_MODE,
   };
   addLocalItem(pendingItem);
   try {
@@ -2529,7 +2536,7 @@ async function safeSubmit(action, localItem, success) {
       txHash: result?.transactionHash,
       blockNumber: result?.blockNumber,
       status: result?.status || "pending",
-      mode: result?.mode || pendingItem.mode,
+      mode: pendingItem.mode,
       time: result?.timestamp || pendingItem.time,
     });
     showToast(success);
@@ -2606,15 +2613,16 @@ function updateLocalItem(item, updates) {
 }
 
 async function sendChat(message) {
+  const mode = chatTransportMode();
   await safeSubmit(
-    () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message, mode: state.messageMode }),
+    () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message, mode }),
     {
       type: "message",
       sender: "You",
       body: message,
       self: true,
       time: Date.now(),
-      mode: state.messageMode,
+      mode: CHAT_DISPLAY_MODE,
     },
     "Message sent.",
   );
