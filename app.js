@@ -46,6 +46,9 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
 const CHAT_DISPLAY_MODE = "shield";
 const DIRECT_HELPER_MESSAGE_MODE = "unshield";
+const DEAL_OFFER_AMOUNT = "450 STRK";
+const FEE_ESTIMATE_PENDING = "Will be calculated before signing";
+const TOTAL_ESTIMATE_PENDING = "Calculated in wallet";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
   github: import.meta.env.VITE_VEIL_GITHUB_URL || "https://github.com/DXJLabs/velix",
@@ -273,6 +276,7 @@ const composerForm = document.querySelector("#composer-form");
 const messageInput = document.querySelector("#message-input");
 const attachmentInput = document.querySelector("#attachment-input");
 const toast = document.querySelector("#toast");
+const offerReviewModal = document.querySelector("#offer-review-modal");
 const privyAuthRoot = document.querySelector("#privy-auth-root");
 
 function createClient(transport) {
@@ -2241,6 +2245,51 @@ function currentOfferProofItem() {
   };
 }
 
+function setElementText(selector, value) {
+  const element = document.querySelector(selector);
+  if (element) element.textContent = value;
+}
+
+function offerPrivacyMode() {
+  return state.defaultPrivacyMode === "unshield" ? "unshield" : "shield";
+}
+
+function offerPrivacyLabel() {
+  return offerPrivacyMode() === "shield" ? "Shielded" : "Unshielded";
+}
+
+function renderDealTransactionSummary() {
+  const isShielded = offerPrivacyMode() === "shield";
+  const privacyFeeRow = document.querySelector("#deal-privacy-fee-row");
+
+  setElementText("#deal-price", DEAL_OFFER_AMOUNT);
+  setElementText("#deal-summary-offer", DEAL_OFFER_AMOUNT);
+  setElementText("#deal-network-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#deal-privacy-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#deal-summary-total", TOTAL_ESTIMATE_PENDING);
+  setElementText("#offer-review-amount", DEAL_OFFER_AMOUNT);
+  setElementText("#offer-review-privacy", offerPrivacyLabel());
+  setElementText("#offer-review-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#offer-review-total", TOTAL_ESTIMATE_PENDING);
+
+  if (privacyFeeRow) privacyFeeRow.classList.toggle("hidden", !isShielded);
+}
+
+function showOfferReview() {
+  renderDealTransactionSummary();
+  if (!offerReviewModal) return;
+  offerReviewModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  iconRefresh();
+  offerReviewModal.querySelector("[data-offer-review-sign]")?.focus();
+}
+
+function hideOfferReview() {
+  if (!offerReviewModal) return;
+  offerReviewModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const currentStatus = accepted ? "Accepted" : "Negotiating";
@@ -2251,6 +2300,7 @@ function renderDeal() {
   const nextStepCopy = document.querySelector("#deal-next-step-copy");
   const waitingStep = document.querySelector("#offer-history-waiting");
   const offerProof = document.querySelector("#deal-offer-proof");
+  renderDealTransactionSummary();
   if (currentStatusEl) currentStatusEl.textContent = currentStatus;
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
@@ -2575,7 +2625,7 @@ async function safeSubmit(action, localItem, success) {
           errorLabel: "Cancelled",
           errorMessage: "Wallet connection was not completed.",
         });
-        return;
+        return false;
       }
     }
     if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
@@ -2584,7 +2634,7 @@ async function safeSubmit(action, localItem, success) {
         errorLabel: "Failed",
         errorMessage: "Helper contract verification failed on the configured network.",
       });
-      return;
+      return false;
     }
     veilLog("info", "transaction.submit.start", {
       where: "safeSubmit",
@@ -2608,6 +2658,7 @@ async function safeSubmit(action, localItem, success) {
       time: result?.timestamp || pendingItem.time,
     });
     showToast(success);
+    return true;
   } catch (error) {
     const errorDetails = classifyTransactionError(error);
     veilError("transaction.submit.failed", error, {
@@ -2632,6 +2683,7 @@ async function safeSubmit(action, localItem, success) {
       errorMessage: errorDetails.why,
     });
     showToast(errorDetails.toast);
+    return false;
   }
 }
 
@@ -2770,13 +2822,10 @@ async function counterOffer() {
 }
 
 async function acceptOffer() {
-  state.offerAccepted = true;
-  currentChannel().status = "Escrow Active";
-  renderDeal();
-  await safeSubmit(
+  const submitted = await safeSubmit(
     () => veilClient.acceptOffer({
       channelId: state.channelId,
-      offerId: "450 STRK",
+      offerId: DEAL_OFFER_AMOUNT,
       reason: "Accepted.",
       sender: "you",
     }),
@@ -2788,6 +2837,10 @@ async function acceptOffer() {
     },
     "Offer accepted.",
   );
+  if (!submitted) return;
+  state.offerAccepted = true;
+  currentChannel().status = "Escrow Active";
+  renderDeal();
 }
 
 async function sendPayment() {
@@ -2922,6 +2975,17 @@ function bindEvents() {
       return;
     }
 
+    if (event.target.closest("[data-offer-review-close]")) {
+      hideOfferReview();
+      return;
+    }
+
+    if (event.target.closest("[data-offer-review-sign]")) {
+      hideOfferReview();
+      acceptOffer();
+      return;
+    }
+
     if (event.target.closest("[data-transaction-retry]")) {
       showToast("Retry action by sending/signing again.");
       return;
@@ -2951,7 +3015,7 @@ function bindEvents() {
       return;
     }
     if (dealAction?.dataset.dealAction === "accept") {
-      acceptOffer();
+      showOfferReview();
       return;
     }
     if (dealAction?.dataset.dealAction === "reject") {
@@ -2972,6 +3036,7 @@ function bindEvents() {
       state.paymentMode = state.defaultPrivacyMode;
       renderWallet();
       renderPayment();
+      renderDeal();
       showToast(`${state.defaultPrivacyMode === "shield" ? "Shield" : "Unshield"} set as default.`);
       return;
     }
@@ -3075,6 +3140,12 @@ function bindEvents() {
     }
     if (composerAction) {
       showToast("Action ready.");
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !offerReviewModal?.classList.contains("hidden")) {
+      hideOfferReview();
     }
   });
 

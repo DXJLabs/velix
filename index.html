@@ -590,6 +590,16 @@
               </ol>
             </section>
 
+            <section class="plain-panel transaction-summary-panel">
+              <h2 class="section-title">Transaction Summary</h2>
+              <div class="transaction-summary-list">
+                <div><span>Offer Amount</span><strong id="deal-summary-offer">450 STRK</strong></div>
+                <div><span>Network Fee</span><strong id="deal-network-fee">Will be calculated before signing</strong></div>
+                <div id="deal-privacy-fee-row"><span>Privacy Fee</span><strong id="deal-privacy-fee">Will be calculated before signing</strong></div>
+                <div class="summary-total"><span>Total</span><strong id="deal-summary-total">Calculated in wallet</strong></div>
+              </div>
+            </section>
+
             <section class="plain-panel">
               <h2 class="section-title">Next Step</h2>
               <p id="deal-next-step-copy" class="plain-note compact">Accept this proposal to continue to Escrow.</p>
@@ -756,6 +766,24 @@
       </nav>
 
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </div>
+    <div id="offer-review-modal" class="review-modal hidden" role="dialog" aria-modal="true" aria-labelledby="offer-review-title">
+      <div class="review-modal-backdrop" data-offer-review-close></div>
+      <section class="review-modal-sheet">
+        <button class="icon-button ghost review-modal-close" type="button" data-offer-review-close aria-label="Close review">
+          <i data-lucide="x" class="size-5"></i>
+        </button>
+        <p class="eyebrow">Review Transaction</p>
+        <h2 id="offer-review-title">Accept Proposal</h2>
+        <div class="review-summary-list">
+          <div><span>Amount</span><strong id="offer-review-amount">450 STRK</strong></div>
+          <div><span>Privacy</span><strong id="offer-review-privacy">Shielded</strong></div>
+          <div><span>Estimated Fee</span><strong id="offer-review-fee">Will be calculated before signing</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="offer-review-total">Calculated in wallet</strong></div>
+        </div>
+        <button class="primary-action w-full" type="button" data-offer-review-sign>Sign Transaction</button>
+        <button class="secondary-action w-full" type="button" data-offer-review-close>Cancel</button>
+      </section>
     </div>
     <div id="privy-auth-root" hidden></div>
   </body>

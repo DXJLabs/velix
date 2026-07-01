@@ -1903,6 +1903,58 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   margin-top: .85rem;
 }
 
+.transaction-summary-list,
+.review-summary-list {
+  display: grid;
+  gap: 0;
+  margin-top: .75rem;
+}
+
+.transaction-summary-list > div,
+.review-summary-list > div {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+  border-bottom: 1px solid rgb(241 245 249);
+}
+
+.transaction-summary-list > div:last-child,
+.review-summary-list > div:last-child {
+  border-bottom: 0;
+}
+
+.transaction-summary-list span,
+.review-summary-list span {
+  min-width: 0;
+  color: rgb(100 116 139);
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.transaction-summary-list strong,
+.review-summary-list strong {
+  max-width: 58%;
+  min-width: 0;
+  color: rgb(15 23 42);
+  font-size: .9rem;
+  font-weight: 950;
+  line-height: 1.2;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.transaction-summary-list .summary-total,
+.review-summary-list .summary-total {
+  min-height: 3.55rem;
+}
+
+.transaction-summary-list .summary-total strong,
+.review-summary-list .summary-total strong {
+  font-size: 1rem;
+}
+
 .offer-proof-panel {
   border-top: 1px solid rgb(226 232 240);
   padding-top: .25rem;
@@ -2193,6 +2245,62 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .toast.visible {
   transform: translateY(0);
   opacity: 1;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.review-modal {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  padding: 1rem;
+}
+
+.review-modal.hidden {
+  display: none;
+}
+
+.review-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .45);
+}
+
+.review-modal-sheet {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(100%, 31rem);
+  gap: .85rem;
+  margin: 0 auto;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: 1rem;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .22);
+}
+
+.review-modal-sheet h2 {
+  color: rgb(15 23 42);
+  font-size: 1.25rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.review-modal-close {
+  position: absolute;
+  top: .65rem;
+  right: .65rem;
+}
+
+@media (min-width: 48rem) {
+  .review-modal {
+    align-items: center;
+  }
 }
 
 @keyframes screen-in {
