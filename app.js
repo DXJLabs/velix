@@ -2513,22 +2513,55 @@ async function safeSubmit(action, localItem, success) {
     });
     showToast(success);
   } catch (error) {
-    const errorMessage = error?.message || String(error);
+    const errorDetails = classifyTransactionError(error);
     veilError("transaction.submit.failed", error, {
       where: "safeSubmit",
       timelineMode,
       helperAddress,
-      howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
+      transactionErrorCode: errorDetails.code,
+      howToFix: errorDetails.howToFix,
     });
+    if (errorDetails.code === "INSUFFICIENT_FEE_BALANCE") {
+      veilLog("warn", "wallet.fee_balance.insufficient", {
+        where: "safeSubmit",
+        walletAddress: walletAddressValue(),
+        network: expectedChainId,
+        why: errorDetails.why,
+        howToFix: errorDetails.howToFix,
+      });
+    }
     updateLocalItem(pendingItem, { status: "failed" });
-    showToast(
-      errorMessage.includes("Privacy Pool-derived encryption")
-        ? "Message encryption key is not configured."
-        : timelineMode === "direct-helper"
-          ? "Onchain action failed. Check Sepolia."
-          : success,
-    );
+    showToast(errorDetails.toast);
   }
+}
+
+function classifyTransactionError(error) {
+  const message = error?.message || String(error);
+  if (message.includes("Privacy Pool-derived encryption")) {
+    return {
+      code: "ENCRYPTION_NOT_CONFIGURED",
+      toast: "Message encryption key is not configured.",
+      why: message,
+      howToFix: "Configure Privacy Pool-derived encryption or the direct-helper testnet encryption fallback before retrying.",
+    };
+  }
+
+  if (/exceeds? balance|insufficient.*balance|balance \(0\)|fee.*balance/i.test(message)) {
+    const address = walletAddressValue();
+    return {
+      code: "INSUFFICIENT_FEE_BALANCE",
+      toast: `Fund ${expectedNetworkName()} STRK for gas.`,
+      why: message,
+      howToFix: `Fund ${address || "the connected account"} with ${expectedNetworkName()} STRK, then refresh Wallet and retry.`,
+    };
+  }
+
+  return {
+    code: "ONCHAIN_SUBMIT_FAILED",
+    toast: timelineMode === "direct-helper" ? "Onchain action failed. Check Sepolia." : "Action failed.",
+    why: message,
+    howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
+  };
 }
 
 function addLocalItem(item) {
