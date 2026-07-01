@@ -39,6 +39,7 @@ const channelKeySource = configuredChannelKey ? "env" : browserFallbackChannelKe
 const channelKeyId = configuredChannelKey ? "veil-env-channel" : browserFallbackChannelKey ? "veil-browser-testnet-channel" : undefined;
 const onchainPayloads = (import.meta.env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true"
   || helperAddress.toLowerCase() === DEPLOYED_CHANNEL_HELPER_ADDRESS;
+const STARKNET_SEPOLIA_EXPLORER_URL = "https://sepolia.voyager.online";
 const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
   || rpcUrl.replace("/v0_10", "/v0_8")
   || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
@@ -1914,7 +1915,7 @@ function formatTime(timestamp) {
 
 function transactionExplorerUrl(txHash) {
   if (!txHash || String(txHash).startsWith("mock-")) return "";
-  return `https://sepolia.voyager.online/tx/${encodeURIComponent(txHash)}`;
+  return `${STARKNET_SEPOLIA_EXPLORER_URL}/tx/${encodeURIComponent(txHash)}`;
 }
 
 function shortHash(value) {
@@ -1938,7 +1939,7 @@ function renderTransactionLink(item) {
   const txUrl = transactionExplorerUrl(item.txHash);
   if (!txUrl) {
     const title = item.txHash ? `Transaction hash: ${item.txHash}` : "Transaction hash is not available yet";
-    return `<button class="tx-link" type="button" data-transaction-pending title="${escapeHtml(title)}">View Transaction</button>`;
+    return `<a class="tx-link" href="${STARKNET_SEPOLIA_EXPLORER_URL}" target="_blank" rel="noreferrer" data-transaction-pending title="${escapeHtml(title)}">View Transaction</a>`;
   }
   return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.txHash)}">View Transaction</a>`;
 }
