@@ -526,6 +526,8 @@
             </button>
           </header>
 
+          <section class="workflow-progress" data-workflow-progress></section>
+
           <section class="channel-security-banner">
             <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
             <div class="min-w-0">
@@ -564,6 +566,8 @@
             </div>
           </header>
           <div class="detail-content">
+            <section class="workflow-progress" data-workflow-progress></section>
+
             <section class="deal-proposal-card">
               <div class="proposal-topline">
                 <span class="eyebrow">Current Offer</span>
@@ -594,8 +598,8 @@
               <h2 class="section-title">Transaction Summary</h2>
               <div class="transaction-summary-list">
                 <div><span>Offer Amount</span><strong id="deal-summary-offer">450 STRK</strong></div>
-                <div><span>Network Fee</span><strong id="deal-network-fee">Will be calculated before signing</strong></div>
-                <div id="deal-privacy-fee-row"><span>Privacy Fee</span><strong id="deal-privacy-fee">Will be calculated before signing</strong></div>
+                <div><span>Network Fee</span><strong id="deal-network-fee">Fee will be calculated before wallet signature</strong></div>
+                <div id="deal-privacy-fee-row"><span>Privacy Fee</span><strong id="deal-privacy-fee">Fee will be calculated before wallet signature</strong></div>
                 <div class="summary-total"><span>Total</span><strong id="deal-summary-total">Calculated in wallet</strong></div>
               </div>
             </section>
@@ -631,6 +635,8 @@
             </div>
           </header>
           <div class="detail-content">
+            <section class="workflow-progress" data-workflow-progress></section>
+
             <section class="channel-context-card">
               <div>
                 <p class="eyebrow">Channel</p>
@@ -641,20 +647,32 @@
             </section>
 
             <section class="plain-panel">
-              <h2 class="section-title">Deposit progress</h2>
+              <h2 class="section-title">Release Conditions</h2>
               <div class="escrow-checks">
                 <div class="complete"><i data-lucide="check" class="size-5"></i><span>Buyer deposited</span></div>
                 <div class="complete"><i data-lucide="check" class="size-5"></i><span>Seller deposited</span></div>
+                <div id="escrow-buyer-confirmed"><i data-lucide="circle" class="size-5"></i><span>Buyer confirmed</span></div>
+                <div id="escrow-seller-confirmed"><i data-lucide="circle" class="size-5"></i><span>Seller confirmed</span></div>
+                <div id="escrow-ai-review"><i data-lucide="circle" class="size-5"></i><span>AI Review complete</span></div>
               </div>
-              <div class="plain-note">Release when both parties confirm AI review and payment details.</div>
               <button class="primary-action mt-5 w-full" type="button" data-escrow-release>
                 <i data-lucide="unlock" class="size-5"></i>
                 <span>Release Escrow</span>
               </button>
-              <button class="secondary-action mt-2 w-full" type="button" data-escrow-dispute>Dispute</button>
+              <button id="escrow-dispute-action" class="secondary-action mt-2 w-full" type="button" data-escrow-dispute>Dispute</button>
             </section>
-            <section class="plain-list">
-              <div><span>Transaction proof</span><strong id="escrow-proof">Pending</strong></div>
+            <section class="plain-panel">
+              <h2 class="section-title">Transaction Proof</h2>
+              <div class="escrow-proof-steps">
+                <article>
+                  <div><strong>Funding</strong><small id="escrow-funding-status">Deposits recorded</small></div>
+                  <div id="escrow-funding-proof" class="chain-meta"></div>
+                </article>
+                <article>
+                  <div><strong>Release</strong><small id="escrow-release-status">Waiting</small></div>
+                  <div id="escrow-release-proof" class="chain-meta"></div>
+                </article>
+              </div>
             </section>
           </div>
         </section>
@@ -670,6 +688,8 @@
             </div>
           </header>
           <form id="payment-form" class="detail-content">
+            <section class="workflow-progress" data-workflow-progress></section>
+
             <section class="payment-summary-card">
               <h2>Rights Transfer</h2>
               <div class="payment-route">
@@ -683,6 +703,15 @@
               <div><span>Recipient</span><strong>Bob</strong></div>
               <div><span>Current Deal</span><strong id="payment-deal-status">Escrow Active</strong></div>
               <div><span>Amount</span><strong>450 STRK</strong></div>
+            </section>
+            <section class="plain-panel transaction-summary-panel">
+              <h2 class="section-title">Fee Summary</h2>
+              <div class="transaction-summary-list">
+                <div><span>Amount</span><strong id="payment-summary-amount">450 STRK</strong></div>
+                <div><span>Estimated Network Fee</span><strong id="payment-network-fee">Fee will be calculated before wallet signature</strong></div>
+                <div id="payment-privacy-fee-row"><span>Privacy Fee</span><strong id="payment-privacy-fee">Fee will be calculated before wallet signature</strong></div>
+                <div class="summary-total"><span>Total</span><strong id="payment-summary-total">Calculated in wallet</strong></div>
+              </div>
             </section>
             <input id="payment-recipient" type="hidden" value="Bob" />
             <input id="payment-asset" type="hidden" value="STRK" />
@@ -778,11 +807,31 @@
         <div class="review-summary-list">
           <div><span>Amount</span><strong id="offer-review-amount">450 STRK</strong></div>
           <div><span>Privacy</span><strong id="offer-review-privacy">Shielded</strong></div>
-          <div><span>Estimated Fee</span><strong id="offer-review-fee">Will be calculated before signing</strong></div>
+          <div><span>Estimated Fee</span><strong id="offer-review-fee">Fee will be calculated before wallet signature</strong></div>
           <div class="summary-total"><span>Total</span><strong id="offer-review-total">Calculated in wallet</strong></div>
         </div>
         <button class="primary-action w-full" type="button" data-offer-review-sign>Sign Transaction</button>
         <button class="secondary-action w-full" type="button" data-offer-review-close>Cancel</button>
+      </section>
+    </div>
+    <div id="payment-review-modal" class="review-modal hidden" role="dialog" aria-modal="true" aria-labelledby="payment-review-title">
+      <div class="review-modal-backdrop" data-payment-review-close></div>
+      <section class="review-modal-sheet">
+        <button class="icon-button ghost review-modal-close" type="button" data-payment-review-close aria-label="Close review">
+          <i data-lucide="x" class="size-5"></i>
+        </button>
+        <p class="eyebrow">Review Transaction</p>
+        <h2 id="payment-review-title">Send Payment</h2>
+        <div class="review-summary-list">
+          <div><span>Recipient</span><strong id="payment-review-recipient">Bob</strong></div>
+          <div><span>Amount</span><strong id="payment-review-amount">450 STRK</strong></div>
+          <div><span>Privacy</span><strong id="payment-review-privacy">Shield</strong></div>
+          <div><span>Estimated Fee</span><strong id="payment-review-fee">Fee will be calculated before wallet signature</strong></div>
+          <div><span>AI Memo</span><strong id="payment-review-memo">Final settlement for rights transfer.</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="payment-review-total">Calculated in wallet</strong></div>
+        </div>
+        <button class="primary-action w-full" type="button" data-payment-review-sign>Sign Transaction</button>
+        <button class="secondary-action w-full" type="button" data-payment-review-close>Cancel</button>
       </section>
     </div>
     <div id="privy-auth-root" hidden></div>

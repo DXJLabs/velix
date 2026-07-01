@@ -47,8 +47,9 @@ const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID 
 const CHAT_DISPLAY_MODE = "shield";
 const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const DEAL_OFFER_AMOUNT = "450 STRK";
-const FEE_ESTIMATE_PENDING = "Will be calculated before signing";
+const FEE_ESTIMATE_PENDING = "Fee will be calculated before wallet signature";
 const TOTAL_ESTIMATE_PENDING = "Calculated in wallet";
+const PAYMENT_RECIPIENT = "Bob";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
   github: import.meta.env.VITE_VEIL_GITHUB_URL || "https://github.com/DXJLabs/velix",
@@ -254,6 +255,7 @@ const state = {
   offerAccepted: false,
   paymentSent: false,
   escrowReleased: false,
+  escrowDisputeOpened: false,
   proofExported: false,
 };
 
@@ -277,6 +279,7 @@ const messageInput = document.querySelector("#message-input");
 const attachmentInput = document.querySelector("#attachment-input");
 const toast = document.querySelector("#toast");
 const offerReviewModal = document.querySelector("#offer-review-modal");
+const paymentReviewModal = document.querySelector("#payment-review-modal");
 const privyAuthRoot = document.querySelector("#privy-auth-root");
 
 function createClient(transport) {
@@ -2008,6 +2011,7 @@ function showScreen(screen, options = {}) {
   if (screen === "settings") renderSettings();
   if (screen === "settlement") renderSettlement();
   if (screen === "proof") renderProof();
+  renderWorkflowProgress();
 
   if (!options.keepScroll) window.scrollTo({ top: 0, behavior: "auto" });
   iconRefresh();
@@ -2290,6 +2294,120 @@ function hideOfferReview() {
   document.body.classList.remove("modal-open");
 }
 
+function paymentAmountLabel() {
+  const amount = document.querySelector("#payment-amount")?.value.trim() || "450";
+  const asset = document.querySelector("#payment-asset")?.value.trim() || "STRK";
+  return `${amount} ${asset}`;
+}
+
+function paymentPrivacyLabel() {
+  return state.paymentMode === "shield" ? "Shield" : "Unshield";
+}
+
+function paymentMemoValue() {
+  return document.querySelector("#payment-memo")?.value.trim() || "Final settlement for rights transfer.";
+}
+
+function renderPaymentTransactionSummary() {
+  const isShielded = state.paymentMode === "shield";
+  const privacyFeeRow = document.querySelector("#payment-privacy-fee-row");
+
+  setElementText("#payment-summary-amount", paymentAmountLabel());
+  setElementText("#payment-network-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#payment-privacy-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#payment-summary-total", TOTAL_ESTIMATE_PENDING);
+  setElementText("#payment-review-recipient", PAYMENT_RECIPIENT);
+  setElementText("#payment-review-amount", paymentAmountLabel());
+  setElementText("#payment-review-privacy", paymentPrivacyLabel());
+  setElementText("#payment-review-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#payment-review-memo", paymentMemoValue());
+  setElementText("#payment-review-total", TOTAL_ESTIMATE_PENDING);
+
+  if (privacyFeeRow) privacyFeeRow.classList.toggle("hidden", !isShielded);
+}
+
+function showPaymentReview() {
+  renderPaymentTransactionSummary();
+  if (!paymentReviewModal) return;
+  paymentReviewModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  iconRefresh();
+  paymentReviewModal.querySelector("[data-payment-review-sign]")?.focus();
+}
+
+function hidePaymentReview() {
+  if (!paymentReviewModal) return;
+  paymentReviewModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function workflowStageData() {
+  const status = String(currentChannel().status || "").toLowerCase();
+  const channelInEscrow = status.includes("escrow") || status.includes("settlement");
+  const negotiationComplete = state.offerAccepted || state.escrowReleased || state.paymentSent || channelInEscrow;
+  const escrowComplete = state.escrowReleased || state.paymentSent || status.includes("settlement");
+  const settlementComplete = state.paymentSent || status.includes("settlement");
+  const activeStage = settlementComplete || state.screen === "payment" || state.screen === "settlement" || state.screen === "proof"
+    ? "settlement"
+    : negotiationComplete || state.screen === "escrow"
+      ? "escrow"
+      : "negotiation";
+
+  return [
+    { id: "negotiation", label: "Negotiation", done: negotiationComplete, active: activeStage === "negotiation" },
+    { id: "escrow", label: "Escrow", done: escrowComplete, active: activeStage === "escrow" },
+    { id: "settlement", label: "Settlement", done: settlementComplete, active: activeStage === "settlement" },
+  ];
+}
+
+function renderWorkflowProgress() {
+  const stages = workflowStageData();
+  document.querySelectorAll("[data-workflow-progress]").forEach((container) => {
+    container.innerHTML = `
+      <strong>${escapeHtml(currentChannel().title || "Rights Transfer")}</strong>
+      <ol>
+        ${stages.map((stage) => {
+          const stateClass = stage.done ? "complete" : stage.active ? "active" : "pending";
+          const icon = stage.done ? "check" : stage.active ? "circle-dot" : "circle";
+          return `<li class="${stateClass}"><span><i data-lucide="${icon}" class="size-3.5"></i></span><em>${escapeHtml(stage.label)}</em></li>`;
+        }).join("")}
+      </ol>
+    `;
+  });
+}
+
+function latestChannelItem(predicate) {
+  return [...channelMessages()].reverse().find(predicate);
+}
+
+function escrowFundingProofItem() {
+  const item = latestChannelItem((entry) => {
+    const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
+    return label.includes("deposit") || label.includes("escrow is ready") || label.includes("offer accepted");
+  });
+  return {
+    ...(item || {}),
+    type: "inline",
+    title: item?.title || "Escrow funding",
+    time: item?.time || now - 3 * minute,
+    mode: CHAT_DISPLAY_MODE,
+  };
+}
+
+function escrowReleaseProofItem() {
+  const item = latestChannelItem((entry) => {
+    const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
+    return label.includes("escrow released") || label.includes("settlement can complete");
+  });
+  return {
+    ...(item || {}),
+    type: "inline",
+    title: item?.title || "Escrow release",
+    time: item?.time || (state.escrowReleased ? Date.now() : undefined),
+    mode: CHAT_DISPLAY_MODE,
+  };
+}
+
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const currentStatus = accepted ? "Accepted" : "Negotiating";
@@ -2321,7 +2439,29 @@ function renderDeal() {
 }
 
 function renderEscrow() {
-  document.querySelector("#escrow-proof").textContent = state.escrowReleased ? "Released" : "Pending";
+  const releaseDone = state.escrowReleased || state.paymentSent;
+  const fundingProof = document.querySelector("#escrow-funding-proof");
+  const releaseProof = document.querySelector("#escrow-release-proof");
+  const disputeAction = document.querySelector("#escrow-dispute-action");
+
+  ["#escrow-buyer-confirmed", "#escrow-seller-confirmed", "#escrow-ai-review"].forEach((selector) => {
+    const item = document.querySelector(selector);
+    if (!item) return;
+    item.classList.toggle("complete", releaseDone);
+    const icon = item.querySelector("svg, i");
+    if (icon) icon.outerHTML = `<i data-lucide="${releaseDone ? "check" : "circle"}" class="size-5"></i>`;
+  });
+
+  setElementText("#escrow-funding-status", "Deposits recorded");
+  setElementText("#escrow-release-status", releaseDone ? "Released" : "Waiting");
+  if (fundingProof) fundingProof.innerHTML = renderChainMeta(escrowFundingProofItem());
+  if (releaseProof) releaseProof.innerHTML = renderChainMeta(escrowReleaseProofItem());
+
+  if (disputeAction) {
+    disputeAction.textContent = state.escrowDisputeOpened ? "Dispute Opened" : "Dispute";
+    disputeAction.disabled = state.escrowDisputeOpened;
+    disputeAction.classList.toggle("disabled", state.escrowDisputeOpened);
+  }
 }
 
 function renderPayment() {
@@ -2330,6 +2470,7 @@ function renderPayment() {
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
+  renderPaymentTransactionSummary();
 }
 
 function expectedNetworkName() {
@@ -2803,6 +2944,7 @@ async function counterOffer() {
   state.offerAccepted = false;
   currentChannel().status = "Negotiating";
   renderDeal();
+  renderWorkflowProgress();
   await safeSubmit(
     () => veilClient.counterOffer({
       channelId: state.channelId,
@@ -2841,16 +2983,14 @@ async function acceptOffer() {
   state.offerAccepted = true;
   currentChannel().status = "Escrow Active";
   renderDeal();
+  renderWorkflowProgress();
 }
 
 async function sendPayment() {
   const amount = document.querySelector("#payment-amount").value.trim() || "450";
   const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
   const memo = document.querySelector("#payment-memo").value.trim() || "Final settlement for rights transfer.";
-  state.paymentSent = true;
-  currentChannel().status = "Settlement";
-  renderPayment();
-  await safeSubmit(
+  const submitted = await safeSubmit(
     () => veilClient.sendPaymentMemo({
       channelId: state.channelId,
       amount: `${amount} ${asset}`,
@@ -2867,14 +3007,16 @@ async function sendPayment() {
     },
     "Payment sent.",
   );
+  if (!submitted) return;
+  state.paymentSent = true;
+  currentChannel().status = "Settlement";
+  renderPayment();
+  renderWorkflowProgress();
   showScreen("settlement");
 }
 
 async function releaseEscrow() {
-  state.escrowReleased = true;
-  currentChannel().status = "Escrow Active";
-  renderEscrow();
-  await safeSubmit(
+  const submitted = await safeSubmit(
     () => veilClient.recordEscrowStatus({
       channelId: state.channelId,
       status: "settled",
@@ -2889,6 +3031,11 @@ async function releaseEscrow() {
     },
     "Escrow released.",
   );
+  if (!submitted) return;
+  state.escrowReleased = true;
+  currentChannel().status = "Escrow Active";
+  renderEscrow();
+  renderWorkflowProgress();
   showScreen("payment");
 }
 
@@ -2983,6 +3130,17 @@ function bindEvents() {
     if (event.target.closest("[data-offer-review-sign]")) {
       hideOfferReview();
       acceptOffer();
+      return;
+    }
+
+    if (event.target.closest("[data-payment-review-close]")) {
+      hidePaymentReview();
+      return;
+    }
+
+    if (event.target.closest("[data-payment-review-sign]")) {
+      hidePaymentReview();
+      sendPayment();
       return;
     }
 
@@ -3109,12 +3267,15 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-escrow-dispute]")) {
+      if (state.escrowDisputeOpened) return;
+      state.escrowDisputeOpened = true;
+      renderEscrow();
       showToast("Dispute started.");
       return;
     }
 
     if (event.target.closest("[data-payment-review]")) {
-      showToast("Transaction reviewed.");
+      showPaymentReview();
       return;
     }
 
@@ -3146,6 +3307,9 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !offerReviewModal?.classList.contains("hidden")) {
       hideOfferReview();
+    }
+    if (event.key === "Escape" && !paymentReviewModal?.classList.contains("hidden")) {
+      hidePaymentReview();
     }
   });
 
@@ -3188,7 +3352,7 @@ function bindEvents() {
 
   document.querySelector("#payment-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    await sendPayment();
+    showPaymentReview();
   });
 
 }
