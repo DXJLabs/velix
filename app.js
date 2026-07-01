@@ -1928,15 +1928,15 @@ function transactionStatusInfo(item) {
   const status = String(item.status || "").toLowerCase();
   if (status === "failed") {
     const label = item.errorLabel || "Failed";
-    return { kind: "failed", label: `⚠ ${label}`, detail: label };
+    return { kind: "failed", label: "⚠", ariaLabel: label, detail: label };
   }
   if (status === "read") {
-    return { kind: "read", label: "✓✓ Read" };
+    return { kind: "read", label: "✓✓", ariaLabel: "Read" };
   }
   if (["encrypting", "signing", "pending"].includes(status) || !item.txHash) {
-    return { kind: "pending", label: "⏳ Processing" };
+    return { kind: "pending", label: "⏳", ariaLabel: "Processing" };
   }
-  return { kind: "confirmed", label: "✓ Confirmed" };
+  return { kind: "confirmed", label: "✓", ariaLabel: "Confirmed" };
 }
 
 function renderTransactionLink(item) {
@@ -1959,8 +1959,8 @@ function renderFailureActions(item, statusInfo) {
   if (statusInfo.kind !== "failed") return "";
   const errorText = item.errorMessage || statusInfo.detail || "Transaction failed.";
   return [
-    `<button class="tx-action" type="button" data-transaction-retry>Retry</button>`,
-    `<button class="tx-action" type="button" data-transaction-error="${escapeHtml(errorText)}">View Error</button>`,
+    `<button class="tx-action" type="button" data-transaction-retry aria-label="Retry" title="Retry">↻</button>`,
+    `<button class="tx-action" type="button" data-transaction-error="${escapeHtml(errorText)}" aria-label="View error" title="View error">!</button>`,
   ].join("");
 }
 
@@ -1968,7 +1968,7 @@ function renderChainMeta(item, alignRight = false) {
   const statusInfo = transactionStatusInfo(item);
   const parts = [];
   parts.push(renderShieldBadge(statusInfo));
-  parts.push(`<span class="tx-status ${statusInfo.kind}">${escapeHtml(statusInfo.label)}</span>`);
+  parts.push(`<span class="tx-status ${statusInfo.kind}" aria-label="${escapeHtml(statusInfo.ariaLabel)}" title="${escapeHtml(statusInfo.ariaLabel)}">${escapeHtml(statusInfo.label)}</span>`);
   if (item.time) parts.push(`<time>${escapeHtml(formatTime(item.time))}</time>`);
   if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
   if (item.txHash) parts.push(`<span class="tx-hash">${escapeHtml(shortHash(item.txHash))}</span>`);
