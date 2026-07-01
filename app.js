@@ -7,8 +7,10 @@ import { accountPresets } from "starkzap-account-presets";
 import { ChainId } from "starkzap-config";
 import { OnboardStrategy } from "starkzap-onboard";
 
-const timelineMode = import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
-const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || "";
+const runtimeParams = new URLSearchParams(window.location.search);
+const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") === "demo";
+const timelineMode = demoRuntimeMode ? "mock" : import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
+const privyAppId = demoRuntimeMode ? "" : import.meta.env.VITE_PRIVY_APP_ID || "";
 const configuredPrivyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,google")
   .split(",")
   .map((method) => method.trim())
@@ -28,7 +30,13 @@ const helperAddress = configuredHelperAddress.toLowerCase() === LEGACY_CHANNEL_H
   : configuredHelperAddress || DEPLOYED_CHANNEL_HELPER_ADDRESS;
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
 const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
-const channelKey = import.meta.env.VITE_VEIL_CHANNEL_KEY || "";
+const configuredChannelKey = import.meta.env.VITE_VEIL_CHANNEL_KEY || "";
+const browserFallbackChannelKey = !configuredChannelKey && timelineMode === "direct-helper"
+  ? readOrCreateBrowserFallbackChannelKey()
+  : "";
+const channelKey = configuredChannelKey || browserFallbackChannelKey;
+const channelKeySource = configuredChannelKey ? "env" : browserFallbackChannelKey ? "browser-testnet-fallback" : "missing";
+const channelKeyId = configuredChannelKey ? "veil-env-channel" : browserFallbackChannelKey ? "veil-browser-testnet-channel" : undefined;
 const onchainPayloads = (import.meta.env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true"
   || helperAddress.toLowerCase() === DEPLOYED_CHANNEL_HELPER_ADDRESS;
 const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
@@ -245,6 +253,7 @@ const state = {
 let toastTimer;
 let walletInitTimer;
 let directTransport;
+let encryptionConfigWarningShown = false;
 let veilClient = createClient();
 let starknetReadProvider;
 let starkzapSdk;
@@ -263,17 +272,28 @@ const privyAuthRoot = document.querySelector("#privy-auth-root");
 
 function createClient(transport) {
   const encryption = channelKey
-    ? new ChannelEncryptionAdapter({ channelKey, keyId: "veil-env-channel" })
+    ? new ChannelEncryptionAdapter({ channelKey, keyId: channelKeyId })
     : timelineMode === "mock"
       ? undefined
       : createFailClosedEncryptionAdapter()
   ;
   const activeTransport = transport || (timelineMode === "mock" ? undefined : createFailClosedTransport());
-  if (timelineMode !== "mock" && !channelKey) {
-    veilLog("warn", "encryption.config.missing", {
-      where: "createClient",
-      howToFix: "Configure Privacy Pool-derived message encryption in production. VITE_VEIL_CHANNEL_KEY remains a legacy testnet fallback only.",
-    });
+  if (timelineMode !== "mock" && !encryptionConfigWarningShown) {
+    encryptionConfigWarningShown = true;
+    if (channelKeySource === "browser-testnet-fallback") {
+      veilLog("warn", "encryption.browser_testnet_fallback.enabled", {
+        where: "createClient",
+        timelineMode,
+        helperAddress,
+        why: "VITE_VEIL_CHANNEL_KEY is not configured, so this browser generated a local direct-helper testnet encryption key.",
+        howToFix: "Configure Privacy Pool-derived encryption for Shield mode, or set VITE_VEIL_CHANNEL_KEY when a shared direct-helper testnet key is required.",
+      });
+    } else if (!channelKey) {
+      veilLog("warn", "encryption.config.missing", {
+        where: "createClient",
+        howToFix: "Configure Privacy Pool-derived message encryption in production. VITE_VEIL_CHANNEL_KEY remains a legacy testnet fallback only.",
+      });
+    }
   }
 
   return new VeilClient({
@@ -295,6 +315,34 @@ function createFailClosedEncryptionAdapter() {
       return null;
     },
   };
+}
+
+function readOrCreateBrowserFallbackChannelKey() {
+  if (!globalThis.crypto?.getRandomValues) {
+    return "";
+  }
+
+  const storageKey = `veil:direct-helper:channel-key:${helperAddress || "default"}:v1`;
+  try {
+    const storage = window.localStorage;
+    const existing = storage.getItem(storageKey);
+    if (/^0x[0-9a-fA-F]{64}$/.test(existing || "")) {
+      return existing;
+    }
+
+    const bytes = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(bytes);
+    const generated = `0x${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+    storage.setItem(storageKey, generated);
+    return generated;
+  } catch (error) {
+    veilLog("warn", "encryption.browser_testnet_fallback.failed", {
+      where: "readOrCreateBrowserFallbackChannelKey",
+      why: error?.message || String(error),
+      howToFix: "Enable browser storage or configure VITE_VEIL_CHANNEL_KEY for direct-helper testnet messaging.",
+    });
+    return "";
+  }
 }
 
 function createFailClosedTransport() {
@@ -863,6 +911,8 @@ function refreshConnectLabels() {
     ? walletInitLabel()
     : state.walletConnected
     ? "Connected"
+    : demoRuntimeMode
+      ? "Open Demo"
     : privyAppId && !state.privyReady
       ? "Loading Privy"
       : "Connect Wallet";
@@ -2463,6 +2513,7 @@ async function safeSubmit(action, localItem, success) {
     });
     showToast(success);
   } catch (error) {
+    const errorMessage = error?.message || String(error);
     veilError("transaction.submit.failed", error, {
       where: "safeSubmit",
       timelineMode,
@@ -2470,7 +2521,13 @@ async function safeSubmit(action, localItem, success) {
       howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
     });
     updateLocalItem(pendingItem, { status: "failed" });
-    showToast(timelineMode === "direct-helper" ? "Onchain action failed. Check Sepolia." : success);
+    showToast(
+      errorMessage.includes("Privacy Pool-derived encryption")
+        ? "Message encryption key is not configured."
+        : timelineMode === "direct-helper"
+          ? "Onchain action failed. Check Sepolia."
+          : success,
+    );
   }
 }
 
