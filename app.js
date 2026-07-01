@@ -115,7 +115,7 @@ const channels = [
     status: "Negotiating",
     unread: 1,
     time: "9:20 AM",
-    last: "Payment memo requested",
+    last: "AI note requested",
   },
   {
     id: "northline-goods",
@@ -191,7 +191,7 @@ const messages = {
     {
       type: "message",
       sender: "Mira",
-      body: "Can you attach the memo before release?",
+      body: "Can you attach the AI review before release?",
       time: now - 18 * minute,
     },
   ],
@@ -2067,7 +2067,7 @@ function timelinePayloadToFeedItem(item, payload) {
   const titles = {
     accept_offer: "Offer accepted",
     reject_offer: "Offer rejected",
-    payment_memo: "Memo attached",
+    payment_memo: "AI note attached",
     escrow: "Escrow updated",
     proof: "Proof attached",
   };

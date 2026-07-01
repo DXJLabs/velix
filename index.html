@@ -49,7 +49,7 @@
                 <p class="home-label">VEIL</p>
                 <h1>Private Deal Workspace</h1>
                 <p class="home-kicker">Private deal channels. Secure settlement. Built on Starknet.</p>
-                <p class="home-description">ECDH encrypted messages, offers, escrow, payments, memos, proofs, and settlement in one on-chain channel.</p>
+                <p class="home-description">ECDH encrypted messages, offers, escrow, payments, AI notes, proofs, and settlement in one on-chain channel.</p>
                 <div class="unlock-actions">
                   <button class="primary-action" type="button" data-connect-wallet>
                     <i data-lucide="wallet-cards" class="size-5"></i>
@@ -83,7 +83,7 @@
               <article class="capability-card">
               <span class="capability-icon"><i data-lucide="network" class="size-5"></i></span>
               <h2>Encrypted Channels</h2>
-              <p>Each channel keeps private messages, offers, escrow, memos, proofs, and settlement together.</p>
+              <p>Each channel keeps private messages, offers, escrow, AI notes, proofs, and settlement together.</p>
               </article>
               <article class="capability-card">
               <span class="capability-icon"><i data-lucide="shield" class="size-5"></i></span>
@@ -195,7 +195,7 @@
               </div>
               <div class="inspector-timeline">
                 <div class="complete"><i data-lucide="check" class="size-4"></i><span>Offer accepted</span></div>
-                <div class="complete"><i data-lucide="check" class="size-4"></i><span>Memo prepared</span></div>
+                <div class="complete"><i data-lucide="check" class="size-4"></i><span>AI prepared</span></div>
                 <div><i data-lucide="shield" class="size-4"></i><span>Escrow release pending</span></div>
                 <div><i data-lucide="file-check-2" class="size-4"></i><span>Proof export next</span></div>
               </div>
@@ -259,8 +259,8 @@
                 <button class="task-row" type="button" data-open-route="payment">
                   <span class="action-icon"><i data-lucide="file-text" class="size-5"></i></span>
                   <span>
-                    <strong>Sign Memo</strong>
-                    <small>Design Milestone needs payment memo signature</small>
+                    <strong>AI Review</strong>
+                    <small>Design Milestone needs AI-assisted payment review</small>
                   </span>
                   <i data-lucide="chevron-right" class="size-5"></i>
                 </button>
@@ -290,7 +290,7 @@
                     <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Counter Offer Accepted</span><strong>Rights Transfer</strong></li>
                     <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Escrow Funded</span><strong>Northline Goods</strong></li>
                     <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Payment Sent</span><strong>Design Milestone</strong></li>
-                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Memo Attached</span><strong>Rights Transfer</strong></li>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>AI Attached</span><strong>Rights Transfer</strong></li>
                   </ol>
                 </section>
 
@@ -452,8 +452,8 @@
               </label>
               <label class="setting-row">
                 <span class="setting-copy">
-                  <strong>Require Memo before Payment</strong>
-                  <small>Block settlement payment until memo is attached</small>
+                  <strong>Require AI before Payment</strong>
+                  <small>Block settlement payment until AI review is attached</small>
                 </span>
                 <input class="switch-input" type="checkbox" checked data-setting-toggle="require-memo" />
               </label>
@@ -639,7 +639,7 @@
                 <div class="complete"><i data-lucide="check" class="size-5"></i><span>Buyer deposited</span></div>
                 <div class="complete"><i data-lucide="check" class="size-5"></i><span>Seller deposited</span></div>
               </div>
-              <div class="plain-note">Release when both parties confirm settlement memo and payment details.</div>
+              <div class="plain-note">Release when both parties confirm AI review and payment details.</div>
               <button class="primary-action mt-5 w-full" type="button" data-escrow-release>
                 <i data-lucide="unlock" class="size-5"></i>
                 <span>Release Escrow</span>
@@ -687,7 +687,7 @@
                 <button type="button" data-payment-mode="unshield">Unshield</button>
               </div>
             </div>
-            <label class="field"><span>Memo</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>
+            <label class="field"><span>AI Note</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>
             <button class="secondary-action w-full" type="button" data-payment-review>Review Transaction</button>
             <button class="primary-action w-full" type="submit">
               <i data-lucide="send" class="size-5"></i>
