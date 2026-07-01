@@ -647,32 +647,45 @@
             </section>
 
             <section class="plain-panel">
-              <h2 class="section-title">Release Conditions</h2>
+              <h2 class="section-title">Funding</h2>
               <div class="escrow-checks">
                 <div class="complete"><i data-lucide="check" class="size-5"></i><span>Buyer deposited</span></div>
                 <div class="complete"><i data-lucide="check" class="size-5"></i><span>Seller deposited</span></div>
-                <div id="escrow-buyer-confirmed"><i data-lucide="circle" class="size-5"></i><span>Buyer confirmed</span></div>
-                <div id="escrow-seller-confirmed"><i data-lucide="circle" class="size-5"></i><span>Seller confirmed</span></div>
-                <div id="escrow-ai-review"><i data-lucide="circle" class="size-5"></i><span>AI Review complete</span></div>
               </div>
-              <button class="primary-action mt-5 w-full" type="button" data-escrow-release>
-                <i data-lucide="unlock" class="size-5"></i>
+              <div id="escrow-funding-proof" class="chain-meta escrow-stage-proof"></div>
+            </section>
+
+            <section class="plain-panel">
+              <h2 class="section-title">Confirmation</h2>
+              <div class="escrow-checks">
+                <div id="escrow-buyer-confirmed" data-escrow-confirmation="buyer"><i data-lucide="circle" class="size-5"></i><span>Buyer Confirmation</span><small>Waiting</small></div>
+                <div id="escrow-seller-confirmed" data-escrow-confirmation="seller"><i data-lucide="circle" class="size-5"></i><span>Seller Confirmation</span><small>Waiting</small></div>
+                <div id="escrow-ai-review" data-escrow-confirmation="ai"><i data-lucide="circle" class="size-5"></i><span>AI Review</span><small>Waiting</small></div>
+              </div>
+            </section>
+
+            <section class="plain-panel">
+              <h2 class="section-title">Release</h2>
+              <p id="escrow-release-copy" class="plain-note compact">Waiting for confirmation</p>
+              <button id="escrow-release-action" class="primary-action mt-5 w-full" type="button" data-escrow-release disabled>
+                <i data-lucide="lock" class="size-5"></i>
                 <span>Release Escrow</span>
+                <small>Locked</small>
               </button>
               <button id="escrow-dispute-action" class="secondary-action mt-2 w-full" type="button" data-escrow-dispute>Dispute</button>
             </section>
             <section class="plain-panel">
               <h2 class="section-title">Transaction Proof</h2>
-              <div class="escrow-proof-steps">
-                <article>
-                  <div><strong>Funding</strong><small id="escrow-funding-status">Deposits recorded</small></div>
-                  <div id="escrow-funding-proof" class="chain-meta"></div>
-                </article>
-                <article>
-                  <div><strong>Release</strong><small id="escrow-release-status">Waiting</small></div>
-                  <div id="escrow-release-proof" class="chain-meta"></div>
-                </article>
-              </div>
+              <ol class="escrow-proof-timeline">
+                <li id="escrow-funding-proof-step" class="complete">
+                  <span class="proof-dot"><i data-lucide="check" class="size-4"></i></span>
+                  <div><strong>Funding</strong><small id="escrow-funding-status">Deposits recorded</small><div id="escrow-funding-proof-timeline" class="chain-meta"></div></div>
+                </li>
+                <li id="escrow-release-proof-step">
+                  <span class="proof-dot"><i data-lucide="circle" class="size-4"></i></span>
+                  <div><strong>Release</strong><small id="escrow-release-status">Waiting</small><div id="escrow-release-proof" class="chain-meta"></div></div>
+                </li>
+              </ol>
             </section>
           </div>
         </section>

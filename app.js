@@ -255,6 +255,11 @@ const state = {
   offerAccepted: false,
   paymentSent: false,
   escrowReleased: false,
+  escrowConfirmations: {
+    buyer: false,
+    seller: false,
+    ai: false,
+  },
   escrowDisputeOpened: false,
   proofExported: false,
 };
@@ -2408,6 +2413,23 @@ function escrowReleaseProofItem() {
   };
 }
 
+function hasRealTransactionHash(item) {
+  return Boolean(item?.txHash && !String(item.txHash).startsWith("mock-"));
+}
+
+function renderEscrowProofMeta(item) {
+  return hasRealTransactionHash(item) ? renderChainMeta(item) : "";
+}
+
+function setLucideIcon(container, iconName, sizeClass = "size-5") {
+  const icon = container?.querySelector("svg, i");
+  if (icon) icon.outerHTML = `<i data-lucide="${iconName}" class="${sizeClass}"></i>`;
+}
+
+function escrowConfirmationsComplete() {
+  return Boolean(state.escrowConfirmations.buyer && state.escrowConfirmations.seller && state.escrowConfirmations.ai);
+}
+
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const currentStatus = accepted ? "Accepted" : "Negotiating";
@@ -2440,28 +2462,61 @@ function renderDeal() {
 
 function renderEscrow() {
   const releaseDone = state.escrowReleased || state.paymentSent;
+  const releaseReady = releaseDone || escrowConfirmationsComplete();
+  const fundingItem = escrowFundingProofItem();
+  const releaseItem = escrowReleaseProofItem();
   const fundingProof = document.querySelector("#escrow-funding-proof");
+  const fundingProofTimeline = document.querySelector("#escrow-funding-proof-timeline");
   const releaseProof = document.querySelector("#escrow-release-proof");
+  const releaseAction = document.querySelector("#escrow-release-action");
+  const releaseStep = document.querySelector("#escrow-release-proof-step");
   const disputeAction = document.querySelector("#escrow-dispute-action");
 
-  ["#escrow-buyer-confirmed", "#escrow-seller-confirmed", "#escrow-ai-review"].forEach((selector) => {
+  [
+    ["#escrow-buyer-confirmed", "buyer"],
+    ["#escrow-seller-confirmed", "seller"],
+    ["#escrow-ai-review", "ai"],
+  ].forEach(([selector, key]) => {
     const item = document.querySelector(selector);
     if (!item) return;
-    item.classList.toggle("complete", releaseDone);
-    const icon = item.querySelector("svg, i");
-    if (icon) icon.outerHTML = `<i data-lucide="${releaseDone ? "check" : "circle"}" class="size-5"></i>`;
+    const complete = releaseDone || Boolean(state.escrowConfirmations[key]);
+    item.classList.toggle("complete", complete);
+    setLucideIcon(item, complete ? "check" : "circle");
+    const status = item.querySelector("small");
+    if (status) status.textContent = complete ? "Confirmed" : "Waiting";
   });
 
   setElementText("#escrow-funding-status", "Deposits recorded");
-  setElementText("#escrow-release-status", releaseDone ? "Released" : "Waiting");
-  if (fundingProof) fundingProof.innerHTML = renderChainMeta(escrowFundingProofItem());
-  if (releaseProof) releaseProof.innerHTML = renderChainMeta(escrowReleaseProofItem());
+  setElementText("#escrow-release-status", releaseDone ? "Released" : "Waiting for confirmation");
+  setElementText("#escrow-release-copy", releaseDone
+    ? "Escrow released."
+    : releaseReady
+      ? "Ready for wallet signature."
+      : "Waiting for confirmation");
+  if (fundingProof) fundingProof.innerHTML = renderEscrowProofMeta(fundingItem);
+  if (fundingProofTimeline) fundingProofTimeline.innerHTML = renderEscrowProofMeta(fundingItem);
+  if (releaseProof) releaseProof.innerHTML = releaseDone ? renderEscrowProofMeta(releaseItem) : "";
+  if (releaseStep) {
+    releaseStep.classList.toggle("complete", releaseDone);
+    releaseStep.classList.toggle("pending", !releaseDone);
+    setLucideIcon(releaseStep, releaseDone ? "check" : "circle", "size-4");
+  }
+  if (releaseAction) {
+    releaseAction.disabled = !releaseReady || releaseDone;
+    releaseAction.classList.toggle("disabled", !releaseReady || releaseDone);
+    releaseAction.innerHTML = releaseDone
+      ? `<i data-lucide="check" class="size-5"></i><span>Released</span>`
+      : releaseReady
+        ? `<i data-lucide="unlock" class="size-5"></i><span>Release Escrow</span>`
+        : `<i data-lucide="lock" class="size-5"></i><span>Release Escrow</span><small>Locked</small>`;
+  }
 
   if (disputeAction) {
     disputeAction.textContent = state.escrowDisputeOpened ? "Dispute Opened" : "Dispute";
     disputeAction.disabled = state.escrowDisputeOpened;
     disputeAction.classList.toggle("disabled", state.escrowDisputeOpened);
   }
+  iconRefresh();
 }
 
 function renderPayment() {
@@ -3016,6 +3071,11 @@ async function sendPayment() {
 }
 
 async function releaseEscrow() {
+  if (!escrowConfirmationsComplete() && !state.escrowReleased) {
+    showToast("Complete confirmations before release.");
+    renderEscrow();
+    return;
+  }
   const submitted = await safeSubmit(
     () => veilClient.recordEscrowStatus({
       channelId: state.channelId,
@@ -3258,6 +3318,16 @@ function bindEvents() {
 
     if (event.target.closest("[data-connect-wallet]")) {
       connectWallet({ goToInbox: state.screen === "unlock" });
+      return;
+    }
+
+    const escrowConfirmation = event.target.closest("[data-escrow-confirmation]");
+    if (escrowConfirmation) {
+      const key = escrowConfirmation.dataset.escrowConfirmation;
+      if (key && key in state.escrowConfirmations && !state.escrowReleased) {
+        state.escrowConfirmations[key] = !state.escrowConfirmations[key];
+        renderEscrow();
+      }
       return;
     }
 
