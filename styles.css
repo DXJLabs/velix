@@ -1756,44 +1756,64 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   gap: 1rem;
 }
 
-.proposal-round {
-  display: grid;
-  gap: .18rem;
+.proposal-amount-block {
   margin-top: 1rem;
-  border-radius: .7rem;
-  background: rgb(248 250 252);
-  padding: .85rem;
 }
 
-.proposal-round span,
-.proposal-parties,
-.payment-route {
+.proposal-amount-block small {
+  display: block;
+  margin-top: .35rem;
   color: rgb(100 116 139);
-  font-size: .82rem;
+  font-size: .9rem;
   font-weight: 850;
 }
 
-.proposal-round span {
-  letter-spacing: .05em;
-  text-transform: uppercase;
-}
-
-.proposal-round strong {
-  color: rgb(15 23 42);
-  font-size: 1rem;
-  font-weight: 950;
-}
-
 .proposal-amount {
-  margin-top: .85rem;
   color: rgb(15 23 42);
-  font-size: 2.75rem;
+  font-size: 3.1rem;
   font-weight: 950;
   letter-spacing: 0;
   line-height: 1;
 }
 
-.proposal-parties,
+.deal-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .6rem;
+  margin-top: 1.2rem;
+}
+
+.deal-info-grid div {
+  min-width: 0;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .75rem;
+}
+
+.deal-info-grid span,
+.deal-info-grid strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-info-grid span {
+  color: rgb(100 116 139);
+  font-size: .68rem;
+  font-weight: 950;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.deal-info-grid strong {
+  margin-top: .18rem;
+  color: rgb(15 23 42);
+  font-size: .92rem;
+  font-weight: 950;
+}
+
 .payment-route {
   display: flex;
   align-items: center;
@@ -1803,23 +1823,55 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .price-timeline {
   display: grid;
-  gap: .75rem;
+  gap: .85rem;
+  position: relative;
 }
 
 .price-timeline li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: .2rem 1rem;
-  border-left: 3px solid rgb(226 232 240);
-  padding-left: .75rem;
+  position: relative;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  gap: .2rem .75rem;
+  align-items: center;
+  padding-left: 0;
 }
 
-.price-timeline li.complete {
-  border-left-color: rgb(16 185 129);
+.price-timeline li::before {
+  display: inline-grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 999px;
+  background: white;
+  color: rgb(100 116 139);
+  content: "○";
+  font-size: .76rem;
+  font-weight: 950;
 }
 
-.price-timeline li.active {
-  border-left-color: rgb(245 158 11);
+.price-timeline li:not(:last-child)::after {
+  position: absolute;
+  top: 1.85rem;
+  left: .73rem;
+  height: .65rem;
+  color: rgb(148 163 184);
+  content: "↓";
+  font-size: .8rem;
+  font-weight: 950;
+}
+
+.price-timeline li.complete::before {
+  border-color: rgb(167 243 208);
+  background: rgb(220 252 231);
+  color: rgb(22 101 52);
+  content: "✓";
+}
+
+.price-timeline li.active::before {
+  border-color: rgb(191 219 254);
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
 }
 
 .price-timeline span,
@@ -1836,7 +1888,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 }
 
 .price-timeline small {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   font-size: .78rem;
 }
 
@@ -1849,6 +1901,15 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .65rem;
   margin-top: .85rem;
+}
+
+.offer-proof-panel {
+  border-top: 1px solid rgb(226 232 240);
+  padding-top: .25rem;
+}
+
+.offer-proof-panel .chain-meta {
+  margin-top: 0;
 }
 
 .payment-summary-card h2 {

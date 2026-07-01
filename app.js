@@ -248,6 +248,7 @@ const state = {
   walletAssetBalances: createDefaultWalletAssetBalances(),
   walletAssetSyncKey: "",
   walletAssetSyncStatus: "idle",
+  offerAccepted: false,
   paymentSent: false,
   escrowReleased: false,
   proofExported: false,
@@ -2223,15 +2224,50 @@ function renderInlineEvent(item) {
   `;
 }
 
+function currentOfferProofItem() {
+  const offerItem = [...channelMessages()]
+    .reverse()
+    .find((item) => {
+      if (item.type === "offer") return true;
+      const label = `${item.title || ""} ${item.subtitle || ""}`.toLowerCase();
+      return label.includes("counter offer") && !label.includes("accepted");
+    });
+  return {
+    ...(offerItem || {}),
+    type: "inline",
+    title: offerItem?.title || "Current offer",
+    time: offerItem?.time || now - 2 * minute,
+    mode: CHAT_DISPLAY_MODE,
+  };
+}
+
 function renderDeal() {
-  const currentStatus = state.paymentSent ? "Settlement" : state.escrowReleased ? "Escrow Active" : "Negotiating";
+  const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
+  const currentStatus = accepted ? "Accepted" : "Negotiating";
   const currentStatusEl = document.querySelector("#deal-current-status");
   const dealStatusEl = document.querySelector("#deal-status");
+  const negotiationActions = document.querySelector("#deal-negotiation-actions");
+  const escrowAction = document.querySelector("#deal-escrow-action");
+  const nextStepCopy = document.querySelector("#deal-next-step-copy");
+  const waitingStep = document.querySelector("#offer-history-waiting");
+  const offerProof = document.querySelector("#deal-offer-proof");
   if (currentStatusEl) currentStatusEl.textContent = currentStatus;
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
-    dealStatusEl.className = statusPillClass(currentStatus);
+    dealStatusEl.className = accepted ? "status-pill escrow-active" : statusPillClass(currentStatus);
   }
+  if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted);
+  if (escrowAction) escrowAction.classList.toggle("hidden", !accepted);
+  if (nextStepCopy) nextStepCopy.textContent = accepted
+    ? "Continue to Escrow to secure the accepted proposal."
+    : "Accept this proposal to continue to Escrow.";
+  if (waitingStep) {
+    waitingStep.classList.toggle("complete", accepted);
+    waitingStep.classList.toggle("active", !accepted);
+    waitingStep.querySelector("span").textContent = accepted ? "Proposal Accepted" : "Waiting for Response";
+    waitingStep.querySelector("strong").textContent = accepted ? "Ready" : "Open";
+  }
+  if (offerProof) offerProof.innerHTML = renderChainMeta(currentOfferProofItem());
 }
 
 function renderEscrow() {
@@ -2712,6 +2748,7 @@ function applyAiDraft() {
 }
 
 async function counterOffer() {
+  state.offerAccepted = false;
   currentChannel().status = "Negotiating";
   renderDeal();
   await safeSubmit(
@@ -2733,6 +2770,7 @@ async function counterOffer() {
 }
 
 async function acceptOffer() {
+  state.offerAccepted = true;
   currentChannel().status = "Escrow Active";
   renderDeal();
   await safeSubmit(

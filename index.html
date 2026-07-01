@@ -566,47 +566,44 @@
           <div class="detail-content">
             <section class="deal-proposal-card">
               <div class="proposal-topline">
-                <span class="eyebrow">Deal</span>
+                <span class="eyebrow">Current Offer</span>
                 <span id="deal-status" class="status-pill negotiating">Negotiating</span>
               </div>
-              <h2>Rights Transfer</h2>
-              <div class="proposal-round">
-                <span>Current Round</span>
-                <strong>Counter Offer #2</strong>
+              <div class="proposal-amount-block">
+                <div class="proposal-amount" id="deal-price">450 STRK</div>
+                <small id="deal-fiat-estimate">≈ $315.00</small>
               </div>
-              <div class="proposal-amount" id="deal-price">450 STRK</div>
-              <div class="proposal-parties">
-                <span>Alice</span>
-                <i data-lucide="move-horizontal" class="size-4"></i>
-                <span>Bob</span>
-              </div>
-              <div class="split-list mt-5">
-                <div><span>Channel</span><strong>On-chain</strong></div>
-                <div><span>Asset</span><strong>Rights package</strong></div>
-                <div><span>Privacy</span><strong>ECDH</strong></div>
-                <div><span>Status</span><strong id="deal-current-status">Negotiating</strong></div>
+              <div class="deal-info-grid">
+                <div><span>Deal Status</span><strong id="deal-current-status">Negotiating</strong></div>
+                <div><span>Current Round</span><strong>2 / 5</strong></div>
+                <div><span>Counterparty</span><strong>Bob</strong></div>
+                <div><span>Last Updated</span><strong>2 min ago</strong></div>
               </div>
             </section>
 
             <section class="plain-panel">
               <h2 class="section-title">Offer History</h2>
               <ol class="price-timeline">
-                <li class="complete"><span>Offer</span><strong>500 STRK</strong><small>Initial proposal</small></li>
-                <li class="active"><span>Counter</span><strong>450 STRK</strong><small>Counter Offer #2</small></li>
-                <li><span>Accepted</span><strong>Pending</strong><small>Moves channel to escrow</small></li>
+                <li class="complete"><span>Initial Offer</span><strong>500 STRK</strong></li>
+                <li class="complete active"><span>Counter Offer</span><strong>450 STRK</strong></li>
+                <li id="offer-history-waiting"><span>Waiting for Response</span><strong>Open</strong></li>
               </ol>
             </section>
 
             <section class="plain-panel">
               <h2 class="section-title">Next Step</h2>
-              <p class="plain-note compact">Review the current counter offer inside this channel before opening escrow.</p>
-              <div class="proposal-actions">
+              <p id="deal-next-step-copy" class="plain-note compact">Accept this proposal to continue to Escrow.</p>
+              <div id="deal-negotiation-actions" class="proposal-actions">
                 <button class="secondary-action" type="button" data-deal-action="counter">Revise Counter</button>
                 <button class="primary-action" type="button" data-deal-action="accept">Accept Proposal</button>
               </div>
             </section>
 
-            <button class="primary-action w-full" type="button" data-open-route="escrow">
+            <section class="offer-proof-panel">
+              <div id="deal-offer-proof" class="chain-meta"></div>
+            </section>
+
+            <button id="deal-escrow-action" class="primary-action w-full hidden" type="button" data-open-route="escrow">
               <i data-lucide="shield-check" class="size-5"></i>
               <span>Continue to Escrow</span>
             </button>
