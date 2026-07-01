@@ -528,23 +528,29 @@
 
           <section class="channel-security-banner">
             <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
-            <div class="min-w-0">
-              <strong>ECDH Encrypted</strong>
-              <small>On-chain Channel</small>
+            <div class="channel-security-main min-w-0">
+              <div class="channel-security-title">
+                <strong>Shielded Deal Room</strong>
+                <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
+              </div>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
+              <div class="channel-status-grid">
+                <div><span>Deal Status</span><strong id="channel-context-status-label">Escrow Active</strong></div>
+                <div><span>Mode</span><strong id="channel-context-mode">Shielded</strong></div>
+                <div><span>Counterparty</span><strong id="channel-context-counterparty">Bob</strong></div>
+                <div><span>Network</span><strong id="channel-context-network">Starknet Sepolia</strong></div>
+              </div>
             </div>
-            <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
           </section>
 
           <div id="message-feed" class="message-feed"></div>
 
           <form id="composer-form" class="composer">
             <div class="composer-actions" aria-label="Quick actions">
-              <button type="button" data-composer-action="attach" aria-label="Attachment"><i data-lucide="paperclip" class="size-5"></i></button>
-              <button type="button" data-open-route="deal" aria-label="Offer"><i data-lucide="handshake" class="size-5"></i></button>
-              <button type="button" data-open-route="payment" aria-label="Payment"><i data-lucide="badge-dollar-sign" class="size-5"></i></button>
-              <button type="button" data-open-route="escrow" aria-label="Escrow"><i data-lucide="shield-check" class="size-5"></i></button>
-              <button type="button" data-composer-action="memo" aria-label="Memo"><i data-lucide="file-text" class="size-5"></i></button>
+              <button type="button" data-composer-action="message" aria-label="Message"><i data-lucide="message-square" class="size-4"></i><span>Message</span></button>
+              <button type="button" data-open-route="deal" aria-label="Offer"><i data-lucide="badge-dollar-sign" class="size-4"></i><span>Offer</span></button>
+              <button type="button" data-open-route="escrow" aria-label="Escrow"><i data-lucide="shield-check" class="size-4"></i><span>Escrow</span></button>
+              <button type="button" data-composer-action="memo" aria-label="Memo"><i data-lucide="file-text" class="size-4"></i><span>Memo</span></button>
             </div>
             <div class="composer-input">
               <textarea id="message-input" rows="1" placeholder="Message"></textarea>

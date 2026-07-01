@@ -1909,18 +1909,9 @@ function formatTime(timestamp) {
   return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
 }
 
-function messageModeLabel(mode) {
-  return mode === "shield" ? "Shield" : "Unshield";
-}
-
-function messageStatusLabel(status) {
-  return status || "confirmed";
-}
-
 function starkscanUrl(txHash) {
   if (!txHash || String(txHash).startsWith("mock-")) return "";
-  const network = expectedChainId === "SN_MAIN" ? "" : "sepolia.";
-  return `https://${network}starkscan.co/tx/${encodeURIComponent(txHash)}`;
+  return `https://sepolia.starkscan.co/tx/${encodeURIComponent(txHash)}`;
 }
 
 function shortHash(value) {
@@ -1929,21 +1920,42 @@ function shortHash(value) {
   return text.length > 18 ? `${text.slice(0, 10)}...${text.slice(-6)}` : text;
 }
 
-function renderChainMeta(item, alignRight = false) {
-  const txUrl = starkscanUrl(item.txHash);
-  const parts = [];
-  if (item.mode) {
-    parts.push(`<span class="mode-badge ${item.mode === "shield" ? "shield" : "unshield"}">${escapeHtml(messageModeLabel(item.mode))}</span>`);
+function transactionStatusInfo(item) {
+  const status = String(item.status || "").toLowerCase();
+  if (status === "failed") {
+    return { kind: "failed", label: "❌ Failed" };
   }
-  if (item.status) parts.push(`<span>${escapeHtml(messageStatusLabel(item.status))}</span>`);
-  if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
-  if (item.txHash) {
-    parts.push(txUrl
-      ? `<a href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer">${escapeHtml(shortHash(item.txHash))}</a>`
-      : `<span>${escapeHtml(shortHash(item.txHash))}</span>`);
+  if (["encrypting", "signing", "pending"].includes(status) || !item.txHash) {
+    return { kind: "pending", label: "⏳ Pending" };
   }
+  return { kind: "confirmed", label: "✅ Confirmed" };
+}
 
-  if (!parts.length) return "";
+function renderTransactionLink(item) {
+  const txUrl = starkscanUrl(item.txHash);
+  if (!item.txHash) {
+    return `<span class="tx-link disabled">View Transaction</span>`;
+  }
+  if (!txUrl) {
+    return `<span class="tx-link disabled" title="${escapeHtml(item.txHash)}">View Transaction</span>`;
+  }
+  return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.txHash)}">View Transaction</a>`;
+}
+
+function renderShieldBadge() {
+  return `<span class="shield-badge">🛡 Shielded</span>`;
+}
+
+function renderChainMeta(item, alignRight = false) {
+  const statusInfo = transactionStatusInfo(item);
+  const parts = [];
+  parts.push(renderShieldBadge());
+  parts.push(`<span class="tx-status ${statusInfo.kind}">${escapeHtml(statusInfo.label)}</span>`);
+  if (item.time) parts.push(`<time>${escapeHtml(formatTime(item.time))}</time>`);
+  if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
+  if (item.txHash) parts.push(`<span class="tx-hash">${escapeHtml(shortHash(item.txHash))}</span>`);
+  parts.push(renderTransactionLink(item));
+
   return `<div class="chain-meta ${alignRight ? "right" : ""}">${parts.join("")}</div>`;
 }
 
@@ -2112,14 +2124,22 @@ function renderChannel() {
   const contextTitle = document.querySelector("#channel-context-title");
   const contextParty = document.querySelector("#channel-context-party");
   const contextStatus = document.querySelector("#channel-context-status");
+  const contextStatusLabel = document.querySelector("#channel-context-status-label");
+  const contextMode = document.querySelector("#channel-context-mode");
+  const contextCounterparty = document.querySelector("#channel-context-counterparty");
+  const contextNetwork = document.querySelector("#channel-context-network");
   if (contextTitle) contextTitle.textContent = channel.title;
   if (contextParty) contextParty.textContent = channel.person;
+  if (contextStatusLabel) contextStatusLabel.textContent = channel.status;
+  if (contextMode) contextMode.textContent = "Shielded";
+  if (contextCounterparty) contextCounterparty.textContent = channel.person;
+  if (contextNetwork) contextNetwork.textContent = expectedNetworkName();
   if (contextStatus) {
     contextStatus.textContent = channel.status;
     contextStatus.className = statusPillClass(channel.status);
   }
   messageFeed.innerHTML = `
-    <div class="inline-event"><strong>Today</strong></div>
+    <div class="timeline-day"><span>Today</span></div>
     ${channelMessages().map(renderFeedItem).join("")}
   `;
   iconRefresh();
@@ -2131,35 +2151,41 @@ function renderFeedItem(item) {
   return renderInlineEvent(item);
 }
 
-function renderMessageDelivery(item) {
-  const status = String(item.status || "").toLowerCase();
-  if (status === "failed") return "Encrypted - Failed";
-  if (["encrypting", "signing", "pending"].includes(status)) return "Encrypted - Sending";
-  return "Encrypted - Sent";
-}
-
 function renderMessage(item) {
   const self = item.self || item.sender === "You";
   return `
     <article class="message ${self ? "self" : ""}">
-      <div class="max-w-full">
-        <div class="message-meta ${self ? "text-right" : ""}">${escapeHtml(self ? "You" : item.sender)} - ${escapeHtml(formatTime(item.time))}</div>
+      <div class="message-stack ${self ? "right" : ""}">
+        <div class="message-meta ${self ? "text-right" : ""}">
+          <span>${escapeHtml(self ? "You" : item.sender)}</span>
+          <time>${escapeHtml(formatTime(item.time))}</time>
+        </div>
         <p class="bubble">${escapeHtml(item.body)}</p>
-        <div class="message-delivery ${self ? "right" : ""}">${escapeHtml(renderMessageDelivery(item))}</div>
+        ${renderChainMeta(item, self)}
       </div>
     </article>
   `;
 }
 
+function timelineIcon(item) {
+  const label = `${item.title || ""} ${item.subtitle || ""}`.toLowerCase();
+  if (label.includes("channel")) return "network";
+  if (label.includes("payment") || label.includes("memo")) return "file-text";
+  if (label.includes("escrow")) return "shield-check";
+  if (label.includes("offer") || label.includes("counter")) return "badge-dollar-sign";
+  return "shield";
+}
+
 function renderOfferCard(item) {
   return `
-    <article class="offer-card">
-      <span>
+    <article class="timeline-event offer-timeline">
+      <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
+      <div class="timeline-card">
         <strong>${escapeHtml(item.title)}</strong>
         <b>${escapeHtml(item.amount)}</b>
         <small>${escapeHtml(item.subtitle)}</small>
         ${renderChainMeta(item)}
-      </span>
+      </div>
       <button type="button" data-open-route="deal">Open</button>
     </article>
   `;
@@ -2167,10 +2193,13 @@ function renderOfferCard(item) {
 
 function renderInlineEvent(item) {
   return `
-    <article class="inline-event">
-      <strong>${escapeHtml(item.title)}</strong>
-      <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
-      ${renderChainMeta(item)}
+    <article class="timeline-event">
+      <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
+      <div class="timeline-card">
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
+        ${renderChainMeta(item)}
+      </div>
     </article>
   `;
 }
@@ -2899,12 +2928,16 @@ function bindEvents() {
     }
 
     const composerAction = event.target.closest("[data-composer-action]");
+    if (composerAction?.dataset.composerAction === "message") {
+      messageInput?.focus();
+      return;
+    }
     if (composerAction?.dataset.composerAction === "memo") {
       showScreen("payment");
       return;
     }
     if (composerAction) {
-      showToast("Attachment ready.");
+      showToast("Action ready.");
     }
   });
 
