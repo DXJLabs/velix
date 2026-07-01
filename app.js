@@ -1909,9 +1909,9 @@ function formatTime(timestamp) {
   return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
 }
 
-function starkscanUrl(txHash) {
+function transactionExplorerUrl(txHash) {
   if (!txHash || String(txHash).startsWith("mock-")) return "";
-  return `https://sepolia.starkscan.co/tx/${encodeURIComponent(txHash)}`;
+  return `https://sepolia.voyager.online/tx/${encodeURIComponent(txHash)}`;
 }
 
 function shortHash(value) {
@@ -1932,7 +1932,7 @@ function transactionStatusInfo(item) {
 }
 
 function renderTransactionLink(item) {
-  const txUrl = starkscanUrl(item.txHash);
+  const txUrl = transactionExplorerUrl(item.txHash);
   if (!item.txHash) {
     return `<span class="tx-link disabled">View Transaction</span>`;
   }
