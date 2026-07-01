@@ -1927,12 +1927,16 @@ function shortHash(value) {
 function transactionStatusInfo(item) {
   const status = String(item.status || "").toLowerCase();
   if (status === "failed") {
-    return { kind: "failed", label: "❌ Failed" };
+    const label = item.errorLabel || "Failed";
+    return { kind: "failed", label: `⚠ ${label}`, detail: label };
+  }
+  if (status === "read") {
+    return { kind: "read", label: "✓✓ Read" };
   }
   if (["encrypting", "signing", "pending"].includes(status) || !item.txHash) {
-    return { kind: "pending", label: "⏳ Pending" };
+    return { kind: "pending", label: "⏳ Processing" };
   }
-  return { kind: "confirmed", label: "✅ Confirmed" };
+  return { kind: "confirmed", label: "✓ Confirmed" };
 }
 
 function renderTransactionLink(item) {
@@ -1944,21 +1948,41 @@ function renderTransactionLink(item) {
   return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.txHash)}">View Transaction</a>`;
 }
 
-function renderShieldBadge() {
-  return `<span class="shield-badge">🛡 Shielded</span>`;
+function renderShieldBadge(statusInfo) {
+  const warning = statusInfo.kind === "failed"
+    ? `<span class="shield-warning" aria-label="Failed">⚠</span>`
+    : "";
+  return `<span class="shield-badge">🛡 Shielded${warning}</span>`;
+}
+
+function renderFailureActions(item, statusInfo) {
+  if (statusInfo.kind !== "failed") return "";
+  const errorText = item.errorMessage || statusInfo.detail || "Transaction failed.";
+  return [
+    `<button class="tx-action" type="button" data-transaction-retry>Retry</button>`,
+    `<button class="tx-action" type="button" data-transaction-error="${escapeHtml(errorText)}">View Error</button>`,
+  ].join("");
 }
 
 function renderChainMeta(item, alignRight = false) {
   const statusInfo = transactionStatusInfo(item);
   const parts = [];
-  parts.push(renderShieldBadge());
+  parts.push(renderShieldBadge(statusInfo));
   parts.push(`<span class="tx-status ${statusInfo.kind}">${escapeHtml(statusInfo.label)}</span>`);
   if (item.time) parts.push(`<time>${escapeHtml(formatTime(item.time))}</time>`);
   if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
   if (item.txHash) parts.push(`<span class="tx-hash">${escapeHtml(shortHash(item.txHash))}</span>`);
+  parts.push(renderFailureActions(item, statusInfo));
   parts.push(renderTransactionLink(item));
 
   return `<div class="chain-meta ${alignRight ? "right" : ""}">${parts.join("")}</div>`;
+}
+
+function itemStateClass(item) {
+  const status = transactionStatusInfo(item).kind;
+  if (status === "failed") return "failed";
+  if (status === "pending") return "processing";
+  return status;
 }
 
 function showScreen(screen, options = {}) {
@@ -2149,7 +2173,7 @@ function renderFeedItem(item) {
 function renderMessage(item) {
   const self = item.self || item.sender === "You";
   return `
-    <article class="message ${self ? "self" : ""}">
+    <article class="message ${self ? "self" : ""} ${itemStateClass(item)}">
       <div class="message-stack ${self ? "right" : ""}">
         <div class="message-meta ${self ? "text-right" : ""}">
           <span>${escapeHtml(self ? "You" : item.sender)}</span>
@@ -2173,7 +2197,7 @@ function timelineIcon(item) {
 
 function renderOfferCard(item) {
   return `
-    <article class="timeline-event offer-timeline">
+    <article class="timeline-event offer-timeline ${itemStateClass(item)}">
       <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
       <div class="timeline-card">
         <strong>${escapeHtml(item.title)}</strong>
@@ -2188,7 +2212,7 @@ function renderOfferCard(item) {
 
 function renderInlineEvent(item) {
   return `
-    <article class="timeline-event">
+    <article class="timeline-event ${itemStateClass(item)}">
       <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
       <div class="timeline-card">
         <strong>${escapeHtml(item.title)}</strong>
@@ -2510,12 +2534,20 @@ async function safeSubmit(action, localItem, success) {
     if (timelineMode === "direct-helper" && !directTransport) {
       const connected = await connectWallet();
       if (!connected) {
-        updateLocalItem(pendingItem, { status: "failed" });
+        updateLocalItem(pendingItem, {
+          status: "failed",
+          errorLabel: "Cancelled",
+          errorMessage: "Wallet connection was not completed.",
+        });
         return;
       }
     }
     if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
-      updateLocalItem(pendingItem, { status: "failed" });
+      updateLocalItem(pendingItem, {
+        status: "failed",
+        errorLabel: "Failed",
+        errorMessage: "Helper contract verification failed on the configured network.",
+      });
       return;
     }
     veilLog("info", "transaction.submit.start", {
@@ -2558,7 +2590,11 @@ async function safeSubmit(action, localItem, success) {
         howToFix: errorDetails.howToFix,
       });
     }
-    updateLocalItem(pendingItem, { status: "failed" });
+    updateLocalItem(pendingItem, {
+      status: "failed",
+      errorLabel: errorDetails.label,
+      errorMessage: errorDetails.why,
+    });
     showToast(errorDetails.toast);
   }
 }
@@ -2568,9 +2604,30 @@ function classifyTransactionError(error) {
   if (message.includes("Privacy Pool-derived encryption")) {
     return {
       code: "ENCRYPTION_NOT_CONFIGURED",
+      label: "Failed",
       toast: "Message encryption key is not configured.",
       why: message,
       howToFix: "Configure Privacy Pool-derived encryption or the direct-helper testnet encryption fallback before retrying.",
+    };
+  }
+
+  if (/reject|rejected|denied|cancel|cancelled|user abort/i.test(message)) {
+    return {
+      code: "USER_CANCELLED",
+      label: "Cancelled",
+      toast: "Cancelled.",
+      why: message,
+      howToFix: "Retry the action and approve the wallet signature if the transaction is still needed.",
+    };
+  }
+
+  if (/timeout|timed out|network|fetch failed|rpc/i.test(message)) {
+    return {
+      code: "RPC_TIMEOUT",
+      label: "Retrying...",
+      toast: "Network retry needed.",
+      why: message,
+      howToFix: "Check Starknet Sepolia RPC availability, then retry the action.",
     };
   }
 
@@ -2578,6 +2635,7 @@ function classifyTransactionError(error) {
     const address = walletAddressValue();
     return {
       code: "INSUFFICIENT_FEE_BALANCE",
+      label: "Failed",
       toast: `Fund ${expectedNetworkName()} STRK for gas.`,
       why: message,
       howToFix: `Fund ${address || "the connected account"} with ${expectedNetworkName()} STRK, then refresh Wallet and retry.`,
@@ -2586,6 +2644,7 @@ function classifyTransactionError(error) {
 
   return {
     code: "ONCHAIN_SUBMIT_FAILED",
+    label: "Failed",
     toast: timelineMode === "direct-helper" ? "Onchain action failed. Check Sepolia." : "Action failed.",
     why: message,
     howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
@@ -2822,6 +2881,17 @@ function bindEvents() {
 
     if (event.target.closest("[data-transaction-pending]")) {
       showToast("Transaction hash belum tersedia. Tunggu status confirmed.");
+      return;
+    }
+
+    if (event.target.closest("[data-transaction-retry]")) {
+      showToast("Retry action by sending/signing again.");
+      return;
+    }
+
+    const transactionError = event.target.closest("[data-transaction-error]");
+    if (transactionError) {
+      showToast(transactionError.dataset.transactionError || "Transaction failed.");
       return;
     }
 

@@ -1381,6 +1381,11 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(15 23 42);
 }
 
+.message.failed .bubble,
+.timeline-event.failed .timeline-card {
+  opacity: .7;
+}
+
 .message-meta {
   display: inline-flex;
   max-width: 100%;
@@ -1437,9 +1442,16 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .shield-badge {
   display: inline-flex;
   align-items: center;
+  gap: .28rem;
   background: rgb(220 252 231);
   color: rgb(22 101 52);
   font-weight: 950;
+}
+
+.shield-warning {
+  color: rgb(146 64 14);
+  font-size: .72rem;
+  line-height: 1;
 }
 
 .tx-status {
@@ -1457,9 +1469,14 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(22 101 52);
 }
 
+.tx-status.read {
+  background: rgb(219 234 254);
+  color: rgb(30 64 175);
+}
+
 .tx-status.failed {
-  background: rgb(254 226 226);
-  color: rgb(153 27 27);
+  background: rgb(254 243 199);
+  color: rgb(146 64 14);
 }
 
 .tx-hash {
@@ -1478,6 +1495,18 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 }
 
 .tx-link:active {
+  transform: scale(.98);
+}
+
+.tx-action {
+  border: 1px solid rgb(226 232 240);
+  background: white;
+  color: rgb(71 85 105);
+  cursor: pointer;
+  font-weight: 950;
+}
+
+.tx-action:active {
   transform: scale(.98);
 }
 
