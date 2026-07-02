@@ -2469,6 +2469,7 @@ function renderEscrow() {
   const releaseProof = document.querySelector("#escrow-release-proof");
   const releaseAction = document.querySelector("#escrow-release-action");
   const releaseStep = document.querySelector("#escrow-release-proof-step");
+  const settlementAction = document.querySelector("#escrow-settlement-action");
   const disputeAction = document.querySelector("#escrow-dispute-action");
 
   [
@@ -2508,6 +2509,27 @@ function renderEscrow() {
         ? `<i data-lucide="unlock" class="size-5"></i><span>Release Escrow</span>`
         : `<i data-lucide="lock" class="size-5"></i><span>Release Escrow</span><small>Locked</small>`;
   }
+  if (settlementAction) {
+    if (state.paymentSent) {
+      settlementAction.disabled = false;
+      settlementAction.classList.remove("disabled");
+      settlementAction.dataset.openRoute = "settlement";
+      settlementAction.innerHTML = `<i data-lucide="check" class="size-5"></i><span>View Settlement</span>`;
+      setElementText("#escrow-settlement-copy", "Settlement proof is ready.");
+    } else if (releaseDone) {
+      settlementAction.disabled = false;
+      settlementAction.classList.remove("disabled");
+      settlementAction.dataset.openRoute = "payment";
+      settlementAction.innerHTML = `<i data-lucide="send" class="size-5"></i><span>Continue to Payment</span>`;
+      setElementText("#escrow-settlement-copy", "Send settlement payment to complete this deal.");
+    } else {
+      settlementAction.disabled = true;
+      settlementAction.classList.add("disabled");
+      settlementAction.dataset.openRoute = "payment";
+      settlementAction.innerHTML = `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
+      setElementText("#escrow-settlement-copy", "Release escrow to unlock settlement payment.");
+    }
+  }
 
   if (disputeAction) {
     disputeAction.textContent = state.escrowDisputeOpened ? "Dispute Opened" : "Dispute";
@@ -2519,11 +2541,22 @@ function renderEscrow() {
 
 function renderPayment() {
   const paymentDealStatus = document.querySelector("#payment-deal-status");
+  const settlementAction = document.querySelector("#payment-settlement-action");
   if (paymentDealStatus) paymentDealStatus.textContent = state.paymentSent ? "Settlement" : "Escrow Active";
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
   renderPaymentTransactionSummary();
+  if (settlementAction) {
+    settlementAction.disabled = !state.paymentSent;
+    settlementAction.classList.toggle("disabled", !state.paymentSent);
+    settlementAction.innerHTML = state.paymentSent
+      ? `<i data-lucide="check" class="size-5"></i><span>View Settlement</span>`
+      : `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
+    setElementText("#payment-settlement-copy", state.paymentSent
+      ? "Settlement proof is ready."
+      : "Send payment to generate settlement proof.");
+  }
 }
 
 function expectedNetworkName() {

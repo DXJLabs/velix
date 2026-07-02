@@ -673,6 +673,16 @@
               </button>
               <button id="escrow-dispute-action" class="secondary-action mt-2 w-full" type="button" data-escrow-dispute>Dispute</button>
             </section>
+
+            <section class="plain-panel settlement-route-panel">
+              <h2 class="section-title">Settlement</h2>
+              <p id="escrow-settlement-copy" class="plain-note compact">Release escrow to unlock settlement payment.</p>
+              <button id="escrow-settlement-action" class="secondary-action mt-4 w-full" type="button" data-open-route="payment" disabled>
+                <i data-lucide="lock" class="size-5"></i>
+                <span>Settlement Locked</span>
+              </button>
+            </section>
+
             <section class="plain-panel">
               <h2 class="section-title">Transaction Proof</h2>
               <ol class="escrow-proof-timeline">
@@ -741,17 +751,36 @@
               <i data-lucide="send" class="size-5"></i>
               <span>Send Payment</span>
             </button>
+            <section class="plain-panel settlement-route-panel">
+              <h2 class="section-title">Settlement</h2>
+              <p id="payment-settlement-copy" class="plain-note compact">Send payment to generate settlement proof.</p>
+              <button id="payment-settlement-action" class="secondary-action mt-4 w-full" type="button" data-open-route="settlement" disabled>
+                <i data-lucide="lock" class="size-5"></i>
+                <span>Settlement Locked</span>
+              </button>
+            </section>
           </form>
         </section>
 
         <section class="screen hidden bg-[#f7f8fa]" data-screen="settlement">
-          <div class="success-screen">
-            <div class="success-icon"><i data-lucide="check" class="size-9"></i></div>
-            <p class="eyebrow">Settlement</p>
-            <h1>Settlement complete.</h1>
-            <p>Proof generated and attached to the deal.</p>
-            <button class="primary-action w-full" type="button" data-open-route="proof">View Proof</button>
-            <button class="secondary-action w-full" type="button" data-nav="channel">Back to Channel</button>
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="payment" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="eyebrow">Settlement</p>
+              <h1 class="detail-title">Settlement complete</h1>
+            </div>
+          </header>
+          <div class="detail-content">
+            <section class="workflow-progress" data-workflow-progress></section>
+            <section class="settlement-complete-card">
+              <div class="success-icon"><i data-lucide="check" class="size-9"></i></div>
+              <h2>Settlement complete.</h2>
+              <p>Proof generated and attached to the deal.</p>
+              <button class="primary-action w-full" type="button" data-open-route="proof">View Proof</button>
+              <button class="secondary-action w-full" type="button" data-nav="channel">Back to Channel</button>
+            </section>
           </div>
         </section>
 
