@@ -562,7 +562,7 @@
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <p class="eyebrow">Deal Proposal</p>
+              <p class="eyebrow">Negotiation</p>
               <h1 class="detail-title">Rights Transfer</h1>
             </div>
           </header>
@@ -579,10 +579,10 @@
                 <small id="deal-fiat-estimate">≈ $315.00</small>
               </div>
               <div class="deal-info-grid">
-                <div><span>Deal Status</span><strong id="deal-current-status">Negotiating</strong></div>
-                <div><span>Current Round</span><strong>2 / 5</strong></div>
                 <div><span>Counterparty</span><strong>Bob</strong></div>
-                <div><span>Last Updated</span><strong>2 min ago</strong></div>
+                <div><span>Asset</span><strong>Rights Transfer</strong></div>
+                <div><span>Current Round</span><strong>2 / 5</strong></div>
+                <div><span>Expiration</span><strong>24h left</strong></div>
               </div>
             </section>
 
@@ -595,19 +595,9 @@
               </ol>
             </section>
 
-            <section class="plain-panel transaction-summary-panel">
-              <h2 class="section-title">Transaction Summary</h2>
-              <div class="transaction-summary-list">
-                <div><span>Offer Amount</span><strong id="deal-summary-offer">450 STRK</strong></div>
-                <div><span>Network Fee</span><strong id="deal-network-fee">Fee will be calculated before wallet signature</strong></div>
-                <div id="deal-privacy-fee-row"><span>Privacy Fee</span><strong id="deal-privacy-fee">Fee will be calculated before wallet signature</strong></div>
-                <div class="summary-total"><span>Total</span><strong id="deal-summary-total">Calculated in wallet</strong></div>
-              </div>
-            </section>
-
             <section class="plain-panel">
               <h2 class="section-title">Next Step</h2>
-              <p id="deal-next-step-copy" class="plain-note compact">Accept this proposal to continue to Escrow.</p>
+              <p id="deal-next-step-copy" class="plain-note compact">If you accept this offer, the deal moves to Escrow Funding. Buyer deposits funds and seller deposits the asset. Both remain locked until release.</p>
               <div id="deal-negotiation-actions" class="proposal-actions">
                 <button class="secondary-action" type="button" data-deal-action="counter">Revise Counter</button>
                 <button class="primary-action" type="button" data-deal-action="accept">Accept Proposal</button>
@@ -617,11 +607,6 @@
             <section class="offer-proof-panel">
               <div id="deal-offer-proof" class="chain-meta"></div>
             </section>
-
-            <button id="deal-escrow-action" class="primary-action w-full hidden" type="button" data-open-route="escrow">
-              <i data-lucide="shield-check" class="size-5"></i>
-              <span>Continue to Escrow</span>
-            </button>
           </div>
         </section>
 

@@ -2267,20 +2267,11 @@ function offerPrivacyLabel() {
 }
 
 function renderDealTransactionSummary() {
-  const isShielded = offerPrivacyMode() === "shield";
-  const privacyFeeRow = document.querySelector("#deal-privacy-fee-row");
-
   setElementText("#deal-price", DEAL_OFFER_AMOUNT);
-  setElementText("#deal-summary-offer", DEAL_OFFER_AMOUNT);
-  setElementText("#deal-network-fee", FEE_ESTIMATE_PENDING);
-  setElementText("#deal-privacy-fee", FEE_ESTIMATE_PENDING);
-  setElementText("#deal-summary-total", TOTAL_ESTIMATE_PENDING);
   setElementText("#offer-review-amount", DEAL_OFFER_AMOUNT);
   setElementText("#offer-review-privacy", offerPrivacyLabel());
   setElementText("#offer-review-fee", FEE_ESTIMATE_PENDING);
   setElementText("#offer-review-total", TOTAL_ESTIMATE_PENDING);
-
-  if (privacyFeeRow) privacyFeeRow.classList.toggle("hidden", !isShielded);
 }
 
 function showOfferReview() {
@@ -2351,6 +2342,14 @@ function workflowStageData() {
     return [
       { id: "direct-payment", label: "Direct Pay", done: state.paymentSent, active: !state.paymentSent },
       { id: "settlement", label: "Settlement", done: state.paymentSent, active: state.paymentSent },
+    ];
+  }
+
+  if (state.screen === "deal" && !state.offerAccepted && !state.escrowReleased && !state.paymentSent) {
+    return [
+      { id: "negotiation", label: "Negotiation", done: false, active: true },
+      { id: "escrow", label: "Escrow", done: false, active: false },
+      { id: "settlement", label: "Settlement", done: false, active: false },
     ];
   }
 
@@ -2443,24 +2442,20 @@ function escrowConfirmationsComplete() {
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const currentStatus = accepted ? "Accepted" : "Negotiating";
-  const currentStatusEl = document.querySelector("#deal-current-status");
   const dealStatusEl = document.querySelector("#deal-status");
   const negotiationActions = document.querySelector("#deal-negotiation-actions");
-  const escrowAction = document.querySelector("#deal-escrow-action");
   const nextStepCopy = document.querySelector("#deal-next-step-copy");
   const waitingStep = document.querySelector("#offer-history-waiting");
   const offerProof = document.querySelector("#deal-offer-proof");
   renderDealTransactionSummary();
-  if (currentStatusEl) currentStatusEl.textContent = currentStatus;
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
     dealStatusEl.className = accepted ? "status-pill escrow-active" : statusPillClass(currentStatus);
   }
   if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted);
-  if (escrowAction) escrowAction.classList.toggle("hidden", !accepted);
   if (nextStepCopy) nextStepCopy.textContent = accepted
-    ? "Continue to Escrow to secure the accepted proposal."
-    : "Accept this proposal to continue to Escrow.";
+    ? "Offer accepted. Escrow funding is ready."
+    : "If you accept this offer, the deal moves to Escrow Funding. Buyer deposits funds and seller deposits the asset. Both remain locked until release.";
   if (waitingStep) {
     waitingStep.classList.toggle("complete", accepted);
     waitingStep.classList.toggle("active", !accepted);
@@ -3173,6 +3168,7 @@ async function acceptOffer() {
   currentChannel().status = "Escrow Active";
   renderDeal();
   renderWorkflowProgress();
+  showScreen("escrow");
 }
 
 async function sendPayment() {
