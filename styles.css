@@ -2145,6 +2145,65 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 800;
 }
 
+.escrow-deposit-grid {
+  display: grid;
+  gap: .75rem;
+}
+
+.escrow-deposit-card {
+  display: grid;
+  gap: .35rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .85rem;
+}
+
+.escrow-deposit-card.complete {
+  border-color: rgb(187 247 208);
+  background: rgb(236 253 245);
+}
+
+.deposit-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.deposit-card-top span {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+  color: rgb(4 120 87);
+}
+
+.deposit-card-top small,
+.escrow-deposit-card > small {
+  color: rgb(4 120 87);
+  font-size: .78rem;
+  font-weight: 850;
+}
+
+.escrow-deposit-card p {
+  color: rgb(15 23 42);
+  font-size: .86rem;
+  font-weight: 900;
+}
+
+.escrow-deposit-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: 1.2rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .escrow-checks {
   display: grid;
   gap: .6rem;

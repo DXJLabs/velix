@@ -648,9 +648,25 @@
 
             <section class="plain-panel">
               <h2 class="section-title">Funding</h2>
-              <div class="escrow-checks">
-                <div class="complete"><i data-lucide="check" class="size-5"></i><span>Buyer deposited</span></div>
-                <div class="complete"><i data-lucide="check" class="size-5"></i><span>Seller deposited</span></div>
+              <div class="escrow-deposit-grid">
+                <article class="escrow-deposit-card complete">
+                  <div class="deposit-card-top">
+                    <span><i data-lucide="check" class="size-5"></i></span>
+                    <small>Deposited</small>
+                  </div>
+                  <p>Buyer Deposit</p>
+                  <strong>450 STRK</strong>
+                  <small>Alice payment escrow</small>
+                </article>
+                <article class="escrow-deposit-card complete">
+                  <div class="deposit-card-top">
+                    <span><i data-lucide="check" class="size-5"></i></span>
+                    <small>Deposited</small>
+                  </div>
+                  <p>Seller Deposit</p>
+                  <strong>Rights Transfer</strong>
+                  <small>Bob asset commitment</small>
+                </article>
               </div>
               <div id="escrow-funding-proof" class="chain-meta escrow-stage-proof"></div>
             </section>
