@@ -2033,12 +2033,20 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 }
 
 .offer-proof-panel {
-  border-top: 1px solid rgb(226 232 240);
-  padding-top: .25rem;
+  display: grid;
+  gap: .55rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: .9rem;
 }
 
 .offer-proof-panel .chain-meta {
   margin-top: 0;
+}
+
+.offer-proof-panel .section-title {
+  margin-bottom: 0;
 }
 
 .settlement-route-panel .plain-note {

@@ -581,8 +581,8 @@
               <div class="deal-info-grid">
                 <div><span>Counterparty</span><strong>Bob</strong></div>
                 <div><span>Asset</span><strong>Rights Transfer</strong></div>
-                <div><span>Current Round</span><strong>2 / 5</strong></div>
-                <div><span>Expiration</span><strong>24h left</strong></div>
+                <div><span>Negotiation Round</span><strong>2 of 5</strong></div>
+                <div><span>Expiration</span><strong>Expires in 24h</strong></div>
               </div>
             </section>
 
@@ -591,20 +591,21 @@
               <ol class="price-timeline">
                 <li class="complete"><span>Initial Offer</span><strong>500 STRK</strong></li>
                 <li class="complete active"><span>Counter Offer</span><strong>450 STRK</strong></li>
-                <li id="offer-history-waiting"><span>Waiting for Response</span><strong>Open</strong></li>
+                <li id="offer-history-waiting"><span>Waiting for Bob</span><strong>Pending</strong></li>
               </ol>
             </section>
 
             <section class="plain-panel">
               <h2 class="section-title">Next Step</h2>
-              <p id="deal-next-step-copy" class="plain-note compact">If you accept this offer, the deal moves to Escrow Funding. Buyer deposits funds and seller deposits the asset. Both remain locked until release.</p>
+              <p id="deal-next-step-copy" class="plain-note compact">Accept this offer to start escrow funding. Buyer deposits funds, seller deposits the asset. Both remain locked until release.</p>
               <div id="deal-negotiation-actions" class="proposal-actions">
-                <button class="secondary-action" type="button" data-deal-action="counter">Revise Counter</button>
-                <button class="primary-action" type="button" data-deal-action="accept">Accept Proposal</button>
+                <button id="deal-counter-action" class="secondary-action" type="button" data-deal-action="counter">Waiting for Bob...</button>
+                <button id="deal-accept-action" class="primary-action" type="button" data-deal-action="accept">Accept Proposal</button>
               </div>
             </section>
 
             <section class="offer-proof-panel">
+              <h2 class="section-title">Latest On-chain Activity</h2>
               <div id="deal-offer-proof" class="chain-meta"></div>
             </section>
           </div>

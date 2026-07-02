@@ -2442,8 +2442,10 @@ function escrowConfirmationsComplete() {
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const currentStatus = accepted ? "Accepted" : "Negotiating";
+  const waitingForCounterparty = !accepted;
   const dealStatusEl = document.querySelector("#deal-status");
   const negotiationActions = document.querySelector("#deal-negotiation-actions");
+  const counterAction = document.querySelector("#deal-counter-action");
   const nextStepCopy = document.querySelector("#deal-next-step-copy");
   const waitingStep = document.querySelector("#offer-history-waiting");
   const offerProof = document.querySelector("#deal-offer-proof");
@@ -2453,14 +2455,19 @@ function renderDeal() {
     dealStatusEl.className = accepted ? "status-pill escrow-active" : statusPillClass(currentStatus);
   }
   if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted);
+  if (counterAction) {
+    counterAction.disabled = waitingForCounterparty;
+    counterAction.classList.toggle("disabled", waitingForCounterparty);
+    counterAction.textContent = waitingForCounterparty ? "Waiting for Bob..." : "Counter Offer";
+  }
   if (nextStepCopy) nextStepCopy.textContent = accepted
     ? "Offer accepted. Escrow funding is ready."
-    : "If you accept this offer, the deal moves to Escrow Funding. Buyer deposits funds and seller deposits the asset. Both remain locked until release.";
+    : "Accept this offer to start escrow funding. Buyer deposits funds, seller deposits the asset. Both remain locked until release.";
   if (waitingStep) {
     waitingStep.classList.toggle("complete", accepted);
     waitingStep.classList.toggle("active", !accepted);
-    waitingStep.querySelector("span").textContent = accepted ? "Proposal Accepted" : "Waiting for Response";
-    waitingStep.querySelector("strong").textContent = accepted ? "Ready" : "Open";
+    waitingStep.querySelector("span").textContent = accepted ? "Proposal Accepted" : "Waiting for Bob";
+    waitingStep.querySelector("strong").textContent = accepted ? "Ready" : "Pending";
   }
   if (offerProof) offerProof.innerHTML = renderChainMeta(currentOfferProofItem());
 }
