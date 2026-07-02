@@ -252,6 +252,9 @@ const state = {
   walletAssetBalances: createDefaultWalletAssetBalances(),
   walletAssetSyncKey: "",
   walletAssetSyncStatus: "idle",
+  negotiationStep: "decision",
+  initialOfferAmount: "500 STRK",
+  latestOfferAmount: DEAL_OFFER_AMOUNT,
   offerAccepted: false,
   paymentSent: false,
   escrowReleased: false,
@@ -2266,9 +2269,31 @@ function offerPrivacyLabel() {
   return offerPrivacyMode() === "shield" ? "Shielded" : "Unshielded";
 }
 
+function normalizeOfferAmount(value) {
+  const match = String(value || "").match(/\d+(?:[.,]\d+)?/);
+  return match ? match[0].replace(",", ".") : "450";
+}
+
+function createOfferAmountValue() {
+  return normalizeOfferAmount(document.querySelector("#create-offer-amount")?.value || "500");
+}
+
+function createOfferAssetValue() {
+  return document.querySelector("#create-offer-asset")?.value.trim() || "Rights Transfer";
+}
+
+function createOfferTermsValue() {
+  return document.querySelector("#create-offer-terms")?.value.trim()
+    || "Buyer deposits funds, seller deposits the asset. Both remain locked until release.";
+}
+
+function currentDealOfferAmount() {
+  return state.latestOfferAmount || DEAL_OFFER_AMOUNT;
+}
+
 function renderDealTransactionSummary() {
-  setElementText("#deal-price", DEAL_OFFER_AMOUNT);
-  setElementText("#offer-review-amount", DEAL_OFFER_AMOUNT);
+  setElementText("#deal-price", currentDealOfferAmount());
+  setElementText("#offer-review-amount", currentDealOfferAmount());
   setElementText("#offer-review-privacy", offerPrivacyLabel());
   setElementText("#offer-review-fee", FEE_ESTIMATE_PENDING);
   setElementText("#offer-review-total", TOTAL_ESTIMATE_PENDING);
@@ -2441,52 +2466,100 @@ function escrowConfirmationsComplete() {
 
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
+  const negotiationStep = accepted ? "accepted" : state.negotiationStep || "decision";
   const currentStatus = accepted ? "Accepted" : "Negotiating";
+  const currentAmount = currentDealOfferAmount();
+  const initialAmount = state.initialOfferAmount || currentAmount;
+  const waitingForCounterparty = negotiationStep === "waiting";
+  const createOfferPanel = document.querySelector("#create-offer-panel");
+  const createOfferStatus = document.querySelector("#create-offer-status");
+  const createOfferAction = document.querySelector("#create-offer-action");
   const dealStatusEl = document.querySelector("#deal-status");
   const negotiationActions = document.querySelector("#deal-negotiation-actions");
   const counterAction = document.querySelector("#deal-counter-action");
   const dealTurnLabel = document.querySelector("#deal-turn-label");
   const negotiationFlowList = document.querySelector("#negotiation-flow-list");
   const nextStepCopy = document.querySelector("#deal-next-step-copy");
-  const waitingStep = document.querySelector("#offer-history-waiting");
+  const offerHistoryList = document.querySelector("#offer-history-list");
   const offerProof = document.querySelector("#deal-offer-proof");
   renderDealTransactionSummary();
+  if (createOfferPanel) createOfferPanel.hidden = accepted;
+  if (createOfferStatus) {
+    createOfferStatus.textContent = waitingForCounterparty ? "Created" : "Step 1";
+    createOfferStatus.className = waitingForCounterparty ? "status-pill escrow-active" : "status-pill negotiating";
+  }
+  if (createOfferAction) {
+    createOfferAction.disabled = waitingForCounterparty;
+    createOfferAction.classList.toggle("disabled", waitingForCounterparty);
+    const label = createOfferAction.querySelector("span");
+    if (label) label.textContent = waitingForCounterparty ? "Offer Created" : "Create Offer";
+  }
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
     dealStatusEl.className = accepted ? "status-pill escrow-active" : statusPillClass(currentStatus);
   }
-  if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted);
+  if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted || waitingForCounterparty);
   if (counterAction) {
     counterAction.disabled = false;
     counterAction.classList.remove("disabled");
     counterAction.textContent = "Counter Again";
   }
-  if (dealTurnLabel) dealTurnLabel.textContent = accepted ? "Escrow Funding" : "Your Decision";
+  if (dealTurnLabel) dealTurnLabel.textContent = accepted ? "Escrow Funding" : waitingForCounterparty ? "Waiting for Bob" : "Your Decision";
   if (negotiationFlowList) {
-    negotiationFlowList.innerHTML = accepted
-      ? `
-        <li class="complete"><span>1</span><div><strong>Offer Created</strong><small>Alice proposed 500 STRK</small></div></li>
-        <li class="complete"><span>2</span><div><strong>Waiting for Bob</strong><small>Counterparty reviewed the offer</small></div></li>
-        <li class="complete"><span>3</span><div><strong>Counter Offer</strong><small>Bob proposed 450 STRK</small></div></li>
-        <li class="complete"><span>4</span><div><strong>Proposal Accepted</strong><small>Wallet signature confirmed</small></div></li>
-        <li class="active"><span>5</span><div><strong>Escrow Funding</strong><small>Buyer and seller deposit next</small></div></li>
-      `
-      : `
-        <li class="complete"><span>1</span><div><strong>Offer Created</strong><small>Alice proposed 500 STRK</small></div></li>
-        <li class="complete"><span>2</span><div><strong>Waiting for Bob</strong><small>Counterparty reviewed the offer</small></div></li>
-        <li class="complete"><span>3</span><div><strong>Counter Offer</strong><small>Bob proposed 450 STRK</small></div></li>
-        <li class="active"><span>4</span><div><strong>Your Decision</strong><small>Accept or counter again</small></div></li>
-        <li><span>5</span><div><strong>Escrow Funding</strong><small>Unlocked after acceptance</small></div></li>
-      `;
+    const flowStates = accepted
+      ? ["complete", "complete", "complete", "complete", "active"]
+      : waitingForCounterparty
+        ? ["complete", "active", "", "", ""]
+        : ["complete", "complete", "complete", "active", ""];
+    const flowCopy = accepted
+      ? [
+        ["Offer Created", `Alice proposed ${initialAmount}`],
+        ["Waiting for Bob", "Counterparty reviewed the offer"],
+        ["Counter Offer", `Bob proposed ${currentAmount}`],
+        ["Proposal Accepted", "Wallet signature confirmed"],
+        ["Escrow Funding", "Buyer and seller deposit next"],
+      ]
+      : waitingForCounterparty
+        ? [
+          ["Offer Created", `Alice proposed ${currentAmount}`],
+          ["Waiting for Bob", "Counterparty can accept or counter"],
+          ["Counter Offer", "Not received yet"],
+          ["Your Decision", "Unlocked after counter"],
+          ["Escrow Funding", "Unlocked after acceptance"],
+        ]
+        : [
+          ["Offer Created", `Alice proposed ${initialAmount}`],
+          ["Waiting for Bob", "Counterparty reviewed the offer"],
+          ["Counter Offer", `Bob proposed ${currentAmount}`],
+          ["Your Decision", "Accept or counter again"],
+          ["Escrow Funding", "Unlocked after acceptance"],
+        ];
+    negotiationFlowList.innerHTML = flowCopy.map(([title, copy], index) => `
+      <li class="${flowStates[index]}"><span>${index + 1}</span><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(copy)}</small></div></li>
+    `).join("");
   }
   if (nextStepCopy) nextStepCopy.textContent = accepted
     ? "Offer accepted. Escrow funding is ready."
-    : "Accept 450 STRK to start escrow funding, or counter again before the offer expires.";
-  if (waitingStep) {
-    waitingStep.classList.toggle("complete", accepted);
-    waitingStep.classList.toggle("active", !accepted);
-    waitingStep.querySelector("span").textContent = accepted ? "Proposal Accepted" : "Your Decision";
-    waitingStep.querySelector("strong").textContent = accepted ? "Ready" : "Pending";
+    : waitingForCounterparty
+      ? "Offer created. Waiting for Bob to accept or counter."
+      : `Accept ${currentAmount} to start escrow funding, or counter again before the offer expires.`;
+  if (offerHistoryList) {
+    offerHistoryList.innerHTML = accepted
+      ? `
+        <li class="complete"><span>Initial Offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
+        <li class="complete"><span>Bob Counter Offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
+        <li class="complete active"><span>Proposal Accepted</span><strong>Ready</strong></li>
+      `
+      : waitingForCounterparty
+        ? `
+          <li class="complete active"><span>Initial Offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
+          <li><span>Waiting for Bob</span><strong>Pending</strong></li>
+        `
+        : `
+          <li class="complete"><span>Initial Offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
+          <li class="complete active"><span>Bob Counter Offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
+          <li><span>Your Decision</span><strong>Pending</strong></li>
+        `;
   }
   if (offerProof) offerProof.innerHTML = renderChainMeta(currentOfferProofItem());
 }
@@ -3150,17 +3223,47 @@ function applyAiDraft() {
   showToast("AI draft ready.");
 }
 
-async function counterOffer() {
+async function createOffer() {
+  const amount = createOfferAmountValue();
+  const amountLabel = `${amount} STRK`;
+  const asset = createOfferAssetValue();
+  const terms = createOfferTermsValue();
+  const submitted = await safeSubmit(
+    () => veilClient.createOffer({
+      channelId: state.channelId,
+      amount,
+      currency: "STRK",
+      terms,
+      mode: offerPrivacyMode(),
+      sender: "you",
+    }),
+    {
+      type: "offer",
+      title: "Offer Created",
+      amount: amountLabel,
+      subtitle: asset,
+      time: Date.now(),
+    },
+    "Offer created.",
+  );
+  if (!submitted) return;
   state.offerAccepted = false;
+  state.negotiationStep = "waiting";
+  state.initialOfferAmount = amountLabel;
+  state.latestOfferAmount = amountLabel;
   currentChannel().status = "Negotiating";
   renderDeal();
   renderWorkflowProgress();
-  await safeSubmit(
+}
+
+async function counterOffer() {
+  const submitted = await safeSubmit(
     () => veilClient.counterOffer({
       channelId: state.channelId,
       amount: "450",
       currency: "STRK",
       terms: "Private payment with proof.",
+      mode: offerPrivacyMode(),
       sender: "you",
     }),
     {
@@ -3171,14 +3274,22 @@ async function counterOffer() {
     },
     "Counter sent.",
   );
+  if (!submitted) return;
+  state.offerAccepted = false;
+  state.negotiationStep = "waiting";
+  state.latestOfferAmount = DEAL_OFFER_AMOUNT;
+  currentChannel().status = "Negotiating";
+  renderDeal();
+  renderWorkflowProgress();
 }
 
 async function acceptOffer() {
   const submitted = await safeSubmit(
     () => veilClient.acceptOffer({
       channelId: state.channelId,
-      offerId: DEAL_OFFER_AMOUNT,
+      offerId: currentDealOfferAmount(),
       reason: "Accepted.",
+      mode: offerPrivacyMode(),
       sender: "you",
     }),
     {
@@ -3191,6 +3302,7 @@ async function acceptOffer() {
   );
   if (!submitted) return;
   state.offerAccepted = true;
+  state.negotiationStep = "accepted";
   currentChannel().status = "Escrow Active";
   renderDeal();
   renderWorkflowProgress();
@@ -3384,6 +3496,10 @@ function bindEvents() {
     }
 
     const dealAction = event.target.closest("[data-deal-action]");
+    if (dealAction?.dataset.dealAction === "create-offer") {
+      createOffer();
+      return;
+    }
     if (dealAction?.dataset.dealAction === "counter") {
       counterOffer();
       return;

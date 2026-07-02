@@ -1891,6 +1891,110 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 950;
 }
 
+.create-offer-panel {
+  display: grid;
+  gap: .85rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .9rem;
+  background: white;
+  padding: 1rem;
+}
+
+.create-offer-panel[hidden] {
+  display: none;
+}
+
+.create-offer-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .85rem;
+}
+
+.create-offer-heading h2 {
+  color: rgb(15 23 42);
+  font-size: 1.35rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.create-offer-heading small {
+  display: block;
+  margin-top: .18rem;
+  color: rgb(100 116 139);
+  font-size: .82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.create-offer-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+}
+
+.offer-amount-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: white;
+  padding-right: .75rem;
+}
+
+.offer-amount-input:focus-within {
+  border-color: rgb(100 116 139);
+}
+
+.field .offer-amount-input input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: .85rem .85rem;
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 950;
+  outline: none;
+}
+
+.offer-amount-input strong {
+  color: rgb(71 85 105);
+  font-size: .82rem;
+  font-weight: 950;
+}
+
+.create-offer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .75rem;
+}
+
+.create-offer-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+  color: rgb(4 120 87);
+  padding: .35rem .65rem;
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.create-offer-meta small {
+  min-width: 0;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 850;
+  text-align: right;
+}
+
 .payment-route {
   display: flex;
   align-items: center;
@@ -2157,6 +2261,20 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
   .proposal-actions {
     grid-template-columns: 1fr;
+  }
+
+  .create-offer-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .create-offer-heading,
+  .create-offer-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .create-offer-meta small {
+    text-align: left;
   }
 }
 

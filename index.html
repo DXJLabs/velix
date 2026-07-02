@@ -569,6 +569,50 @@
           <div class="detail-content">
             <section class="workflow-progress" data-workflow-progress></section>
 
+            <section id="create-offer-panel" class="create-offer-panel">
+              <div class="create-offer-heading">
+                <div>
+                  <p class="eyebrow">Create Offer</p>
+                  <h2>Start negotiation</h2>
+                  <small>Define the amount and asset before escrow funding starts.</small>
+                </div>
+                <span id="create-offer-status" class="status-pill negotiating">Step 1</span>
+              </div>
+              <div class="create-offer-fields">
+                <label class="field">
+                  <span>Offer Amount</span>
+                  <div class="offer-amount-input">
+                    <input id="create-offer-amount" type="text" inputmode="decimal" value="500" aria-label="Offer amount" />
+                    <strong>STRK</strong>
+                  </div>
+                </label>
+                <label class="field">
+                  <span>Asset</span>
+                  <input id="create-offer-asset" type="text" value="Rights Package / NFT" />
+                </label>
+                <label class="field">
+                  <span>Counterparty</span>
+                  <input id="create-offer-counterparty" type="text" value="Bob" />
+                </label>
+                <label class="field">
+                  <span>Expiration</span>
+                  <input id="create-offer-expiration" type="text" value="24h" />
+                </label>
+              </div>
+              <label class="field">
+                <span>Terms</span>
+                <textarea id="create-offer-terms" rows="3">Buyer deposits funds, seller deposits the asset. Both remain locked until release.</textarea>
+              </label>
+              <div class="create-offer-meta">
+                <span><i data-lucide="shield" class="size-4"></i> Shielded</span>
+                <small>Fee will be calculated before wallet signature</small>
+              </div>
+              <button id="create-offer-action" class="primary-action w-full" type="button" data-deal-action="create-offer">
+                <i data-lucide="badge-dollar-sign" class="size-5"></i>
+                <span>Create Offer</span>
+              </button>
+            </section>
+
             <section class="deal-proposal-card">
               <div class="proposal-topline">
                 <span class="eyebrow">Current Offer</span>
@@ -599,7 +643,7 @@
 
             <section class="plain-panel">
               <h2 class="section-title">Offer History</h2>
-              <ol class="price-timeline">
+              <ol id="offer-history-list" class="price-timeline">
                 <li class="complete"><span>Initial Offer</span><strong>500 STRK</strong></li>
                 <li class="complete active"><span>Bob Counter Offer</span><strong>450 STRK</strong></li>
                 <li id="offer-history-waiting"><span>Your Decision</span><strong>Pending</strong></li>
