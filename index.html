@@ -569,12 +569,29 @@
           <div class="detail-content">
             <section class="workflow-progress" data-workflow-progress></section>
 
-            <section id="create-offer-panel" class="create-offer-panel">
+            <section id="current-offer-panel" class="deal-proposal-card">
+              <div class="proposal-topline">
+                <span class="eyebrow">Current Offer</span>
+                <span id="deal-status" class="status-pill negotiating">Negotiating</span>
+              </div>
+              <div class="proposal-amount-block">
+                <div class="proposal-amount" id="deal-price">450 STRK</div>
+                <small id="deal-fiat-estimate">≈ $315.00</small>
+              </div>
+              <div class="deal-info-grid">
+                <div><span>Counterparty</span><strong>Bob</strong></div>
+                <div><span>Asset</span><strong>Rights Transfer</strong></div>
+                <div><span>Turn</span><strong id="deal-turn-label">Your Decision</strong></div>
+                <div><span>Expiration</span><strong>Expires in 24h</strong></div>
+              </div>
+            </section>
+
+            <section id="create-offer-panel" class="create-offer-panel" hidden>
               <div class="create-offer-heading">
                 <div>
-                  <p class="eyebrow">Create Offer</p>
-                  <h2>Start negotiation</h2>
-                  <small>Define the amount and asset before escrow funding starts.</small>
+                  <p id="create-offer-eyebrow" class="eyebrow">Create Offer</p>
+                  <h2 id="create-offer-title">Start negotiation</h2>
+                  <small id="create-offer-copy">Define the amount and asset before escrow funding starts.</small>
                 </div>
                 <span id="create-offer-status" class="status-pill negotiating">Step 1</span>
               </div>
@@ -607,41 +624,16 @@
                 <span><i data-lucide="shield" class="size-4"></i> Shielded</span>
                 <small>Fee will be calculated before wallet signature</small>
               </div>
-              <button id="create-offer-action" class="primary-action w-full" type="button" data-deal-action="create-offer">
-                <i data-lucide="badge-dollar-sign" class="size-5"></i>
-                <span>Create Offer</span>
-              </button>
-            </section>
-
-            <section class="deal-proposal-card">
-              <div class="proposal-topline">
-                <span class="eyebrow">Current Offer</span>
-                <span id="deal-status" class="status-pill negotiating">Negotiating</span>
-              </div>
-              <div class="proposal-amount-block">
-                <div class="proposal-amount" id="deal-price">450 STRK</div>
-                <small id="deal-fiat-estimate">≈ $315.00</small>
-              </div>
-              <div class="deal-info-grid">
-                <div><span>Counterparty</span><strong>Bob</strong></div>
-                <div><span>Asset</span><strong>Rights Transfer</strong></div>
-                <div><span>Turn</span><strong id="deal-turn-label">Your Decision</strong></div>
-                <div><span>Expiration</span><strong>Expires in 24h</strong></div>
+              <div class="offer-form-actions">
+                <button id="create-offer-cancel" class="secondary-action" type="button" data-deal-action="cancel-offer-form" hidden>Cancel</button>
+                <button id="create-offer-action" class="primary-action" type="button" data-deal-action="create-offer">
+                  <i data-lucide="badge-dollar-sign" class="size-5"></i>
+                  <span>Create Offer</span>
+                </button>
               </div>
             </section>
 
-            <section class="plain-panel negotiation-flow-card">
-              <h2 class="section-title">Negotiation Flow</h2>
-              <ol id="negotiation-flow-list" class="negotiation-flow-list">
-                <li class="complete"><span>1</span><div><strong>Offer Created</strong><small>Alice proposed 500 STRK</small></div></li>
-                <li class="complete"><span>2</span><div><strong>Waiting for Bob</strong><small>Counterparty reviewed the offer</small></div></li>
-                <li class="complete"><span>3</span><div><strong>Counter Offer</strong><small>Bob proposed 450 STRK</small></div></li>
-                <li class="active"><span>4</span><div><strong>Your Decision</strong><small>Accept or counter again</small></div></li>
-                <li><span>5</span><div><strong>Escrow Funding</strong><small>Unlocked after acceptance</small></div></li>
-              </ol>
-            </section>
-
-            <section class="plain-panel">
+            <section id="offer-history-panel" class="plain-panel">
               <h2 class="section-title">Offer History</h2>
               <ol id="offer-history-list" class="price-timeline">
                 <li class="complete"><span>Initial Offer</span><strong>500 STRK</strong></li>
@@ -650,7 +642,7 @@
               </ol>
             </section>
 
-            <section class="plain-panel">
+            <section id="deal-next-step-panel" class="plain-panel next-step-panel">
               <h2 class="section-title">Next Step</h2>
               <p id="deal-next-step-copy" class="plain-note compact">Accept 450 STRK to start escrow funding, or counter again before the offer expires.</p>
               <div id="deal-negotiation-actions" class="proposal-actions">
@@ -659,10 +651,10 @@
               </div>
             </section>
 
-            <section class="offer-proof-panel">
-              <h2 class="section-title">Latest On-chain Activity</h2>
+            <details id="deal-activity-panel" class="offer-proof-panel">
+              <summary><span id="deal-activity-title">Offer Submitted</span><i data-lucide="chevron-down" class="size-4"></i></summary>
               <div id="deal-offer-proof" class="chain-meta"></div>
-            </section>
+            </details>
           </div>
         </section>
 
