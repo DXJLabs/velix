@@ -2347,11 +2347,14 @@ function hidePaymentReview() {
 
 function workflowStageData() {
   const status = String(currentChannel().status || "").toLowerCase();
+  const escrowSettlementComplete = state.escrowReleased && !state.paymentSent;
+  const settlementReady = status.includes("settlement ready");
+  const settlementStatusComplete = status.includes("settlement") && !status.includes("ready");
   const channelInEscrow = status.includes("escrow") || status.includes("settlement");
-  const negotiationComplete = state.offerAccepted || state.escrowReleased || state.paymentSent || channelInEscrow;
-  const escrowComplete = state.escrowReleased || state.paymentSent || status.includes("settlement");
-  const settlementComplete = state.paymentSent || status.includes("settlement");
-  const activeStage = settlementComplete || state.screen === "payment" || state.screen === "settlement" || state.screen === "proof"
+  const negotiationComplete = state.offerAccepted || settlementReady || escrowSettlementComplete || state.paymentSent || channelInEscrow;
+  const escrowComplete = escrowSettlementComplete || settlementReady || state.paymentSent || settlementStatusComplete;
+  const settlementComplete = escrowSettlementComplete || state.paymentSent || settlementStatusComplete;
+  const activeStage = settlementComplete || settlementReady || state.screen === "payment" || state.screen === "settlement" || state.screen === "proof"
     ? "settlement"
     : negotiationComplete || state.screen === "escrow"
       ? "escrow"
@@ -2462,6 +2465,7 @@ function renderDeal() {
 function renderEscrow() {
   const releaseDone = state.escrowReleased || state.paymentSent;
   const releaseReady = releaseDone || escrowConfirmationsComplete();
+  const escrowDisplayStatus = releaseDone ? "Settlement" : "Escrow Active";
   const fundingItem = escrowFundingProofItem();
   const releaseItem = escrowReleaseProofItem();
   const fundingProof = document.querySelector("#escrow-funding-proof");
@@ -2471,6 +2475,12 @@ function renderEscrow() {
   const releaseStep = document.querySelector("#escrow-release-proof-step");
   const settlementAction = document.querySelector("#escrow-settlement-action");
   const disputeAction = document.querySelector("#escrow-dispute-action");
+  const escrowChannelStatus = document.querySelector("#escrow-channel-status");
+
+  if (escrowChannelStatus) {
+    escrowChannelStatus.textContent = escrowDisplayStatus;
+    escrowChannelStatus.className = statusPillClass(escrowDisplayStatus);
+  }
 
   [
     ["#escrow-buyer-confirmed", "buyer"],
@@ -2486,12 +2496,12 @@ function renderEscrow() {
   });
 
   setElementText("#escrow-funding-status", "Deposits recorded");
-  setElementText("#escrow-release-status", releaseDone ? "Released" : "Waiting for confirmation");
+  setElementText("#escrow-release-status", releaseDone ? "Released" : "Waiting for both approvals");
   setElementText("#escrow-release-copy", releaseDone
-    ? "Escrow released."
+    ? "Escrow released. Settlement proof is ready."
     : releaseReady
       ? "Ready for wallet signature."
-      : "Waiting for confirmation");
+      : "Waiting for both approvals");
   if (fundingProof) fundingProof.innerHTML = renderEscrowProofMeta(fundingItem);
   if (fundingProofTimeline) fundingProofTimeline.innerHTML = renderEscrowProofMeta(fundingItem);
   if (releaseProof) releaseProof.innerHTML = releaseDone ? renderEscrowProofMeta(releaseItem) : "";
@@ -2510,24 +2520,18 @@ function renderEscrow() {
         : `<i data-lucide="lock" class="size-5"></i><span>Release Escrow</span><small>Locked</small>`;
   }
   if (settlementAction) {
-    if (state.paymentSent) {
+    if (releaseDone) {
       settlementAction.disabled = false;
       settlementAction.classList.remove("disabled");
       settlementAction.dataset.openRoute = "settlement";
-      settlementAction.innerHTML = `<i data-lucide="check" class="size-5"></i><span>View Settlement</span>`;
+      settlementAction.innerHTML = `<i data-lucide="check" class="size-5"></i><span>View Settlement Proof</span>`;
       setElementText("#escrow-settlement-copy", "Settlement proof is ready.");
-    } else if (releaseDone) {
-      settlementAction.disabled = false;
-      settlementAction.classList.remove("disabled");
-      settlementAction.dataset.openRoute = "payment";
-      settlementAction.innerHTML = `<i data-lucide="send" class="size-5"></i><span>Continue to Payment</span>`;
-      setElementText("#escrow-settlement-copy", "Send settlement payment to complete this deal.");
     } else {
       settlementAction.disabled = true;
       settlementAction.classList.add("disabled");
-      settlementAction.dataset.openRoute = "payment";
+      settlementAction.dataset.openRoute = "settlement";
       settlementAction.innerHTML = `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
-      setElementText("#escrow-settlement-copy", "Release escrow to unlock settlement payment.");
+      setElementText("#escrow-settlement-copy", "Release escrow to generate settlement proof.");
     }
   }
 
@@ -2542,7 +2546,13 @@ function renderEscrow() {
 function renderPayment() {
   const paymentDealStatus = document.querySelector("#payment-deal-status");
   const settlementAction = document.querySelector("#payment-settlement-action");
-  if (paymentDealStatus) paymentDealStatus.textContent = state.paymentSent ? "Settlement" : "Escrow Active";
+  if (paymentDealStatus) {
+    paymentDealStatus.textContent = state.paymentSent
+      ? "Settlement Complete"
+      : state.escrowReleased
+        ? "Settlement Ready"
+        : "Escrow Active";
+  }
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
@@ -3124,10 +3134,10 @@ async function releaseEscrow() {
   );
   if (!submitted) return;
   state.escrowReleased = true;
-  currentChannel().status = "Escrow Active";
+  currentChannel().status = "Settlement";
   renderEscrow();
   renderWorkflowProgress();
-  showScreen("payment");
+  showScreen("settlement");
 }
 
 function bindEvents() {

@@ -2204,6 +2204,41 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   white-space: nowrap;
 }
 
+.deposit-card-details {
+  display: grid;
+  gap: .45rem;
+  margin-top: .25rem;
+}
+
+.deposit-card-details span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  border-top: 1px solid rgb(187 247 208);
+  padding-top: .45rem;
+}
+
+.deposit-card-details em {
+  color: rgb(71 85 105);
+  font-size: .72rem;
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.deposit-card-details b {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .82rem;
+  font-weight: 950;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .escrow-checks {
   display: grid;
   gap: .6rem;

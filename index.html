@@ -631,7 +631,7 @@
             </button>
             <div class="min-w-0 flex-1">
               <p class="eyebrow">Escrow</p>
-              <h1 class="detail-title">Release conditions</h1>
+              <h1 class="detail-title">Escrow stages</h1>
             </div>
           </header>
           <div class="detail-content">
@@ -643,7 +643,7 @@
                 <h2>Rights Transfer</h2>
                 <small>Alice / Bob</small>
               </div>
-              <span class="status-pill escrow-active">Escrow Active</span>
+              <span id="escrow-channel-status" class="status-pill escrow-active">Escrow Active</span>
             </section>
 
             <section class="plain-panel">
@@ -652,20 +652,26 @@
                 <article class="escrow-deposit-card complete">
                   <div class="deposit-card-top">
                     <span><i data-lucide="check" class="size-5"></i></span>
-                    <small>Deposited</small>
+                    <small>Locked in Escrow</small>
                   </div>
                   <p>Buyer Deposit</p>
                   <strong>450 STRK</strong>
-                  <small>Alice payment escrow</small>
+                  <div class="deposit-card-details">
+                    <span><em>Depositor</em><b>Alice</b></span>
+                    <span><em>Escrow Asset</em><b>STRK locked</b></span>
+                  </div>
                 </article>
                 <article class="escrow-deposit-card complete">
                   <div class="deposit-card-top">
                     <span><i data-lucide="check" class="size-5"></i></span>
-                    <small>Deposited</small>
+                    <small>Locked in Escrow</small>
                   </div>
                   <p>Seller Deposit</p>
-                  <strong>NFT or Work Result</strong>
-                  <small>Bob deliverable escrow</small>
+                  <strong>NFT / Work Result</strong>
+                  <div class="deposit-card-details">
+                    <span><em>Depositor</em><b>Bob</b></span>
+                    <span><em>Escrow Asset</em><b>Deliverable locked</b></span>
+                  </div>
                 </article>
               </div>
               <div id="escrow-funding-proof" class="chain-meta escrow-stage-proof"></div>
@@ -681,7 +687,7 @@
 
             <section class="plain-panel">
               <h2 class="section-title">Release</h2>
-              <p id="escrow-release-copy" class="plain-note compact">Waiting for confirmation</p>
+              <p id="escrow-release-copy" class="plain-note compact">Waiting for both approvals</p>
               <button id="escrow-release-action" class="primary-action mt-5 w-full" type="button" data-escrow-release disabled>
                 <i data-lucide="lock" class="size-5"></i>
                 <span>Release Escrow</span>
@@ -692,8 +698,8 @@
 
             <section class="plain-panel settlement-route-panel">
               <h2 class="section-title">Settlement</h2>
-              <p id="escrow-settlement-copy" class="plain-note compact">Release escrow to unlock settlement payment.</p>
-              <button id="escrow-settlement-action" class="secondary-action mt-4 w-full" type="button" data-open-route="payment" disabled>
+              <p id="escrow-settlement-copy" class="plain-note compact">Release escrow to generate settlement proof.</p>
+              <button id="escrow-settlement-action" class="secondary-action mt-4 w-full" type="button" data-open-route="settlement" disabled>
                 <i data-lucide="lock" class="size-5"></i>
                 <span>Settlement Locked</span>
               </button>
@@ -780,7 +786,7 @@
 
         <section class="screen hidden bg-[#f7f8fa]" data-screen="settlement">
           <header class="detail-header">
-            <button class="icon-button ghost" type="button" data-nav="payment" aria-label="Back">
+            <button class="icon-button ghost" type="button" data-nav="escrow" aria-label="Back">
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <div class="min-w-0 flex-1">
