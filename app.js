@@ -258,7 +258,6 @@ const state = {
   escrowConfirmations: {
     buyer: false,
     seller: false,
-    ai: false,
   },
   escrowDisputeOpened: false,
   proofExported: false,
@@ -2427,7 +2426,7 @@ function setLucideIcon(container, iconName, sizeClass = "size-5") {
 }
 
 function escrowConfirmationsComplete() {
-  return Boolean(state.escrowConfirmations.buyer && state.escrowConfirmations.seller && state.escrowConfirmations.ai);
+  return Boolean(state.escrowConfirmations.buyer && state.escrowConfirmations.seller);
 }
 
 function renderDeal() {
@@ -2475,7 +2474,6 @@ function renderEscrow() {
   [
     ["#escrow-buyer-confirmed", "buyer"],
     ["#escrow-seller-confirmed", "seller"],
-    ["#escrow-ai-review", "ai"],
   ].forEach(([selector, key]) => {
     const item = document.querySelector(selector);
     if (!item) return;
