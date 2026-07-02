@@ -243,8 +243,8 @@
                 <button class="task-row" type="button" data-open-route="payment">
                   <span class="action-icon"><i data-lucide="send" class="size-5"></i></span>
                   <span>
-                    <strong>Send Payment</strong>
-                    <small>450 STRK to Bob from Escrow Active channel</small>
+                    <strong>Direct Payment</strong>
+                    <small>450 STRK to Bob for trusted counterparty</small>
                   </span>
                   <i data-lucide="chevron-right" class="size-5"></i>
                 </button>
@@ -260,7 +260,7 @@
                   <span class="action-icon"><i data-lucide="file-text" class="size-5"></i></span>
                   <span>
                     <strong>AI Review</strong>
-                    <small>Design Milestone needs AI-assisted payment review</small>
+                    <small>Design Milestone needs AI-assisted direct payment review</small>
                   </span>
                   <i data-lucide="chevron-right" class="size-5"></i>
                 </button>
@@ -452,8 +452,8 @@
               </label>
               <label class="setting-row">
                 <span class="setting-copy">
-                  <strong>Require AI before Payment</strong>
-                  <small>Block settlement payment until AI review is attached</small>
+                  <strong>Require AI before Direct Payment</strong>
+                  <small>Block direct payment until AI review is attached</small>
                 </span>
                 <input class="switch-input" type="checkbox" checked data-setting-toggle="require-memo" />
               </label>
@@ -544,6 +544,7 @@
             <div class="composer-actions" aria-label="Quick actions">
               <button type="button" data-composer-action="upload" aria-label="Upload file"><i data-lucide="paperclip" class="size-4"></i><span>Upload</span></button>
               <button type="button" data-open-route="deal" aria-label="Offer"><i data-lucide="badge-dollar-sign" class="size-4"></i><span>Offer</span></button>
+              <button type="button" data-open-route="payment" aria-label="Pay"><i data-lucide="send" class="size-4"></i><span>Pay</span></button>
               <button type="button" data-open-route="escrow" aria-label="Escrow"><i data-lucide="shield-check" class="size-4"></i><span>Escrow</span></button>
               <button type="button" data-composer-action="ai" aria-label="AI"><i data-lucide="sparkles" class="size-4"></i><span>AI</span></button>
             </div>
@@ -727,7 +728,7 @@
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <p class="eyebrow">Payment</p>
+              <p class="eyebrow">Direct Payment</p>
               <h1 class="detail-title">450 STRK to Bob</h1>
             </div>
           </header>
@@ -735,7 +736,7 @@
             <section class="workflow-progress" data-workflow-progress></section>
 
             <section class="payment-summary-card">
-              <h2>Rights Transfer</h2>
+              <h2>Trusted Transfer</h2>
               <div class="payment-route">
                 <span>Alice</span>
                 <i data-lucide="move-right" class="size-4"></i>
@@ -745,7 +746,7 @@
 
             <section class="plain-list">
               <div><span>Recipient</span><strong>Bob</strong></div>
-              <div><span>Current Deal</span><strong id="payment-deal-status">Escrow Active</strong></div>
+              <div><span>Payment Type</span><strong id="payment-deal-status">Direct Transfer</strong></div>
               <div><span>Amount</span><strong>450 STRK</strong></div>
             </section>
             <section class="plain-panel transaction-summary-panel">

@@ -1719,7 +1719,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .composer-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .45rem;
   margin-bottom: .5rem;
 }

@@ -2346,6 +2346,14 @@ function hidePaymentReview() {
 }
 
 function workflowStageData() {
+  const directPaymentFlow = !state.escrowReleased && (state.screen === "payment" || state.paymentSent);
+  if (directPaymentFlow) {
+    return [
+      { id: "direct-payment", label: "Direct Pay", done: state.paymentSent, active: !state.paymentSent },
+      { id: "settlement", label: "Settlement", done: state.paymentSent, active: state.paymentSent },
+    ];
+  }
+
   const status = String(currentChannel().status || "").toLowerCase();
   const escrowSettlementComplete = state.escrowReleased && !state.paymentSent;
   const settlementReady = status.includes("settlement ready");
@@ -2549,9 +2557,7 @@ function renderPayment() {
   if (paymentDealStatus) {
     paymentDealStatus.textContent = state.paymentSent
       ? "Settlement Complete"
-      : state.escrowReleased
-        ? "Settlement Ready"
-        : "Escrow Active";
+      : "Direct Transfer";
   }
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
