@@ -2442,10 +2442,11 @@ function escrowConfirmationsComplete() {
 function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const currentStatus = accepted ? "Accepted" : "Negotiating";
-  const waitingForCounterparty = !accepted;
   const dealStatusEl = document.querySelector("#deal-status");
   const negotiationActions = document.querySelector("#deal-negotiation-actions");
   const counterAction = document.querySelector("#deal-counter-action");
+  const dealTurnLabel = document.querySelector("#deal-turn-label");
+  const negotiationFlowList = document.querySelector("#negotiation-flow-list");
   const nextStepCopy = document.querySelector("#deal-next-step-copy");
   const waitingStep = document.querySelector("#offer-history-waiting");
   const offerProof = document.querySelector("#deal-offer-proof");
@@ -2456,17 +2457,35 @@ function renderDeal() {
   }
   if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted);
   if (counterAction) {
-    counterAction.disabled = waitingForCounterparty;
-    counterAction.classList.toggle("disabled", waitingForCounterparty);
-    counterAction.textContent = waitingForCounterparty ? "Waiting for Bob..." : "Counter Offer";
+    counterAction.disabled = false;
+    counterAction.classList.remove("disabled");
+    counterAction.textContent = "Counter Again";
+  }
+  if (dealTurnLabel) dealTurnLabel.textContent = accepted ? "Escrow Funding" : "Your Decision";
+  if (negotiationFlowList) {
+    negotiationFlowList.innerHTML = accepted
+      ? `
+        <li class="complete"><span>1</span><div><strong>Offer Created</strong><small>Alice proposed 500 STRK</small></div></li>
+        <li class="complete"><span>2</span><div><strong>Waiting for Bob</strong><small>Counterparty reviewed the offer</small></div></li>
+        <li class="complete"><span>3</span><div><strong>Counter Offer</strong><small>Bob proposed 450 STRK</small></div></li>
+        <li class="complete"><span>4</span><div><strong>Proposal Accepted</strong><small>Wallet signature confirmed</small></div></li>
+        <li class="active"><span>5</span><div><strong>Escrow Funding</strong><small>Buyer and seller deposit next</small></div></li>
+      `
+      : `
+        <li class="complete"><span>1</span><div><strong>Offer Created</strong><small>Alice proposed 500 STRK</small></div></li>
+        <li class="complete"><span>2</span><div><strong>Waiting for Bob</strong><small>Counterparty reviewed the offer</small></div></li>
+        <li class="complete"><span>3</span><div><strong>Counter Offer</strong><small>Bob proposed 450 STRK</small></div></li>
+        <li class="active"><span>4</span><div><strong>Your Decision</strong><small>Accept or counter again</small></div></li>
+        <li><span>5</span><div><strong>Escrow Funding</strong><small>Unlocked after acceptance</small></div></li>
+      `;
   }
   if (nextStepCopy) nextStepCopy.textContent = accepted
     ? "Offer accepted. Escrow funding is ready."
-    : "Accept this offer to start escrow funding. Buyer deposits funds, seller deposits the asset. Both remain locked until release.";
+    : "Accept 450 STRK to start escrow funding, or counter again before the offer expires.";
   if (waitingStep) {
     waitingStep.classList.toggle("complete", accepted);
     waitingStep.classList.toggle("active", !accepted);
-    waitingStep.querySelector("span").textContent = accepted ? "Proposal Accepted" : "Waiting for Bob";
+    waitingStep.querySelector("span").textContent = accepted ? "Proposal Accepted" : "Your Decision";
     waitingStep.querySelector("strong").textContent = accepted ? "Ready" : "Pending";
   }
   if (offerProof) offerProof.innerHTML = renderChainMeta(currentOfferProofItem());

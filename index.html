@@ -581,25 +581,36 @@
               <div class="deal-info-grid">
                 <div><span>Counterparty</span><strong>Bob</strong></div>
                 <div><span>Asset</span><strong>Rights Transfer</strong></div>
-                <div><span>Negotiation Round</span><strong>2 of 5</strong></div>
+                <div><span>Turn</span><strong id="deal-turn-label">Your Decision</strong></div>
                 <div><span>Expiration</span><strong>Expires in 24h</strong></div>
               </div>
+            </section>
+
+            <section class="plain-panel negotiation-flow-card">
+              <h2 class="section-title">Negotiation Flow</h2>
+              <ol id="negotiation-flow-list" class="negotiation-flow-list">
+                <li class="complete"><span>1</span><div><strong>Offer Created</strong><small>Alice proposed 500 STRK</small></div></li>
+                <li class="complete"><span>2</span><div><strong>Waiting for Bob</strong><small>Counterparty reviewed the offer</small></div></li>
+                <li class="complete"><span>3</span><div><strong>Counter Offer</strong><small>Bob proposed 450 STRK</small></div></li>
+                <li class="active"><span>4</span><div><strong>Your Decision</strong><small>Accept or counter again</small></div></li>
+                <li><span>5</span><div><strong>Escrow Funding</strong><small>Unlocked after acceptance</small></div></li>
+              </ol>
             </section>
 
             <section class="plain-panel">
               <h2 class="section-title">Offer History</h2>
               <ol class="price-timeline">
                 <li class="complete"><span>Initial Offer</span><strong>500 STRK</strong></li>
-                <li class="complete active"><span>Counter Offer</span><strong>450 STRK</strong></li>
-                <li id="offer-history-waiting"><span>Waiting for Bob</span><strong>Pending</strong></li>
+                <li class="complete active"><span>Bob Counter Offer</span><strong>450 STRK</strong></li>
+                <li id="offer-history-waiting"><span>Your Decision</span><strong>Pending</strong></li>
               </ol>
             </section>
 
             <section class="plain-panel">
               <h2 class="section-title">Next Step</h2>
-              <p id="deal-next-step-copy" class="plain-note compact">Accept this offer to start escrow funding. Buyer deposits funds, seller deposits the asset. Both remain locked until release.</p>
+              <p id="deal-next-step-copy" class="plain-note compact">Accept 450 STRK to start escrow funding, or counter again before the offer expires.</p>
               <div id="deal-negotiation-actions" class="proposal-actions">
-                <button id="deal-counter-action" class="secondary-action" type="button" data-deal-action="counter">Waiting for Bob...</button>
+                <button id="deal-counter-action" class="secondary-action" type="button" data-deal-action="counter">Counter Again</button>
                 <button id="deal-accept-action" class="primary-action" type="button" data-deal-action="accept">Accept Proposal</button>
               </div>
             </section>
