@@ -2516,8 +2516,8 @@ function renderEscrow() {
     releaseAction.innerHTML = releaseDone
       ? `<i data-lucide="check" class="size-5"></i><span>Released</span>`
       : releaseReady
-        ? `<i data-lucide="unlock" class="size-5"></i><span>Release Escrow</span>`
-        : `<i data-lucide="lock" class="size-5"></i><span>Release Escrow</span><small>Locked</small>`;
+        ? `<i data-lucide="unlock" class="size-5"></i><span>Release Assets</span>`
+        : `<i data-lucide="lock" class="size-5"></i><span>Release Assets</span><small>Locked</small>`;
   }
   if (settlementAction) {
     if (releaseDone) {
