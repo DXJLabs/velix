@@ -2846,7 +2846,94 @@ function clearLocalVeilCache() {
 
 function renderSettlement() {}
 
-function renderProof() {}
+function directPaymentProofItem() {
+  const item = latestChannelItem((entry) => {
+    const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
+    return label.includes("payment completed") || label.includes("payment proof");
+  });
+  return {
+    ...(item || {}),
+    type: "inline",
+    title: item?.title || "Direct payment",
+    time: item?.time || (state.paymentSent ? Date.now() : undefined),
+    mode: state.paymentMode,
+  };
+}
+
+function proofStepMarkup(label, value) {
+  return `<li><span><i data-lucide="check" class="size-4"></i></span><p>${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong></li>`;
+}
+
+function escrowSettlementProofMarkup() {
+  return `
+    <div class="proof-group">
+      <h2>Negotiation</h2>
+      <ol>
+        ${proofStepMarkup("Offer", "500 STRK")}
+        ${proofStepMarkup("Counter Offer", "450 STRK")}
+      </ol>
+    </div>
+    <div class="proof-group">
+      <h2>Funding</h2>
+      <ol>
+        ${proofStepMarkup("Buyer locked", "450 STRK")}
+        ${proofStepMarkup("Seller locked", "NFT / Work Result")}
+      </ol>
+    </div>
+    <div class="proof-group">
+      <h2>Release</h2>
+      <ol>
+        ${proofStepMarkup("Assets released", "Complete")}
+      </ol>
+    </div>
+    <div class="proof-group">
+      <h2>Settlement</h2>
+      <ol>
+        ${proofStepMarkup("Asset delivered", "Buyer")}
+        ${proofStepMarkup("Funds delivered", "Seller")}
+      </ol>
+    </div>
+  `;
+}
+
+function directPaymentProofMarkup() {
+  return `
+    <div class="proof-group">
+      <h2>Direct Payment</h2>
+      <ol>
+        ${proofStepMarkup("Recipient", PAYMENT_RECIPIENT)}
+        ${proofStepMarkup("Amount", paymentAmountLabel())}
+        ${proofStepMarkup("Privacy", paymentPrivacyLabel())}
+      </ol>
+    </div>
+    <div class="proof-group">
+      <h2>Settlement</h2>
+      <ol>
+        ${proofStepMarkup("Payment confirmed", "Complete")}
+        ${proofStepMarkup("Proof attached", "Ready")}
+      </ol>
+    </div>
+  `;
+}
+
+function renderProof() {
+  const directPaymentProof = state.paymentSent && !state.escrowReleased;
+  const item = directPaymentProof ? directPaymentProofItem() : escrowReleaseProofItem();
+  const txHash = hasRealTransactionHash(item) ? String(item.txHash) : "";
+  const proofFlow = document.querySelector("#settlement-proof-flow");
+  const proofLink = document.querySelector("#settlement-proof-link");
+
+  setElementText("#settlement-proof-title", directPaymentProof ? "Trusted Transfer" : currentChannel().title || "Rights Transfer");
+  setElementText("#settlement-proof-parties", "Alice <-> Bob");
+  if (proofFlow) proofFlow.innerHTML = directPaymentProof ? directPaymentProofMarkup() : escrowSettlementProofMarkup();
+  setElementText("#settlement-proof-hash", txHash || "Available after wallet confirmation");
+  if (proofLink) {
+    proofLink.href = txHash ? transactionExplorerUrl(txHash) : STARKNET_SEPOLIA_EXPLORER_URL;
+    const label = proofLink.querySelector("span");
+    if (label) label.textContent = txHash ? "View Transaction" : "View on Voyager";
+  }
+  iconRefresh();
+}
 
 function chatTransportMode() {
   return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : CHAT_DISPLAY_MODE;

@@ -814,26 +814,63 @@
             </button>
             <div class="min-w-0 flex-1">
               <p class="eyebrow">Proof</p>
-              <h1 class="detail-title">Settlement trail</h1>
+              <h1 class="detail-title">Settlement proof</h1>
             </div>
           </header>
           <div class="detail-content">
-            <section class="plain-panel">
-              <ol class="proof-timeline">
-                <li><span>Offer</span><strong>500 STRK</strong></li>
-                <li><span>Counter</span><strong>450 STRK</strong></li>
-                <li><span>Escrow</span><strong>Released</strong></li>
-                <li><span>Payment</span><strong>Sent</strong></li>
-                <li><span>Settlement</span><strong>Complete</strong></li>
-              </ol>
+            <section class="settlement-receipt-card">
+              <div class="success-icon compact"><i data-lucide="check" class="size-6"></i></div>
+              <div>
+                <p class="eyebrow">Settlement Complete</p>
+                <h2 id="settlement-proof-title">Rights Transfer</h2>
+                <small id="settlement-proof-parties">Alice <span>&lt;-&gt;</span> Bob</small>
+              </div>
             </section>
-            <section class="plain-list">
-              <div><span>Proof Hash</span><strong class="break-all">0x6cdd37...4e207</strong></div>
-              <div><span>Explorer</span><strong>Sepolia</strong></div>
+
+            <section id="settlement-proof-flow" class="plain-panel settlement-proof-flow">
+              <div class="proof-group">
+                <h2>Negotiation</h2>
+                <ol>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Offer</p><strong>500 STRK</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Counter Offer</p><strong>450 STRK</strong></li>
+                </ol>
+              </div>
+              <div class="proof-group">
+                <h2>Funding</h2>
+                <ol>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Buyer locked</p><strong>450 STRK</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Seller locked</p><strong>NFT / Work Result</strong></li>
+                </ol>
+              </div>
+              <div class="proof-group">
+                <h2>Release</h2>
+                <ol>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Assets released</p><strong>Complete</strong></li>
+                </ol>
+              </div>
+              <div class="proof-group">
+                <h2>Settlement</h2>
+                <ol>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Asset delivered</p><strong>Buyer</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Funds delivered</p><strong>Seller</strong></li>
+                </ol>
+              </div>
             </section>
-            <button class="primary-action w-full" type="button" data-export-proof>
+
+            <section class="plain-panel settlement-transaction-card">
+              <h2 class="section-title">Settlement Transaction</h2>
+              <div class="settlement-tx-row">
+                <span>Tx</span>
+                <strong id="settlement-proof-hash">Available after wallet confirmation</strong>
+              </div>
+              <a id="settlement-proof-link" class="secondary-action w-full" href="https://sepolia.voyager.online" target="_blank" rel="noreferrer">
+                <i data-lucide="external-link" class="size-5"></i>
+                <span>View on Voyager</span>
+              </a>
+            </section>
+            <button class="secondary-action w-full" type="button" data-export-proof>
               <i data-lucide="download" class="size-5"></i>
-              <span>Export PDF</span>
+              <span>Download Settlement Proof</span>
             </button>
           </div>
         </section>
