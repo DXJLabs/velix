@@ -46,7 +46,6 @@ const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
 const CHAT_DISPLAY_MODE = "shield";
 const DIRECT_HELPER_MESSAGE_MODE = "unshield";
-const INITIAL_PRIVACY_MODE = timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : CHAT_DISPLAY_MODE;
 const DEAL_OFFER_AMOUNT = "450 STRK";
 const PAYMENT_RECIPIENT = "Bob";
 const STRK_SYMBOL = "STRK";
@@ -272,9 +271,9 @@ const initialRewardHistory = [
 const state = {
   screen: "unlock",
   channelId: activeDealId,
-  paymentMode: INITIAL_PRIVACY_MODE,
-  messageMode: INITIAL_PRIVACY_MODE,
-  defaultPrivacyMode: INITIAL_PRIVACY_MODE,
+  paymentMode: "shield",
+  messageMode: CHAT_DISPLAY_MODE,
+  defaultPrivacyMode: "shield",
   autoShield: true,
   walletConnected: false,
   walletAddress: "",
@@ -2080,22 +2079,11 @@ function renderTransactionLink(item) {
   return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.txHash)}">View Transaction</a>`;
 }
 
-function effectivePrivacyMode(mode = state.defaultPrivacyMode) {
-  const requestedMode = mode === "unshield" ? "unshield" : "shield";
-  return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : requestedMode;
-}
-
-function directHelperRequiresUnshield() {
-  return timelineMode === "direct-helper";
-}
-
-function renderShieldBadge(statusInfo, item) {
-  const mode = effectivePrivacyMode(item?.mode || INITIAL_PRIVACY_MODE);
-  const label = mode === "shield" ? "Shielded" : "Unshielded";
+function renderShieldBadge(statusInfo) {
   const warning = statusInfo.kind === "failed"
     ? `<span class="shield-warning" aria-label="Failed">⚠</span>`
     : "";
-  return `<span class="shield-badge ${mode}">Shield ${label}${warning}</span>`;
+  return `<span class="shield-badge">🛡 Shielded${warning}</span>`;
 }
 
 function renderFailureActions(item, statusInfo) {
@@ -2110,7 +2098,7 @@ function renderFailureActions(item, statusInfo) {
 function renderChainMeta(item, alignRight = false) {
   const statusInfo = transactionStatusInfo(item);
   const parts = [];
-  parts.push(renderShieldBadge(statusInfo, item));
+  parts.push(renderShieldBadge(statusInfo));
   parts.push(`<span class="tx-status ${statusInfo.kind}" aria-label="${escapeHtml(statusInfo.ariaLabel)}" title="${escapeHtml(statusInfo.ariaLabel)}">${escapeHtml(statusInfo.label)}</span>`);
   if (item.time) parts.push(`<time>${escapeHtml(formatTime(item.time))}</time>`);
   if (item.blockNumber !== undefined) parts.push(`<span>Block ${escapeHtml(item.blockNumber)}</span>`);
@@ -2210,13 +2198,13 @@ function timelinePayloadToFeedItem(item, payload) {
     txHash: item.transactionHash,
     blockNumber: item.blockNumber,
     status: item.status || "confirmed",
-    mode: effectivePrivacyMode(item.mode || INITIAL_PRIVACY_MODE),
+    mode: item.mode || CHAT_DISPLAY_MODE,
   };
 
   if (payload.kind === "chat") {
     return {
       ...base,
-      mode: effectivePrivacyMode(item.mode || INITIAL_PRIVACY_MODE),
+      mode: CHAT_DISPLAY_MODE,
       type: "message",
       sender,
       body: payload.message,
@@ -2416,7 +2404,7 @@ function currentOfferProofItem() {
     type: "inline",
     title: offerItem?.title || "Current offer",
     time: offerItem?.time || now - 2 * minute,
-    mode: effectivePrivacyMode(offerItem?.mode || INITIAL_PRIVACY_MODE),
+    mode: CHAT_DISPLAY_MODE,
   };
 }
 
@@ -2476,7 +2464,7 @@ function awardReward(ruleKey) {
 }
 
 function offerPrivacyMode() {
-  return effectivePrivacyMode(state.defaultPrivacyMode);
+  return state.defaultPrivacyMode === "unshield" ? "unshield" : "shield";
 }
 
 function offerPrivacyLabel() {
@@ -2555,7 +2543,7 @@ function paymentAmountLabel() {
 }
 
 function paymentPrivacyLabel() {
-  return effectivePrivacyMode(state.paymentMode) === "shield" ? "Shield" : "Unshield";
+  return state.paymentMode === "shield" ? "Shield" : "Unshield";
 }
 
 function paymentMemoValue() {
@@ -2564,9 +2552,8 @@ function paymentMemoValue() {
 
 function renderPaymentTransactionSummary() {
   const amountLabel = paymentAmountLabel();
-  const mode = effectivePrivacyMode(state.paymentMode);
   const fee = estimateVeilFee("directPayment", amountLabel, {
-    shielded: mode === "shield",
+    shielded: state.paymentMode === "shield",
   });
 
   setElementText("#payment-summary-amount", amountLabel);
@@ -2597,9 +2584,8 @@ function hidePaymentReview() {
 }
 
 function renderEscrowTransactionSummary() {
-  const mode = effectivePrivacyMode("shield");
   const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-    shielded: mode === "shield",
+    shielded: true,
   });
   setElementText("#escrow-fee-amount", currentDealOfferAmount());
   setElementText("#escrow-total-fee", fee.feeLabel);
@@ -2693,7 +2679,7 @@ function escrowFundingProofItem() {
     type: "inline",
     title: item?.title || "Escrow funding",
     time: item?.time || now - 3 * minute,
-    mode: effectivePrivacyMode(item?.mode || INITIAL_PRIVACY_MODE),
+    mode: CHAT_DISPLAY_MODE,
   };
 }
 
@@ -2707,7 +2693,7 @@ function escrowReleaseProofItem() {
     type: "inline",
     title: item?.title || "Escrow release",
     time: item?.time || (state.escrowReleased ? Date.now() : undefined),
-    mode: effectivePrivacyMode(item?.mode || INITIAL_PRIVACY_MODE),
+    mode: CHAT_DISPLAY_MODE,
   };
 }
 
@@ -2746,7 +2732,6 @@ function renderDeal() {
   const createOfferStatus = document.querySelector("#create-offer-status");
   const createOfferAction = document.querySelector("#create-offer-action");
   const createOfferCancel = document.querySelector("#create-offer-cancel");
-  const createOfferMeta = document.querySelector(".create-offer-meta span");
   const dealStatusEl = document.querySelector("#deal-status");
   const negotiationActions = document.querySelector("#deal-negotiation-actions");
   const counterAction = document.querySelector("#deal-counter-action");
@@ -2783,9 +2768,6 @@ function renderDeal() {
     if (label) label.textContent = negotiationStep === "counter" ? "Submit Counter" : "Create Offer";
   }
   if (createOfferCancel) createOfferCancel.hidden = negotiationStep !== "counter";
-  if (createOfferMeta) {
-    createOfferMeta.innerHTML = `<i data-lucide="shield" class="size-4"></i> ${offerPrivacyLabel()}`;
-  }
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
     dealStatusEl.className = accepted ? "status-pill escrow-active" : statusPillClass(currentStatus);
@@ -2911,17 +2893,13 @@ function renderEscrow() {
 function renderPayment() {
   const paymentDealStatus = document.querySelector("#payment-deal-status");
   const settlementAction = document.querySelector("#payment-settlement-action");
-  const activeMode = effectivePrivacyMode(state.paymentMode);
   if (paymentDealStatus) {
     paymentDealStatus.textContent = state.paymentSent
       ? "Settlement Complete"
       : "Direct Transfer";
   }
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
-    const isShield = button.dataset.paymentMode === "shield";
-    button.disabled = directHelperRequiresUnshield() && isShield;
-    button.classList.toggle("disabled", button.disabled);
-    button.classList.toggle("active", button.dataset.paymentMode === activeMode);
+    button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
   renderPaymentTransactionSummary();
   if (settlementAction) {
@@ -3081,10 +3059,7 @@ function renderWallet() {
   renderWalletRewards();
   void refreshWalletAssets();
   document.querySelectorAll("[data-default-privacy]").forEach((button) => {
-    const isShield = button.dataset.defaultPrivacy === "shield";
-    button.disabled = directHelperRequiresUnshield() && isShield;
-    button.classList.toggle("disabled", button.disabled);
-    button.classList.toggle("active", button.dataset.defaultPrivacy === effectivePrivacyMode(state.defaultPrivacyMode));
+    button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
   });
   document.querySelectorAll("[data-auto-shield]").forEach((input) => {
     input.checked = state.autoShield;
@@ -3149,10 +3124,7 @@ function renderSettings() {
     settingsWalletStatus.className = `status-pill ${state.walletConnected ? "private" : "public"}`;
   }
   document.querySelectorAll("[data-default-privacy]").forEach((button) => {
-    const isShield = button.dataset.defaultPrivacy === "shield";
-    button.disabled = directHelperRequiresUnshield() && isShield;
-    button.classList.toggle("disabled", button.disabled);
-    button.classList.toggle("active", button.dataset.defaultPrivacy === effectivePrivacyMode(state.defaultPrivacyMode));
+    button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
   });
 }
 
@@ -3254,7 +3226,7 @@ function directPaymentProofItem() {
     type: "inline",
     title: item?.title || "Direct payment",
     time: item?.time || (state.paymentSent ? Date.now() : undefined),
-    mode: effectivePrivacyMode(state.paymentMode),
+    mode: state.paymentMode,
   };
 }
 
@@ -3341,7 +3313,7 @@ async function safeSubmit(action, localItem, success) {
   const pendingItem = {
     ...localItem,
     status: "encrypting",
-    mode: effectivePrivacyMode(localItem.mode || INITIAL_PRIVACY_MODE),
+    mode: localItem.mode || CHAT_DISPLAY_MODE,
   };
   addLocalItem(pendingItem);
   try {
@@ -3497,7 +3469,7 @@ async function sendChat(message) {
       body: message,
       self: true,
       time: Date.now(),
-      mode,
+      mode: CHAT_DISPLAY_MODE,
     },
     "Message sent.",
   );
@@ -3558,14 +3530,13 @@ async function createOffer() {
   const amountLabel = `${amount} STRK`;
   const asset = createOfferAssetValue();
   const terms = createOfferTermsValue();
-  const mode = offerPrivacyMode();
   const submitted = await safeSubmit(
     () => veilClient.createOffer({
       channelId: state.channelId,
       amount,
       currency: "STRK",
       terms,
-      mode,
+      mode: offerPrivacyMode(),
       sender: "you",
     }),
     {
@@ -3574,7 +3545,6 @@ async function createOffer() {
       amount: amountLabel,
       subtitle: asset,
       time: Date.now(),
-      mode,
     },
     "Offer created.",
   );
@@ -3594,14 +3564,13 @@ async function counterOffer() {
   const amountLabel = `${amount} STRK`;
   const asset = createOfferAssetValue();
   const terms = createOfferTermsValue();
-  const mode = offerPrivacyMode();
   const submitted = await safeSubmit(
     () => veilClient.counterOffer({
       channelId: state.channelId,
       amount,
       currency: "STRK",
       terms,
-      mode,
+      mode: offerPrivacyMode(),
       sender: "you",
     }),
     {
@@ -3610,7 +3579,6 @@ async function counterOffer() {
       amount: amountLabel,
       subtitle: asset,
       time: Date.now(),
-      mode,
     },
     "Counter sent.",
   );
@@ -3625,13 +3593,12 @@ async function counterOffer() {
 }
 
 async function acceptOffer() {
-  const mode = offerPrivacyMode();
   const submitted = await safeSubmit(
     () => veilClient.acceptOffer({
       channelId: state.channelId,
       offerId: currentDealOfferAmount(),
       reason: "Accepted.",
-      mode,
+      mode: offerPrivacyMode(),
       sender: "you",
     }),
     {
@@ -3639,7 +3606,6 @@ async function acceptOffer() {
       title: "Offer accepted",
       subtitle: "Escrow is ready.",
       time: Date.now(),
-      mode,
     },
     "Offer accepted.",
   );
@@ -3657,13 +3623,12 @@ async function sendPayment() {
   const amount = document.querySelector("#payment-amount").value.trim() || "450";
   const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
   const memo = document.querySelector("#payment-memo").value.trim() || "Final settlement for rights transfer.";
-  const mode = effectivePrivacyMode(state.paymentMode);
   const submitted = await safeSubmit(
     () => veilClient.sendPaymentMemo({
       channelId: state.channelId,
       amount: `${amount} ${asset}`,
       memo,
-      mode,
+      mode: state.paymentMode,
       sender: "you",
     }),
     {
@@ -3671,7 +3636,7 @@ async function sendPayment() {
       title: "Payment completed",
       subtitle: `${amount} ${asset} to Bob`,
       time: Date.now(),
-      mode,
+      mode: state.paymentMode,
     },
     "Payment sent.",
   );
@@ -3881,12 +3846,6 @@ function bindEvents() {
 
     const paymentMode = event.target.closest("[data-payment-mode]");
     if (paymentMode) {
-      if (directHelperRequiresUnshield() && paymentMode.dataset.paymentMode === "shield") {
-        state.paymentMode = DIRECT_HELPER_MESSAGE_MODE;
-        renderPayment();
-        showToast("Shield mode requires Privacy Pool transport.");
-        return;
-      }
       state.paymentMode = paymentMode.dataset.paymentMode;
       renderPayment();
       return;
@@ -3894,15 +3853,6 @@ function bindEvents() {
 
     const defaultPrivacy = event.target.closest("[data-default-privacy]");
     if (defaultPrivacy) {
-      if (directHelperRequiresUnshield() && defaultPrivacy.dataset.defaultPrivacy === "shield") {
-        state.defaultPrivacyMode = DIRECT_HELPER_MESSAGE_MODE;
-        state.paymentMode = DIRECT_HELPER_MESSAGE_MODE;
-        renderWallet();
-        renderPayment();
-        renderDeal();
-        showToast("Shield mode requires Privacy Pool transport.");
-        return;
-      }
       state.defaultPrivacyMode = defaultPrivacy.dataset.defaultPrivacy;
       state.paymentMode = state.defaultPrivacyMode;
       renderWallet();

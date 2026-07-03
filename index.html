@@ -544,8 +544,8 @@
                   <small>Choose the default mode for payments and deal actions</small>
                 </span>
                 <div class="segmented compact">
-                  <button type="button" data-default-privacy="shield" disabled>Shield</button>
-                  <button class="active" type="button" data-default-privacy="unshield">Unshield</button>
+                  <button class="active" type="button" data-default-privacy="shield">Shield</button>
+                  <button type="button" data-default-privacy="unshield">Unshield</button>
                 </div>
               </div>
               <label class="setting-row">
@@ -726,7 +726,7 @@
                 <textarea id="create-offer-terms" rows="3">Buyer deposits funds, seller deposits the asset. Both remain locked until release.</textarea>
               </label>
               <div class="create-offer-meta">
-                <span><i data-lucide="shield" class="size-4"></i> Unshielded</span>
+                <span><i data-lucide="shield" class="size-4"></i> Shielded</span>
                 <small>Total fee shown before signing</small>
               </div>
               <div class="offer-form-actions">
@@ -820,8 +820,8 @@
               <h2 class="section-title">Fee Summary</h2>
               <div class="transaction-summary-list">
                 <div><span>Escrow Amount</span><strong id="escrow-fee-amount">450 STRK</strong></div>
-                <div><span>Total Fee</span><strong id="escrow-total-fee">2.253 STRK</strong></div>
-                <div class="summary-total"><span>Total</span><strong id="escrow-fee-total">452.253 STRK</strong></div>
+                <div><span>Total Fee</span><strong id="escrow-total-fee">2.263 STRK</strong></div>
+                <div class="summary-total"><span>Total</span><strong id="escrow-fee-total">452.263 STRK</strong></div>
               </div>
             </section>
 
@@ -900,8 +900,8 @@
               <h2 class="section-title">Fee Summary</h2>
               <div class="transaction-summary-list">
                 <div><span>Amount</span><strong id="payment-summary-amount">450 STRK</strong></div>
-                <div><span>Total Fee</span><strong id="payment-total-fee">0.678 STRK</strong></div>
-                <div class="summary-total"><span>Total</span><strong id="payment-summary-total">450.678 STRK</strong></div>
+                <div><span>Total Fee</span><strong id="payment-total-fee">0.688 STRK</strong></div>
+                <div class="summary-total"><span>Total</span><strong id="payment-summary-total">450.688 STRK</strong></div>
               </div>
             </section>
             <input id="payment-recipient" type="hidden" value="Bob" />
@@ -910,8 +910,8 @@
             <div>
               <span class="field-label">Privacy</span>
               <div class="segmented">
-                <button type="button" data-payment-mode="shield" disabled>Shield</button>
-                <button class="active" type="button" data-payment-mode="unshield">Unshield</button>
+                <button class="active" type="button" data-payment-mode="shield">Shield</button>
+                <button type="button" data-payment-mode="unshield">Unshield</button>
               </div>
             </div>
             <label class="field"><span>AI Note</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>
@@ -1053,10 +1053,10 @@
         <h2 id="offer-review-title">Accept Proposal</h2>
         <div class="review-summary-list">
           <div><span>Amount</span><strong id="offer-review-amount">450 STRK</strong></div>
-          <div><span>Privacy</span><strong id="offer-review-privacy">Unshielded</strong></div>
-          <div><span>Total Fee</span><strong id="offer-review-fee">2.253 STRK</strong></div>
+          <div><span>Privacy</span><strong id="offer-review-privacy">Shielded</strong></div>
+          <div><span>Total Fee</span><strong id="offer-review-fee">2.263 STRK</strong></div>
           <div><span>Rewards</span><strong id="offer-review-reward">+10 VEIL Points</strong></div>
-          <div class="summary-total"><span>Total</span><strong id="offer-review-total">452.253 STRK</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="offer-review-total">452.263 STRK</strong></div>
         </div>
         <button class="primary-action w-full" type="button" data-offer-review-sign>Sign Transaction</button>
         <button class="secondary-action w-full" type="button" data-offer-review-close>Cancel</button>
@@ -1073,11 +1073,11 @@
         <div class="review-summary-list">
           <div><span>Recipient</span><strong id="payment-review-recipient">Bob</strong></div>
           <div><span>Amount</span><strong id="payment-review-amount">450 STRK</strong></div>
-          <div><span>Privacy</span><strong id="payment-review-privacy">Unshield</strong></div>
-          <div><span>Total Fee</span><strong id="payment-review-fee">0.678 STRK</strong></div>
+          <div><span>Privacy</span><strong id="payment-review-privacy">Shield</strong></div>
+          <div><span>Total Fee</span><strong id="payment-review-fee">0.688 STRK</strong></div>
           <div><span>Rewards</span><strong id="payment-review-reward">+20 VEIL Points</strong></div>
           <div><span>AI Memo</span><strong id="payment-review-memo">Final settlement for rights transfer.</strong></div>
-          <div class="summary-total"><span>Total</span><strong id="payment-review-total">450.678 STRK</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="payment-review-total">450.688 STRK</strong></div>
         </div>
         <button class="primary-action w-full" type="button" data-payment-review-sign>Sign Transaction</button>
         <button class="secondary-action w-full" type="button" data-payment-review-close>Cancel</button>
@@ -1093,9 +1093,9 @@
         <h2 id="escrow-review-title">Release Escrow</h2>
         <div class="review-summary-list">
           <div><span>Escrow Amount</span><strong id="escrow-review-amount">450 STRK</strong></div>
-          <div><span>Total Fee</span><strong id="escrow-review-fee">2.253 STRK</strong></div>
+          <div><span>Total Fee</span><strong id="escrow-review-fee">2.263 STRK</strong></div>
           <div><span>Rewards</span><strong id="escrow-review-reward">+50 VEIL Points</strong></div>
-          <div class="summary-total"><span>Total</span><strong id="escrow-review-total">452.253 STRK</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="escrow-review-total">452.263 STRK</strong></div>
         </div>
         <button class="primary-action w-full" type="button" data-escrow-review-sign>Sign Transaction</button>
         <button class="secondary-action w-full" type="button" data-escrow-review-close>Cancel</button>
