@@ -2631,6 +2631,18 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 950;
 }
 
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .85rem;
+}
+
+.section-title-row .section-title {
+  margin-bottom: 0;
+}
+
 .event-list,
 .proof-timeline {
   display: grid;
@@ -2780,7 +2792,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
 .escrow-deposit-card {
   display: grid;
-  gap: .35rem;
+  gap: .55rem;
   border: 1px solid rgb(226 232 240);
   border-radius: .75rem;
   background: rgb(248 250 252);
@@ -2790,6 +2802,15 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .escrow-deposit-card.complete {
   border-color: rgb(187 247 208);
   background: rgb(236 253 245);
+}
+
+.escrow-deposit-card.waiting {
+  border-color: rgb(224 242 254);
+  background: rgb(248 250 252);
+}
+
+.escrow-deposit-card.locked {
+  opacity: .74;
 }
 
 .deposit-card-top {
@@ -2809,11 +2830,20 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   color: rgb(4 120 87);
 }
 
+.escrow-deposit-card:not(.complete) .deposit-card-top span {
+  background: rgb(224 242 254);
+  color: rgb(3 105 161);
+}
+
 .deposit-card-top small,
 .escrow-deposit-card > small {
   color: rgb(4 120 87);
   font-size: .78rem;
   font-weight: 850;
+}
+
+.escrow-deposit-card:not(.complete) .deposit-card-top small {
+  color: rgb(3 105 161);
 }
 
 .escrow-deposit-card p {
@@ -2835,7 +2865,6 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .deposit-card-details {
   display: grid;
   gap: .45rem;
-  margin-top: .25rem;
 }
 
 .deposit-card-details span {
@@ -2844,7 +2873,7 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   align-items: center;
   justify-content: space-between;
   gap: .75rem;
-  border-top: 1px solid rgb(187 247 208);
+  border-top: 1px solid rgb(226 232 240);
   padding-top: .45rem;
 }
 
@@ -2872,20 +2901,29 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   gap: .6rem;
 }
 
-.escrow-checks div {
+.escrow-check-item {
   display: flex;
+  width: 100%;
   min-height: 3rem;
   align-items: center;
   gap: .65rem;
+  border: 0;
   border-radius: .7rem;
   background: rgb(248 250 252);
   padding: .75rem;
   color: rgb(51 65 85);
+  font: inherit;
   font-weight: 900;
+  text-align: left;
 }
 
-.escrow-checks div[data-escrow-confirmation] {
+.escrow-check-item:not(:disabled) {
   cursor: pointer;
+}
+
+.escrow-check-item:disabled {
+  cursor: not-allowed;
+  opacity: .72;
 }
 
 .escrow-checks small {
@@ -2895,12 +2933,12 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 850;
 }
 
-.escrow-checks .complete {
+.escrow-check-item.complete {
   background: rgb(236 253 245);
   color: rgb(4 120 87);
 }
 
-.escrow-checks .complete small {
+.escrow-check-item.complete small {
   color: rgb(4 120 87);
 }
 

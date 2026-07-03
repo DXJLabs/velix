@@ -156,7 +156,7 @@ const channels = [
     person: "Bob",
     avatar: "B",
     mode: "Private",
-    status: "Escrow Active",
+    status: "Waiting Deposit",
     unread: 2,
     time: "9:41 AM",
     last: "Counter offer accepted",
@@ -316,8 +316,12 @@ const state = {
   negotiationStep: "decision",
   initialOfferAmount: "500 STRK",
   latestOfferAmount: DEAL_OFFER_AMOUNT,
-  offerAccepted: false,
+  offerAccepted: true,
   paymentSent: false,
+  escrowDeposits: {
+    buyer: false,
+    seller: false,
+  },
   escrowReleased: false,
   escrowConfirmations: {
     buyer: false,
@@ -2118,6 +2122,8 @@ function renderLoadingState() {
     "[data-offer-review-sign]",
     "[data-payment-review-sign]",
     "[data-escrow-review-sign]",
+    "[data-escrow-deposit]",
+    "[data-escrow-confirmation]",
     "#create-offer-action",
     "#deal-accept-action",
     "[data-escrow-release]",
@@ -2342,6 +2348,7 @@ function statusPillClass(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized.includes("negotiating")) return "status-pill negotiating";
   if (normalized.includes("escrow")) return "status-pill escrow-active";
+  if (normalized.includes("funding complete")) return "status-pill escrow-active";
   if (normalized.includes("waiting")) return "status-pill waiting-deposit";
   if (normalized.includes("settlement")) return "status-pill settlement";
   return "status-pill deal-status";
@@ -2772,7 +2779,11 @@ function latestChannelItem(predicate) {
 function escrowFundingProofItem() {
   const item = latestChannelItem((entry) => {
     const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
-    return label.includes("deposit") || label.includes("escrow is ready") || label.includes("offer accepted");
+    return label.includes("deposit")
+      || label.includes("locked asset")
+      || label.includes("seller locked")
+      || label.includes("escrow is ready")
+      || label.includes("offer accepted");
   });
   return {
     ...(item || {}),
@@ -2805,13 +2816,40 @@ function renderEscrowProofMeta(item) {
   return hasRealTransactionHash(item) ? renderChainMeta(item) : "";
 }
 
+function escrowEventMatches(patterns) {
+  return Boolean(latestChannelItem((entry) => {
+    const label = `${entry.title || ""} ${entry.subtitle || ""} ${entry.details || ""}`.toLowerCase();
+    return patterns.some((pattern) => label.includes(pattern));
+  }));
+}
+
+function escrowDepositComplete(key) {
+  if (state.escrowReleased || state.paymentSent) return true;
+  if (state.escrowDeposits?.[key]) return true;
+  return key === "buyer"
+    ? escrowEventMatches(["buyer deposited", "buyer deposit completed", "funds deposited", "deposited funds"])
+    : escrowEventMatches(["seller locked", "seller deposited", "asset locked", "nft locked", "locked asset"]);
+}
+
+function escrowFundingComplete() {
+  return Boolean(escrowDepositComplete("buyer") && escrowDepositComplete("seller"));
+}
+
+function escrowApprovalComplete(key) {
+  if (state.escrowReleased || state.paymentSent) return true;
+  if (state.escrowConfirmations?.[key]) return true;
+  return key === "buyer"
+    ? escrowEventMatches(["buyer approved release", "buyer approved"])
+    : escrowEventMatches(["seller approved release", "seller approved"]);
+}
+
 function setLucideIcon(container, iconName, sizeClass = "size-5") {
   const icon = container?.querySelector("svg, i");
   if (icon) icon.outerHTML = `<i data-lucide="${iconName}" class="${sizeClass}"></i>`;
 }
 
 function escrowConfirmationsComplete() {
-  return Boolean(state.escrowConfirmations.buyer && state.escrowConfirmations.seller);
+  return Boolean(escrowApprovalComplete("buyer") && escrowApprovalComplete("seller"));
 }
 
 function renderDeal() {
@@ -2909,11 +2947,17 @@ function renderDeal() {
 
 function renderEscrow() {
   const releaseDone = state.escrowReleased || state.paymentSent;
-  const releaseReady = releaseDone || escrowConfirmationsComplete();
-  const escrowDisplayStatus = releaseDone ? "Settlement" : "Escrow Active";
+  const buyerDeposited = escrowDepositComplete("buyer");
+  const sellerDeposited = escrowDepositComplete("seller");
+  const fundingComplete = escrowFundingComplete();
+  const buyerApproved = escrowApprovalComplete("buyer");
+  const sellerApproved = escrowApprovalComplete("seller");
+  const releaseReady = releaseDone || (fundingComplete && escrowConfirmationsComplete());
+  const escrowDisplayStatus = releaseDone ? "Settlement" : fundingComplete ? "Funding Complete" : "Waiting Deposit";
   const fundingItem = escrowFundingProofItem();
   const releaseItem = escrowReleaseProofItem();
   const fundingProof = document.querySelector("#escrow-funding-proof");
+  const fundingStep = document.querySelector("#escrow-funding-proof-step");
   const fundingProofTimeline = document.querySelector("#escrow-funding-proof-timeline");
   const releaseProof = document.querySelector("#escrow-release-proof");
   const releaseAction = document.querySelector("#escrow-release-action");
@@ -2921,36 +2965,118 @@ function renderEscrow() {
   const settlementAction = document.querySelector("#escrow-settlement-action");
   const disputeAction = document.querySelector("#escrow-dispute-action");
   const escrowChannelStatus = document.querySelector("#escrow-channel-status");
+  const title = releaseDone
+    ? "Settlement ready"
+    : fundingComplete
+      ? "Confirmation"
+      : buyerDeposited
+        ? "Buyer deposited"
+        : "Waiting deposits";
+  const fundingCopy = releaseDone || fundingComplete
+    ? "Funding complete. Buyer and seller deposits are locked in escrow."
+    : buyerDeposited
+      ? "Buyer deposit is locked. Waiting for Bob to lock the seller asset."
+      : "Step 1 of 2. Waiting for Alice and Bob deposits.";
 
   renderEscrowTransactionSummary();
+
+  setElementText("#escrow-page-eyebrow", fundingComplete ? "Escrow Confirmation" : "Escrow Funding");
+  setElementText("#escrow-page-title", title);
+  setElementText("#escrow-funding-step", fundingComplete ? "Funding Complete" : buyerDeposited ? "Step 2 of 2" : "Step 1 of 2");
+  setElementText("#escrow-funding-copy", fundingCopy);
+  const fundingStepBadge = document.querySelector("#escrow-funding-step");
+  if (fundingStepBadge) fundingStepBadge.className = fundingComplete ? "status-pill escrow-active" : "status-pill waiting-deposit";
 
   if (escrowChannelStatus) {
     escrowChannelStatus.textContent = escrowDisplayStatus;
     escrowChannelStatus.className = statusPillClass(escrowDisplayStatus);
   }
 
-  [
-    ["#escrow-buyer-confirmed", "buyer"],
-    ["#escrow-seller-confirmed", "seller"],
-  ].forEach(([selector, key]) => {
-    const item = document.querySelector(selector);
-    if (!item) return;
-    const complete = releaseDone || Boolean(state.escrowConfirmations[key]);
-    item.classList.toggle("complete", complete);
-    setLucideIcon(item, complete ? "check" : "circle");
-    const status = item.querySelector("small");
-    if (status) status.textContent = complete ? "Confirmed" : "Waiting";
+  const renderDepositCard = (key, complete, options) => {
+    const card = document.querySelector(`#escrow-${key}-deposit-card`);
+    const status = document.querySelector(`#escrow-${key}-deposit-status`);
+    const detail = document.querySelector(`#escrow-${key}-deposit-detail`);
+    const action = document.querySelector(`#escrow-${key}-deposit-action`);
+    if (!card) return;
+    card.classList.toggle("complete", complete);
+    card.classList.toggle("waiting", !complete);
+    card.classList.toggle("locked", Boolean(options.locked));
+    setLucideIcon(card.querySelector(".deposit-card-top"), complete ? "check" : options.locked ? "lock" : "circle");
+    if (status) status.textContent = complete ? options.completeStatus : options.waitingStatus;
+    if (detail) detail.textContent = complete ? options.completeDetail : options.waitingDetail;
+    if (action) {
+      action.disabled = complete || releaseDone || Boolean(options.locked);
+      action.classList.toggle("disabled", action.disabled);
+      action.classList.toggle("primary-action", !options.secondaryWhenReady);
+      action.classList.toggle("secondary-action", Boolean(options.secondaryWhenReady));
+      action.innerHTML = complete
+        ? `<i data-lucide="check" class="size-5"></i><span>${escapeHtml(options.doneAction)}</span>`
+        : `<i data-lucide="${options.actionIcon}" class="size-5"></i><span>${escapeHtml(options.actionLabel)}</span>`;
+    }
+  };
+
+  renderDepositCard("buyer", buyerDeposited, {
+    completeStatus: "Deposited",
+    waitingStatus: "Waiting",
+    completeDetail: `${currentDealOfferAmount()} locked in escrow`,
+    waitingDetail: "Waiting for Alice",
+    actionLabel: "Deposit Funds",
+    doneAction: "Deposited",
+    actionIcon: "wallet",
+  });
+  renderDepositCard("seller", sellerDeposited, {
+    completeStatus: "Locked",
+    waitingStatus: buyerDeposited ? "Waiting for Bob" : "Waiting for Bob",
+    completeDetail: "NFT #88 locked in escrow",
+    waitingDetail: buyerDeposited ? "Waiting for Bob" : "Waiting for buyer deposit",
+    actionLabel: "Lock Asset",
+    doneAction: "Locked",
+    actionIcon: "lock-keyhole",
+    locked: !buyerDeposited,
+    secondaryWhenReady: true,
   });
 
-  setElementText("#escrow-funding-status", "Deposits recorded");
-  setElementText("#escrow-release-status", releaseDone ? "Released" : "Waiting for both approvals");
+  [
+    ["#escrow-buyer-confirmed", "buyer", buyerApproved],
+    ["#escrow-seller-confirmed", "seller", sellerApproved],
+  ].forEach(([selector, key, approved]) => {
+    const item = document.querySelector(selector);
+    if (!item) return;
+    const complete = releaseDone || Boolean(approved);
+    const locked = !fundingComplete || releaseDone || complete;
+    item.disabled = locked;
+    item.classList.toggle("complete", complete);
+    item.classList.toggle("disabled", locked && !complete);
+    setLucideIcon(item, complete ? "check" : fundingComplete ? "circle" : "lock");
+    const status = item.querySelector("small");
+    if (status) status.textContent = complete ? "Approved" : fundingComplete ? "Ready" : "Locked";
+  });
+
+  setElementText("#escrow-confirmation-step", fundingComplete ? "Ready" : "Locked");
+  const confirmationStep = document.querySelector("#escrow-confirmation-step");
+  if (confirmationStep) confirmationStep.className = fundingComplete ? "status-pill escrow-active" : "status-pill public";
+  setElementText("#escrow-confirmation-copy", releaseDone
+    ? "Both approvals are complete. Escrow has been released."
+    : fundingComplete
+      ? "Funding complete. Buyer and seller can approve release."
+      : "Complete both deposits before buyer and seller approvals.");
+
+  setElementText("#escrow-funding-status", fundingComplete ? "Funding complete" : buyerDeposited ? "Waiting seller deposit" : "Waiting deposits");
+  setElementText("#escrow-release-status", releaseDone ? "Released" : releaseReady ? "Ready" : fundingComplete ? "Waiting approvals" : "Funding required");
   setElementText("#escrow-release-copy", releaseDone
     ? "Escrow released. Settlement proof is ready."
     : releaseReady
       ? "Ready for wallet signature."
-      : "Waiting for both approvals");
+      : fundingComplete
+        ? "Waiting for both approvals"
+        : "Waiting for buyer and seller deposits");
   if (fundingProof) fundingProof.innerHTML = renderEscrowProofMeta(fundingItem);
   if (fundingProofTimeline) fundingProofTimeline.innerHTML = renderEscrowProofMeta(fundingItem);
+  if (fundingStep) {
+    fundingStep.classList.toggle("complete", fundingComplete);
+    fundingStep.classList.toggle("pending", !fundingComplete);
+    setLucideIcon(fundingStep, fundingComplete ? "check" : "circle", "size-4");
+  }
   if (releaseProof) releaseProof.innerHTML = releaseDone ? renderEscrowProofMeta(releaseItem) : "";
   if (releaseStep) {
     releaseStep.classList.toggle("complete", releaseDone);
@@ -2964,7 +3090,9 @@ function renderEscrow() {
       ? `<i data-lucide="check" class="size-5"></i><span>Released</span>`
       : releaseReady
         ? `<i data-lucide="unlock" class="size-5"></i><span>Release Assets</span>`
-        : `<i data-lucide="lock" class="size-5"></i><span>Release Assets</span><small>Locked</small>`;
+        : fundingComplete
+          ? `<i data-lucide="lock" class="size-5"></i><span>Release Assets</span><small>Needs approvals</small>`
+          : `<i data-lucide="lock" class="size-5"></i><span>Release Assets</span><small>Funding required</small>`;
   }
   if (settlementAction) {
     if (releaseDone) {
@@ -3672,6 +3800,9 @@ async function createOffer() {
   if (!submitted) return;
   awardReward("createOffer");
   state.offerAccepted = false;
+  state.escrowDeposits = { buyer: false, seller: false };
+  state.escrowConfirmations = { buyer: false, seller: false };
+  state.escrowReleased = false;
   state.negotiationStep = "waiting";
   state.initialOfferAmount = amountLabel;
   state.latestOfferAmount = amountLabel;
@@ -3706,6 +3837,9 @@ async function counterOffer() {
   if (!submitted) return;
   awardReward("counterOffer");
   state.offerAccepted = false;
+  state.escrowDeposits = { buyer: false, seller: false };
+  state.escrowConfirmations = { buyer: false, seller: false };
+  state.escrowReleased = false;
   state.negotiationStep = "waiting";
   state.latestOfferAmount = amountLabel;
   currentChannel().status = "Negotiating";
@@ -3734,7 +3868,11 @@ async function acceptOffer() {
   awardReward("acceptProposal");
   state.offerAccepted = true;
   state.negotiationStep = "accepted";
-  currentChannel().status = "Escrow Active";
+  state.escrowDeposits = { buyer: false, seller: false };
+  state.escrowConfirmations = { buyer: false, seller: false };
+  state.escrowReleased = false;
+  state.escrowDisputeOpened = false;
+  currentChannel().status = "Waiting Deposit";
   renderDeal();
   renderWorkflowProgress();
   showScreen("escrow");
@@ -3770,7 +3908,87 @@ async function sendPayment() {
   showScreen("settlement");
 }
 
+async function submitEscrowDeposit(key) {
+  const isBuyer = key === "buyer";
+  if (!isBuyer && !escrowDepositComplete("buyer")) {
+    showToast("Buyer deposit is required first.");
+    renderEscrow();
+    return;
+  }
+  if (!(key in state.escrowDeposits) || escrowDepositComplete(key)) {
+    renderEscrow();
+    return;
+  }
+  const amount = currentDealOfferAmount();
+  const title = isBuyer ? "Buyer deposited" : "Seller locked asset";
+  const subtitle = isBuyer ? `${amount} locked in escrow` : "NFT #88 locked in escrow";
+  const submitted = await safeSubmit(
+    () => veilClient.recordEscrowStatus({
+      channelId: state.channelId,
+      status: "deposited",
+      details: subtitle,
+      sender: isBuyer ? "buyer" : "seller",
+    }),
+    {
+      type: "inline",
+      title,
+      subtitle,
+      time: Date.now(),
+      mode: CHAT_DISPLAY_MODE,
+    },
+    isBuyer ? "Buyer deposit recorded." : "Seller asset locked.",
+  );
+  if (!submitted) return;
+  state.escrowDeposits[key] = true;
+  if (isBuyer) awardReward("escrowCreated");
+  currentChannel().status = escrowFundingComplete() ? "Funding Complete" : "Waiting Deposit";
+  currentChannel().last = title;
+  renderEscrow();
+  renderWorkflowProgress();
+}
+
+async function approveEscrowRelease(key) {
+  if (!escrowFundingComplete()) {
+    showToast("Complete escrow funding first.");
+    renderEscrow();
+    return;
+  }
+  if (!(key in state.escrowConfirmations) || escrowApprovalComplete(key)) {
+    renderEscrow();
+    return;
+  }
+  const isBuyer = key === "buyer";
+  const title = isBuyer ? "Buyer approved release" : "Seller approved release";
+  const submitted = await safeSubmit(
+    () => veilClient.recordEscrowStatus({
+      channelId: state.channelId,
+      status: "deposited",
+      details: `${title}.`,
+      sender: isBuyer ? "buyer" : "seller",
+    }),
+    {
+      type: "inline",
+      title,
+      subtitle: "Release approval recorded",
+      time: Date.now(),
+      mode: CHAT_DISPLAY_MODE,
+    },
+    "Approval recorded.",
+  );
+  if (!submitted) return;
+  state.escrowConfirmations[key] = true;
+  currentChannel().status = escrowConfirmationsComplete() ? "Escrow Active" : "Funding Complete";
+  currentChannel().last = title;
+  renderEscrow();
+  renderWorkflowProgress();
+}
+
 async function releaseEscrow() {
+  if (!escrowFundingComplete() && !state.escrowReleased) {
+    showToast("Complete escrow funding first.");
+    renderEscrow();
+    return;
+  }
   if (!escrowConfirmationsComplete() && !state.escrowReleased) {
     showToast("Complete confirmations before release.");
     renderEscrow();
@@ -4045,13 +4263,16 @@ function bindEvents() {
       return;
     }
 
+    const escrowDeposit = event.target.closest("[data-escrow-deposit]");
+    if (escrowDeposit) {
+      submitEscrowDeposit(escrowDeposit.dataset.escrowDeposit);
+      return;
+    }
+
     const escrowConfirmation = event.target.closest("[data-escrow-confirmation]");
     if (escrowConfirmation) {
       const key = escrowConfirmation.dataset.escrowConfirmation;
-      if (key && key in state.escrowConfirmations && !state.escrowReleased) {
-        state.escrowConfirmations[key] = !state.escrowConfirmations[key];
-        renderEscrow();
-      }
+      approveEscrowRelease(key);
       return;
     }
 

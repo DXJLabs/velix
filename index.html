@@ -786,8 +786,8 @@
               <i data-lucide="chevron-left" class="size-6"></i>
             </button>
             <div class="min-w-0 flex-1">
-              <p class="eyebrow">Escrow</p>
-              <h1 class="detail-title">Escrow stages</h1>
+              <p id="escrow-page-eyebrow" class="eyebrow">Escrow Funding</p>
+              <h1 id="escrow-page-title" class="detail-title">Waiting deposits</h1>
             </div>
           </header>
           <div class="detail-content">
@@ -803,31 +803,43 @@
             </section>
 
             <section class="plain-panel">
-              <h2 class="section-title">Funding</h2>
+              <div class="section-title-row">
+                <h2 class="section-title">Escrow Funding</h2>
+                <span id="escrow-funding-step" class="status-pill waiting-deposit">Step 1 of 2</span>
+              </div>
+              <p id="escrow-funding-copy" class="plain-note compact">Waiting for deposits</p>
               <div class="escrow-deposit-grid">
-                <article class="escrow-deposit-card complete">
+                <article id="escrow-buyer-deposit-card" class="escrow-deposit-card" data-escrow-deposit-card="buyer">
                   <div class="deposit-card-top">
-                    <span><i data-lucide="check" class="size-5"></i></span>
-                    <small>Locked in Escrow</small>
+                    <span><i data-lucide="circle" class="size-5"></i></span>
+                    <small id="escrow-buyer-deposit-status">Waiting</small>
                   </div>
-                  <p>Buyer Deposit</p>
-                  <strong>450 STRK</strong>
+                  <p>Buyer</p>
+                  <strong>Alice</strong>
                   <div class="deposit-card-details">
-                    <span><em>Depositor</em><b>Alice</b></span>
-                    <span><em>Escrow Asset</em><b>STRK locked</b></span>
+                    <span><em>Deposit</em><b id="escrow-buyer-deposit-amount">450 STRK</b></span>
+                    <span><em>Status</em><b id="escrow-buyer-deposit-detail">Waiting</b></span>
                   </div>
+                  <button id="escrow-buyer-deposit-action" class="primary-action w-full" type="button" data-escrow-deposit="buyer">
+                    <i data-lucide="wallet" class="size-5"></i>
+                    <span>Deposit Funds</span>
+                  </button>
                 </article>
-                <article class="escrow-deposit-card complete">
+                <article id="escrow-seller-deposit-card" class="escrow-deposit-card" data-escrow-deposit-card="seller">
                   <div class="deposit-card-top">
-                    <span><i data-lucide="check" class="size-5"></i></span>
-                    <small>Locked in Escrow</small>
+                    <span><i data-lucide="circle" class="size-5"></i></span>
+                    <small id="escrow-seller-deposit-status">Waiting for Bob</small>
                   </div>
-                  <p>Seller Deposit</p>
-                  <strong>NFT / Work Result</strong>
+                  <p>Seller</p>
+                  <strong>Bob</strong>
                   <div class="deposit-card-details">
-                    <span><em>Depositor</em><b>Bob</b></span>
-                    <span><em>Escrow Asset</em><b>Deliverable locked</b></span>
+                    <span><em>Deposit</em><b>NFT #88</b></span>
+                    <span><em>Status</em><b id="escrow-seller-deposit-detail">Waiting for Bob</b></span>
                   </div>
+                  <button id="escrow-seller-deposit-action" class="secondary-action w-full" type="button" data-escrow-deposit="seller">
+                    <i data-lucide="lock-keyhole" class="size-5"></i>
+                    <span>Lock Asset</span>
+                  </button>
                 </article>
               </div>
               <div id="escrow-funding-proof" class="chain-meta escrow-stage-proof"></div>
@@ -843,10 +855,18 @@
             </section>
 
             <section class="plain-panel">
-              <h2 class="section-title">Confirmation</h2>
+              <div class="section-title-row">
+                <h2 class="section-title">Confirmation</h2>
+                <span id="escrow-confirmation-step" class="status-pill public">Locked</span>
+              </div>
+              <p id="escrow-confirmation-copy" class="plain-note compact">Complete both deposits before buyer and seller approvals.</p>
               <div class="escrow-checks">
-                <div id="escrow-buyer-confirmed" data-escrow-confirmation="buyer"><i data-lucide="circle" class="size-5"></i><span>Buyer approved</span><small>Waiting</small></div>
-                <div id="escrow-seller-confirmed" data-escrow-confirmation="seller"><i data-lucide="circle" class="size-5"></i><span>Seller approved</span><small>Waiting</small></div>
+                <button id="escrow-buyer-confirmed" class="escrow-check-item" type="button" data-escrow-confirmation="buyer">
+                  <i data-lucide="circle" class="size-5"></i><span>Buyer approve</span><small>Locked</small>
+                </button>
+                <button id="escrow-seller-confirmed" class="escrow-check-item" type="button" data-escrow-confirmation="seller">
+                  <i data-lucide="circle" class="size-5"></i><span>Seller approve</span><small>Locked</small>
+                </button>
               </div>
             </section>
 
