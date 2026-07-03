@@ -716,6 +716,182 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   background: rgb(248 250 252);
 }
 
+.new-deal-content {
+  gap: .85rem;
+}
+
+.new-deal-panel,
+.new-deal-flow {
+  display: grid;
+  gap: .9rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: 1rem;
+}
+
+.new-deal-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .75rem;
+  align-items: start;
+}
+
+.new-deal-heading h2 {
+  color: rgb(15 23 42);
+  font-size: 1.12rem;
+  font-weight: 950;
+}
+
+.new-deal-heading p {
+  margin-top: .2rem;
+  color: rgb(100 116 139);
+  font-size: .86rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.new-deal-icon {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border-radius: .7rem;
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.new-deal-icon.muted {
+  background: rgb(241 245 249);
+  color: rgb(51 65 85);
+}
+
+.new-deal-search {
+  margin-top: 0;
+}
+
+.counterparty-result {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .75rem;
+}
+
+.counterparty-result strong,
+.counterparty-result small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.counterparty-result strong {
+  color: rgb(15 23 42);
+  font-weight: 950;
+}
+
+.counterparty-result small {
+  margin-top: .12rem;
+  color: rgb(100 116 139);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.invite-methods {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .35rem;
+}
+
+.invite-methods button {
+  min-height: 2.45rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .65rem;
+  background: white;
+  color: rgb(100 116 139);
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.invite-methods button.active {
+  border-color: rgb(15 23 42);
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.invite-link-card {
+  display: grid;
+  gap: .55rem;
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .8rem;
+}
+
+.invite-link-card span {
+  color: rgb(100 116 139);
+  font-size: .72rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.invite-link-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(15 23 42);
+  font-size: .86rem;
+  font-weight: 950;
+}
+
+.invite-link-card div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .45rem;
+}
+
+.invite-link-card .secondary-action {
+  min-height: 2.55rem;
+  padding-inline: .55rem;
+  font-size: .78rem;
+}
+
+.new-deal-flow ol {
+  display: grid;
+  gap: .5rem;
+}
+
+.new-deal-flow li {
+  display: grid;
+  grid-template-columns: 1.65rem minmax(0, 1fr);
+  align-items: center;
+  gap: .6rem;
+  color: rgb(71 85 105);
+  font-size: .86rem;
+  font-weight: 900;
+}
+
+.new-deal-flow li span {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(241 245 249);
+  color: rgb(100 116 139);
+  font-size: .72rem;
+  font-weight: 950;
+}
+
+.new-deal-flow li.complete span {
+  background: rgb(220 252 231);
+  color: rgb(4 120 87);
+}
+
 .avatar {
   display: grid;
   width: 3rem;
@@ -1347,6 +1523,61 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 .message-feed {
   min-height: calc(100dvh - 4.25rem);
   padding: .85rem 1rem calc(10.8rem + env(safe-area-inset-bottom));
+}
+
+.composer[hidden] {
+  display: none;
+}
+
+.invite-wait-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .75rem;
+  align-items: start;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: .9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.invite-wait-icon {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: .7rem;
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.invite-wait-card strong {
+  display: block;
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+}
+
+.invite-wait-card p {
+  margin-top: .18rem;
+  color: rgb(71 85 105);
+  font-size: .84rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.invite-wait-card small {
+  display: block;
+  margin-top: .45rem;
+  overflow-wrap: anywhere;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.invite-wait-card button {
+  grid-column: 1 / -1;
+  min-height: 2.65rem;
 }
 
 .channel-security-banner {
@@ -2269,6 +2500,20 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
   .offer-form-actions {
     grid-template-columns: 1fr;
+  }
+
+  .invite-methods,
+  .invite-link-card div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .counterparty-result {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .counterparty-result .status-pill {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 

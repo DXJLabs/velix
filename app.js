@@ -50,6 +50,7 @@ const DEAL_OFFER_AMOUNT = "450 STRK";
 const FEE_ESTIMATE_PENDING = "Fee will be calculated before wallet signature";
 const TOTAL_ESTIMATE_PENDING = "Calculated in wallet";
 const PAYMENT_RECIPIENT = "Bob";
+const VEIL_INVITE_BASE_URL = import.meta.env.VITE_VEIL_INVITE_URL || "https://veil.xyz/invite";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
   github: import.meta.env.VITE_VEIL_GITHUB_URL || "https://github.com/DXJLabs/velix",
@@ -264,6 +265,8 @@ const state = {
   },
   escrowDisputeOpened: false,
   proofExported: false,
+  inviteMethod: "username",
+  inviteCode: "8Hsj3K",
 };
 
 let toastTimer;
@@ -604,57 +607,115 @@ function saveLocalChannels() {
   }
 }
 
-function createLocalChannelModel() {
+function createDealInviteLink() {
+  return `${VEIL_INVITE_BASE_URL}/${state.inviteCode}`;
+}
+
+function newDealTitleValue() {
+  return document.querySelector("#new-deal-title")?.value.trim() || "Rights Transfer";
+}
+
+function newDealCounterpartyValue() {
+  return document.querySelector("#new-deal-counterparty")?.value.trim() || "Bob";
+}
+
+function inviteTargetValue() {
+  return document.querySelector("#invite-target")?.value.trim() || "Counterparty";
+}
+
+function counterpartyAvatar(name) {
+  const value = String(name || "C").trim();
+  return value ? value[0].toUpperCase() : "C";
+}
+
+function createLocalChannelModel({
+  title = "Rights Transfer",
+  person = "Bob",
+  status = "Negotiating",
+  last = "Bob joined the deal",
+  invited = false,
+} = {}) {
   const channelNumber = channels.length + 1;
   const channelId = `channel-${Date.now().toString(36)}`;
   return {
     id: channelId,
-    title: `Deal Channel #${channelNumber}`,
-    person: "Counterparty",
-    avatar: "C",
+    title,
+    person,
+    avatar: counterpartyAvatar(person),
     mode: "Private",
-    status: "Negotiating",
+    status,
     unread: 0,
     time: "now",
-    last: "Channel created",
+    last,
+    channelNumber,
+    inviteLink: invited ? createDealInviteLink() : "",
     local: true,
   };
 }
 
-async function createNewChannel() {
+function seedDealTimeline(channel, inviteOnly) {
+  if (inviteOnly) {
+    return [
+      {
+        type: "event",
+        title: "Invitation sent",
+        subtitle: `Waiting for ${channel.person} to join.`,
+        time: Date.now(),
+        offchain: true,
+      },
+    ];
+  }
+
+  return [
+    {
+      type: "event",
+      title: `${channel.person} joined the deal`,
+      subtitle: "Negotiation is ready.",
+      time: Date.now(),
+      offchain: true,
+    },
+  ];
+}
+
+async function createDealChannel({ inviteOnly = false } = {}) {
   if (!state.walletConnected) {
     const connected = await connectWallet({ goToInbox: false });
     if (!connected) return;
   }
 
-  const channel = createLocalChannelModel();
+  const person = inviteOnly ? inviteTargetValue() : newDealCounterpartyValue();
+  const channel = createLocalChannelModel({
+    title: newDealTitleValue(),
+    person,
+    status: inviteOnly ? "Waiting for Counterparty" : "Negotiating",
+    last: inviteOnly ? "Invitation sent" : `${person} joined the deal`,
+    invited: inviteOnly,
+  });
   channels.unshift(channel);
-  messages[channel.id] = [
-    {
-      type: "event",
-      title: "Channel created",
-      subtitle: "Secure on-chain deal channel ready.",
-      time: Date.now(),
-    },
-  ];
+  messages[channel.id] = seedDealTimeline(channel, inviteOnly);
   if (conversationSearch) conversationSearch.value = "";
   saveLocalChannels();
   renderConversationList();
   openChannel(channel.id);
+
+  if (inviteOnly) {
+    showToast("Invitation ready.");
+    return;
+  }
 
   try {
     await veilClient.createChannel({
       channelId: channel.id,
       title: channel.title,
     });
-    showToast("Channel created.");
+    showToast("Deal created.");
   } catch (error) {
     veilError("channel.create.failed", error, {
-      where: "createNewChannel",
+      where: "createDealChannel",
       channelId: channel.id,
       howToFix: "Confirm wallet connection and helper transport before creating a production on-chain channel.",
     });
-    showToast("Channel created locally.");
+    showToast("Deal saved locally.");
   }
 }
 
@@ -2009,6 +2070,7 @@ function showScreen(screen, options = {}) {
   navItems.forEach((item) => item.classList.toggle("active", item.dataset.topNav === screen));
 
   if (screen === "conversations") renderConversationList();
+  if (screen === "new-deal") renderNewDeal();
   if (screen === "unlock") renderHomeStatus();
   if (screen === "channel") renderChannel();
   if (screen === "deal") renderDeal();
@@ -2160,8 +2222,37 @@ function renderConversationList() {
   iconRefresh();
 }
 
+function renderNewDeal() {
+  const inviteLink = document.querySelector("#invite-link-preview");
+  const inviteTargetLabel = document.querySelector("#invite-target-label");
+  const inviteTarget = document.querySelector("#invite-target");
+  const methodLabels = {
+    username: "VEIL Username",
+    wallet: "Wallet Address",
+    email: "Email Address",
+    link: "Share Link",
+  };
+  const methodValues = {
+    username: "@bob.veil",
+    wallet: "0x0b...71e9",
+    email: "bob@example.com",
+    link: createDealInviteLink(),
+  };
+
+  if (inviteLink) inviteLink.textContent = createDealInviteLink();
+  if (inviteTargetLabel) inviteTargetLabel.textContent = methodLabels[state.inviteMethod] || "Invite Target";
+  if (inviteTarget && (!inviteTarget.value || ["@bob.veil", "0x0b...71e9", "bob@example.com", createDealInviteLink()].includes(inviteTarget.value))) {
+    inviteTarget.value = methodValues[state.inviteMethod] || "";
+  }
+  document.querySelectorAll("[data-invite-method]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.inviteMethod === state.inviteMethod);
+  });
+  iconRefresh();
+}
+
 function renderChannel() {
   const channel = currentChannel();
+  const waitingForCounterparty = String(channel.status || "").toLowerCase().includes("waiting for counterparty");
   document.querySelector("#channel-title").textContent = channel.title;
   document.querySelector("#channel-meta").textContent = `${channel.person} - ${channel.status}`;
   const contextTitle = document.querySelector("#channel-context-title");
@@ -2175,9 +2266,25 @@ function renderChannel() {
   }
   messageFeed.innerHTML = `
     <div class="timeline-day"><span>Today</span></div>
+    ${waitingForCounterparty ? renderInviteWaitingCard(channel) : ""}
     ${channelMessages().map(renderFeedItem).join("")}
   `;
+  if (composerForm) composerForm.hidden = waitingForCounterparty;
   iconRefresh();
+}
+
+function renderInviteWaitingCard(channel) {
+  return `
+    <section class="invite-wait-card">
+      <span class="invite-wait-icon"><i data-lucide="send" class="size-5"></i></span>
+      <div>
+        <strong>Waiting for Counterparty</strong>
+        <p>Invitation sent to ${escapeHtml(channel.person)}. Chat and offers unlock after they join.</p>
+        <small>${escapeHtml(channel.inviteLink || createDealInviteLink())}</small>
+      </div>
+      <button class="secondary-action" type="button" data-copy-invite>Copy Link</button>
+    </section>
+  `;
 }
 
 function renderFeedItem(item) {
@@ -2204,7 +2311,7 @@ function renderMessage(item) {
 
 function timelineIcon(item) {
   const label = `${item.title || ""} ${item.subtitle || ""}`.toLowerCase();
-  if (label.includes("channel")) return "network";
+  if (label.includes("invite") || label.includes("joined")) return "user-plus";
   if (label.includes("payment") || label.includes("memo")) return "file-text";
   if (label.includes("escrow")) return "shield-check";
   if (label.includes("offer") || label.includes("counter")) return "badge-dollar-sign";
@@ -2233,7 +2340,7 @@ function renderInlineEvent(item) {
       <div class="timeline-card">
         <strong>${escapeHtml(item.title)}</strong>
         <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
-        ${renderChainMeta(item)}
+        ${item.offchain ? "" : renderChainMeta(item)}
       </div>
     </article>
   `;
@@ -2884,6 +2991,16 @@ async function copyWalletAddress() {
   try {
     await navigator.clipboard.writeText(address);
     showToast("Address copied.");
+  } catch {
+    showToast("Copy unavailable.");
+  }
+}
+
+async function copyInviteLink() {
+  const link = currentChannel()?.inviteLink || createDealInviteLink();
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast("Invite link copied.");
   } catch {
     showToast("Copy unavailable.");
   }
@@ -3675,7 +3792,39 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-new-conversation]")) {
-      createNewChannel();
+      showScreen("new-deal");
+      return;
+    }
+
+    const newDealAction = event.target.closest("[data-new-deal-action]");
+    if (newDealAction?.dataset.newDealAction === "existing") {
+      createDealChannel({ inviteOnly: false });
+      return;
+    }
+    if (newDealAction?.dataset.newDealAction === "invite") {
+      createDealChannel({ inviteOnly: true });
+      return;
+    }
+
+    const inviteMethod = event.target.closest("[data-invite-method]");
+    if (inviteMethod) {
+      state.inviteMethod = inviteMethod.dataset.inviteMethod || "username";
+      renderNewDeal();
+      return;
+    }
+
+    if (event.target.closest("[data-copy-invite]")) {
+      copyInviteLink();
+      return;
+    }
+
+    if (event.target.closest("[data-share-invite]")) {
+      showToast("Share sheet ready.");
+      return;
+    }
+
+    if (event.target.closest("[data-qr-invite]")) {
+      showToast("QR code ready.");
       return;
     }
 

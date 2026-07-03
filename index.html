@@ -162,16 +162,16 @@
                 <div class="flex items-center justify-between gap-3">
                   <div class="min-w-0">
                     <p class="eyebrow">VEIL</p>
-                    <h1 class="page-title">Channels</h1>
-                    <p class="page-subtitle">Secure on-chain deal channels</p>
+                    <h1 class="page-title">Deals</h1>
+                    <p class="page-subtitle">Choose a counterparty, negotiate, then settle.</p>
                   </div>
-                  <button class="icon-button" type="button" data-new-conversation aria-label="New channel">
+                  <button class="icon-button" type="button" data-new-conversation aria-label="New deal">
                     <i data-lucide="plus" class="size-5"></i>
                   </button>
                 </div>
                 <label class="search-field">
                   <i data-lucide="search" class="size-4"></i>
-                  <input id="conversation-search" type="search" placeholder="Search channels" autocomplete="off" />
+                  <input id="conversation-search" type="search" placeholder="Search deals" autocomplete="off" />
                 </label>
               </header>
 
@@ -183,7 +183,7 @@
             <aside class="conversation-inspector" aria-label="Selected channel">
               <div class="inspector-top">
                 <div>
-                  <p class="eyebrow">Active channel</p>
+                  <p class="eyebrow">Active deal</p>
                   <h2>Rights Transfer</h2>
                 </div>
                 <span class="status-pill escrow-active">Escrow Active</span>
@@ -201,9 +201,95 @@
               </div>
               <button class="primary-action w-full" type="button" data-open-channel="20260625">
                 <i data-lucide="arrow-right" class="size-5"></i>
-                <span>Open Channel</span>
+                <span>Open Deal</span>
               </button>
             </aside>
+          </div>
+        </section>
+
+        <section class="screen hidden bg-[#f7f8fa]" data-screen="new-deal">
+          <header class="detail-header">
+            <button class="icon-button ghost" type="button" data-nav="conversations" aria-label="Back">
+              <i data-lucide="chevron-left" class="size-6"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+              <p class="eyebrow">New Deal</p>
+              <h1 class="detail-title">Choose counterparty</h1>
+            </div>
+          </header>
+          <div class="detail-content new-deal-content">
+            <section class="new-deal-panel">
+              <div class="new-deal-heading">
+                <span class="new-deal-icon"><i data-lucide="user-check" class="size-5"></i></span>
+                <div>
+                  <h2>Counterparty on VEIL</h2>
+                  <p>Search a username, ENS, or wallet, then start a private deal room.</p>
+                </div>
+              </div>
+              <label class="field">
+                <span>Deal Name</span>
+                <input id="new-deal-title" type="text" value="Rights Transfer" />
+              </label>
+              <label class="search-field new-deal-search">
+                <i data-lucide="search" class="size-4"></i>
+                <input id="new-deal-counterparty" type="search" value="Bob" placeholder="Username, ENS, or wallet" autocomplete="off" />
+              </label>
+              <article class="counterparty-result">
+                <span class="avatar">B</span>
+                <div>
+                  <strong>Bob</strong>
+                  <small>@bob.veil - 0x0b...71e9</small>
+                </div>
+                <span class="status-pill escrow-active">VEIL User</span>
+              </article>
+              <button class="primary-action w-full" type="button" data-new-deal-action="existing">
+                <i data-lucide="plus" class="size-5"></i>
+                <span>Create Deal</span>
+              </button>
+            </section>
+
+            <section class="new-deal-panel">
+              <div class="new-deal-heading">
+                <span class="new-deal-icon muted"><i data-lucide="send" class="size-5"></i></span>
+                <div>
+                  <h2>Invite Counterparty</h2>
+                  <p>Use this when the other party has not joined VEIL yet.</p>
+                </div>
+              </div>
+              <div class="invite-methods" aria-label="Invite methods">
+                <button class="active" type="button" data-invite-method="username">Username</button>
+                <button type="button" data-invite-method="wallet">Wallet</button>
+                <button type="button" data-invite-method="email">Email</button>
+                <button type="button" data-invite-method="link">Link</button>
+              </div>
+              <label class="field">
+                <span id="invite-target-label">Invite Target</span>
+                <input id="invite-target" type="text" value="bob@example.com" />
+              </label>
+              <div class="invite-link-card">
+                <span>Invite Link</span>
+                <strong id="invite-link-preview">https://veil.xyz/invite/8Hsj3K</strong>
+                <div>
+                  <button class="secondary-action" type="button" data-copy-invite>Copy Link</button>
+                  <button class="secondary-action" type="button" data-share-invite>Share</button>
+                  <button class="secondary-action" type="button" data-qr-invite>QR Code</button>
+                </div>
+              </div>
+              <button class="primary-action w-full" type="button" data-new-deal-action="invite">
+                <i data-lucide="link" class="size-5"></i>
+                <span>Create Invite</span>
+              </button>
+            </section>
+
+            <section class="new-deal-flow">
+              <h2 class="section-title">Start Flow</h2>
+              <ol>
+                <li class="complete"><span>1</span><strong>Choose counterparty</strong></li>
+                <li><span>2</span><strong>Create or invite</strong></li>
+                <li><span>3</span><strong>Negotiate offer</strong></li>
+                <li><span>4</span><strong>Escrow or direct payment</strong></li>
+              </ol>
+            </section>
           </div>
         </section>
 
