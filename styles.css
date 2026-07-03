@@ -2015,6 +2015,19 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 950;
 }
 
+.timeline-actor {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: .18rem;
+  border-radius: 999px;
+  background: rgb(241 245 249);
+  padding: .16rem .46rem;
+  color: rgb(51 65 85);
+  font-size: .68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
 .timeline-card small {
   margin-top: .18rem;
   color: rgb(100 116 139);

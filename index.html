@@ -203,17 +203,17 @@
                   <p class="eyebrow">Active deal</p>
                   <h2>Rights Transfer</h2>
                 </div>
-                <span class="status-pill escrow-active">Escrow Active</span>
+                <span class="status-pill waiting-deposit">Waiting Deposit</span>
               </div>
               <div class="inspector-amount">
                 <span>Accepted offer</span>
                 <strong>450 STRK</strong>
-                <small>Escrow ready for settlement flow</small>
+                <small>Waiting for Alice and Bob deposits</small>
               </div>
               <div class="inspector-timeline">
-                <div class="complete"><i data-lucide="check" class="size-4"></i><span>Offer accepted</span></div>
+                <div class="complete"><i data-lucide="check" class="size-4"></i><span>Alice accepted Bob's counter offer</span></div>
                 <div class="complete"><i data-lucide="check" class="size-4"></i><span>AI prepared</span></div>
-                <div><i data-lucide="shield" class="size-4"></i><span>Escrow release pending</span></div>
+                <div><i data-lucide="shield" class="size-4"></i><span>Escrow deposits pending</span></div>
                 <div><i data-lucide="file-check-2" class="size-4"></i><span>Proof export next</span></div>
               </div>
               <button class="primary-action w-full" type="button" data-open-channel="20260625">
@@ -326,7 +326,7 @@
                 <button class="task-row primary" type="button" data-open-route="deal">
                   <span class="action-icon"><i data-lucide="handshake" class="size-5"></i></span>
                   <span>
-                    <strong>Review Counter Offer</strong>
+                    <strong>Review Bob's Counter</strong>
                     <small>Rights Transfer - 450 STRK awaiting decision</small>
                   </span>
                   <i data-lucide="chevron-right" class="size-5"></i>
@@ -386,7 +386,7 @@
                 <section class="history-day" aria-labelledby="history-today">
                   <h3 id="history-today">Today</h3>
                   <ol>
-                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Counter Offer Accepted</span><strong>Rights Transfer</strong></li>
+                    <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Alice accepted Bob's counter offer</span><strong>Rights Transfer</strong></li>
                     <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Escrow Funded</span><strong>Northline Goods</strong></li>
                     <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>Payment Sent</span><strong>Design Milestone</strong></li>
                     <li><span class="history-check"><i data-lucide="check" class="size-4"></i></span><span>AI Attached</span><strong>Rights Transfer</strong></li>
@@ -642,7 +642,7 @@
             </button>
             <button class="min-w-0 flex-1 text-left" type="button" data-open-route="deal">
               <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
-              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob - Offer accepted</p>
+              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob - Negotiation completed</p>
             </button>
             <button class="icon-button ghost" type="button" data-open-route="deal" aria-label="Deal menu">
               <i data-lucide="more-horizontal" class="size-5"></i>
@@ -658,7 +658,7 @@
               <small>ECDH encrypted channel</small>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
             </div>
-            <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
+            <span id="channel-context-status" class="status-pill waiting-deposit">Waiting Deposit</span>
           </section>
 
           <div id="message-feed" class="message-feed"></div>
@@ -759,8 +759,8 @@
             <section id="offer-history-panel" class="plain-panel">
               <h2 class="section-title">Offer History</h2>
               <ol id="offer-history-list" class="price-timeline">
-                <li class="complete"><span>Initial Offer</span><strong>500 STRK</strong></li>
-                <li class="complete active"><span>Bob Counter Offer</span><strong>450 STRK</strong></li>
+                <li class="complete"><span>Alice created an offer</span><strong>500 STRK</strong></li>
+                <li class="complete active"><span>Bob created a counter offer</span><strong>450 STRK</strong></li>
                 <li id="offer-history-waiting"><span>Your Decision</span><strong>Pending</strong></li>
               </ol>
             </section>
@@ -775,7 +775,7 @@
             </section>
 
             <details id="deal-activity-panel" class="offer-proof-panel">
-              <summary><span id="deal-activity-title">Offer Submitted</span><i data-lucide="chevron-down" class="size-4"></i></summary>
+              <summary><span id="deal-activity-title">Alice created an offer</span><i data-lucide="chevron-down" class="size-4"></i></summary>
               <div id="deal-offer-proof" class="chain-meta"></div>
             </details>
           </div>
@@ -800,7 +800,7 @@
                 <h2>Rights Transfer</h2>
                 <small>Alice / Bob</small>
               </div>
-              <span id="escrow-channel-status" class="status-pill escrow-active">Escrow Active</span>
+              <span id="escrow-channel-status" class="status-pill waiting-deposit">Waiting Deposit</span>
             </section>
 
             <section class="plain-panel">
@@ -813,17 +813,21 @@
                 <article id="escrow-buyer-deposit-card" class="escrow-deposit-card" data-escrow-deposit-card="buyer">
                   <div class="deposit-card-top">
                     <span><i data-lucide="circle" class="size-5"></i></span>
-                    <small id="escrow-buyer-deposit-status">Waiting</small>
+                    <small id="escrow-buyer-deposit-status">Deposit Required</small>
                   </div>
                   <p>Buyer</p>
                   <strong>Alice</strong>
                   <div class="deposit-card-details">
                     <span><em>Deposit</em><b id="escrow-buyer-deposit-amount">450 STRK</b></span>
+                    <span><em>Protocol Fee</em><b id="escrow-buyer-protocol-fee">2.250 STRK</b></span>
+                    <span><em>STRK20 Privacy Fee</em><b id="escrow-buyer-privacy-fee">0.010 STRK</b></span>
+                    <span><em>Network Fee</em><b id="escrow-buyer-network-fee">0.003 STRK</b></span>
+                    <span><em>Reward Points</em><b id="escrow-buyer-reward">+450 VEIL Points</b></span>
                     <span><em>Status</em><b id="escrow-buyer-deposit-detail">Waiting</b></span>
                   </div>
                   <button id="escrow-buyer-deposit-action" class="primary-action w-full" type="button" data-escrow-deposit="buyer">
                     <i data-lucide="wallet" class="size-5"></i>
-                    <span>Deposit Funds</span>
+                    <span>Deposit to Escrow</span>
                   </button>
                 </article>
                 <article id="escrow-seller-deposit-card" class="escrow-deposit-card" data-escrow-deposit-card="seller">
@@ -834,7 +838,8 @@
                   <p>Seller</p>
                   <strong>Bob</strong>
                   <div class="deposit-card-details">
-                    <span><em>Deposit</em><b>NFT #88</b></span>
+                    <span><em>Asset</em><b>Rights Package NFT</b></span>
+                    <span><em>Reward Points</em><b id="escrow-seller-reward">+450 VEIL Points</b></span>
                     <span><em>Status</em><b id="escrow-seller-deposit-detail">Waiting for Bob</b></span>
                   </div>
                   <button id="escrow-seller-deposit-action" class="secondary-action w-full" type="button" data-escrow-deposit="seller">
@@ -1015,15 +1020,15 @@
               <div class="proof-group">
                 <h2>Negotiation</h2>
                 <ol>
-                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Offer</p><strong>500 STRK</strong></li>
-                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Counter Offer</p><strong>450 STRK</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Alice created an offer</p><strong>500 STRK</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Bob created a counter offer</p><strong>450 STRK</strong></li>
                 </ol>
               </div>
               <div class="proof-group">
                 <h2>Funding</h2>
                 <ol>
-                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Buyer locked</p><strong>450 STRK</strong></li>
-                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Seller locked</p><strong>NFT / Work Result</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Alice deposited</p><strong>450 STRK</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Bob locked NFT</p><strong>Rights Package NFT</strong></li>
                 </ol>
               </div>
               <div class="proof-group">
@@ -1035,8 +1040,8 @@
               <div class="proof-group">
                 <h2>Settlement</h2>
                 <ol>
-                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Asset delivered</p><strong>Buyer</strong></li>
-                  <li><span><i data-lucide="check" class="size-4"></i></span><p>Funds delivered</p><strong>Seller</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>NFT delivered to Alice</p><strong>Complete</strong></li>
+                  <li><span><i data-lucide="check" class="size-4"></i></span><p>450 STRK delivered to Bob</p><strong>Complete</strong></li>
                 </ol>
               </div>
             </section>
@@ -1128,7 +1133,7 @@
           <i data-lucide="x" class="size-5"></i>
         </button>
         <p class="eyebrow">Review Transaction</p>
-        <h2 id="escrow-review-title">Release Escrow</h2>
+        <h2 id="escrow-review-title">Release Assets</h2>
         <div class="review-summary-list">
           <div><span>Escrow Amount</span><strong id="escrow-review-amount">450 STRK</strong></div>
           <div><span>Total Fee</span><strong id="escrow-review-fee">2.263 STRK</strong></div>

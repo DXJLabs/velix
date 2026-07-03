@@ -68,17 +68,17 @@ const VEIL_REWARD_POINTS = Object.freeze({
   counterOffer: 5,
   acceptProposal: 10,
   directPayment: 20,
-  escrowCreated: 30,
+  escrowCreated: 450,
   escrowCompleted: 50,
   inviteUserJoined: 100,
 });
 const VEIL_REWARD_LABELS = Object.freeze({
   sendMessage: "Shielded Message",
-  createOffer: "Offer Created",
-  counterOffer: "Counter Offer",
+  createOffer: "Alice created an offer",
+  counterOffer: "Bob created a counter offer",
   acceptProposal: "Accept Proposal",
   directPayment: "Direct Payment",
-  escrowCreated: "Escrow Created",
+  escrowCreated: "Escrow Deposit",
   escrowCompleted: "Escrow Completed",
   inviteUserJoined: "Invite User Joined",
 });
@@ -144,10 +144,29 @@ function reliableRpcUrl(url, fallback) {
   return value;
 }
 
+function demoTxHash(seed) {
+  const text = String(seed || "veil");
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+  }
+  return `mock-${hash.toString(16).padStart(8, "0")}`;
+}
+
+function confirmedTimelineMeta(seed, offset = 0) {
+  return {
+    status: "confirmed",
+    blockNumber: demoBlockStart + offset,
+    txHash: demoTxHash(`${seed}:${offset}`),
+    mode: CHAT_DISPLAY_MODE,
+  };
+}
+
 const now = Date.now();
 const minute = 60_000;
 const activeDealId = "20260625";
 const LOCAL_CHANNELS_KEY = "veil:local:channels:v1";
+const demoBlockStart = 11517060;
 const knownVeilCounterparties = new Set([
   "alice.stark",
   "bob.stark",
@@ -165,7 +184,7 @@ const channels = [
     status: "Waiting Deposit",
     unread: 2,
     time: "9:41 AM",
-    last: "Counter offer accepted",
+    last: "Waiting for escrow deposits",
   },
   {
     id: "design-milestone",
@@ -187,7 +206,7 @@ const channels = [
     status: "Waiting Deposit",
     unread: 0,
     time: "8:15 AM",
-    last: "Buyer deposited funds",
+    last: "Alice deposited funds",
   },
   {
     id: "greylock-ops",
@@ -209,43 +228,62 @@ const channels = [
     status: "Settlement",
     unread: 0,
     time: "Mon",
-    last: "Escrow completed",
+    last: "Settlement complete",
   },
 ];
 
 const messages = {
   [activeDealId]: [
     {
-      type: "message",
-      sender: "Bob",
-      body: "Here is my offer.",
-      time: now - 42 * minute,
-    },
-    {
-      type: "offer",
-      title: "Offer #1",
-      amount: "450 STRK",
-      subtitle: "Rights Transfer",
-      time: now - 39 * minute,
+      type: "event",
+      title: "Bob joined the deal",
+      subtitle: "Negotiation is ready.",
+      actor: "Bob",
+      time: now - 52 * minute,
+      ...confirmedTimelineMeta("bob-joined", 0),
     },
     {
       type: "message",
       sender: "You",
-      body: "Thanks. I will review and get back to you.",
-      time: now - 31 * minute,
+      actor: "Alice",
+      body: "Hello Bob, here is my offer.",
+      time: now - 48 * minute,
       self: true,
+      ...confirmedTimelineMeta("alice-message", 1),
     },
     {
-      type: "message",
-      sender: "Bob",
-      body: "Sure, let me know.",
-      time: now - 9 * minute,
+      type: "offer",
+      title: "Alice created an offer",
+      actor: "Alice",
+      amount: "500 STRK",
+      subtitle: "Rights Package / NFT",
+      time: now - 44 * minute,
+      ...confirmedTimelineMeta("alice-offer", 2),
+    },
+    {
+      type: "offer",
+      title: "Bob created a counter offer",
+      actor: "Bob",
+      amount: "450 STRK",
+      subtitle: "Rights Package / NFT",
+      time: now - 34 * minute,
+      ...confirmedTimelineMeta("bob-counter", 3),
     },
     {
       type: "event",
-      title: "Bob accepted your offer",
-      subtitle: "Escrow is ready to create.",
-      time: now - 4 * minute,
+      title: "Alice accepted Bob's counter offer",
+      subtitle: "Negotiation completed. Escrow contract created.",
+      actor: "Alice",
+      time: now - 24 * minute,
+      ...confirmedTimelineMeta("alice-accepted-counter", 4),
+    },
+    {
+      type: "event",
+      title: "Waiting for escrow deposits",
+      subtitle: "Waiting for: Alice deposits 450 STRK; Bob locks NFT.",
+      actor: "System",
+      time: now - 20 * minute,
+      ...confirmedTimelineMeta("waiting-escrow-deposits", 5),
     },
   ],
   "design-milestone": [
@@ -285,7 +323,7 @@ const messages = {
 const initialRewardHistory = [
   { points: 50, label: "Escrow Completed", time: now - 2 * 60 * minute },
   { points: 20, label: "Direct Payment", time: now - 5 * 60 * minute },
-  { points: 5, label: "Offer Created", time: now - 24 * 60 * minute },
+  { points: 5, label: "Alice created an offer", time: now - 24 * 60 * minute },
   { points: 1, label: "Shielded Message", time: now - 26 * 60 * minute },
 ];
 
@@ -816,6 +854,8 @@ function seedDealTimeline(channel) {
         subtitle: `${channel.dealId} is waiting for ${channel.person}.`,
         time: Date.now(),
         offchain: true,
+        actor: "System",
+        ...confirmedTimelineMeta(`${channel.id}-invite`, 10),
       },
     ];
   }
@@ -828,6 +868,8 @@ function seedDealTimeline(channel) {
         subtitle: `Private deal request sent to ${channel.person}.`,
         time: Date.now(),
         offchain: true,
+        actor: "Alice",
+        ...confirmedTimelineMeta(`${channel.id}-created`, 10),
       },
       {
         type: "event",
@@ -835,6 +877,8 @@ function seedDealTimeline(channel) {
         subtitle: `${channel.person} must accept before negotiation opens.`,
         time: Date.now() + 1,
         offchain: true,
+        actor: "System",
+        ...confirmedTimelineMeta(`${channel.id}-notification`, 11),
       },
     ];
   }
@@ -846,6 +890,8 @@ function seedDealTimeline(channel) {
       subtitle: "Negotiation is ready.",
       time: Date.now(),
       offchain: true,
+      actor: channel.person,
+      ...confirmedTimelineMeta(`${channel.id}-joined`, 12),
     },
   ];
 }
@@ -924,6 +970,8 @@ function acceptPendingCounterparty(channel = currentChannel()) {
     subtitle: "Negotiation is ready.",
     time: Date.now(),
     offchain: true,
+    actor: channel.person,
+    ...confirmedTimelineMeta(`${channel.id}-accepted`, 12),
   });
   if (channel.invited) awardReward("inviteUserJoined");
   saveLocalChannels();
@@ -946,6 +994,8 @@ function declinePendingCounterparty(channel = currentChannel()) {
     subtitle: "Deal request closed.",
     time: Date.now(),
     offchain: true,
+    actor: channel.person,
+    ...confirmedTimelineMeta(`${channel.id}-declined`, 12),
   });
   saveLocalChannels();
   renderConversationList();
@@ -2456,6 +2506,7 @@ function timelinePayloadToFeedItem(item, payload) {
     blockNumber: item.blockNumber,
     status: item.status || "confirmed",
     mode: item.mode || CHAT_DISPLAY_MODE,
+    actor: sender === "You" ? "Alice" : sender,
   };
 
   if (payload.kind === "chat") {
@@ -2480,10 +2531,10 @@ function timelinePayloadToFeedItem(item, payload) {
   }
 
   const titles = {
-    accept_offer: "Offer accepted",
+    accept_offer: "Alice accepted Bob's counter offer",
     reject_offer: "Offer rejected",
     payment_memo: "AI note attached",
-    escrow: "Escrow updated",
+    escrow: payload.status === "settled" ? "Assets released" : "Escrow event recorded",
     proof: "Proof attached",
   };
 
@@ -2500,6 +2551,7 @@ function statusPillClass(status) {
   if (normalized.includes("negotiating")) return "status-pill negotiating";
   if (normalized.includes("escrow")) return "status-pill escrow-active";
   if (normalized.includes("funding complete")) return "status-pill escrow-active";
+  if (normalized.includes("approvals complete")) return "status-pill escrow-active";
   if (normalized.includes("waiting")) return "status-pill waiting-deposit";
   if (normalized.includes("settlement")) return "status-pill settlement";
   return "status-pill deal-status";
@@ -2650,11 +2702,12 @@ function renderFeedItem(item) {
 
 function renderMessage(item) {
   const self = item.self || item.sender === "You";
+  const actor = item.actor || (self ? "Alice" : item.sender);
   return `
     <article class="message ${self ? "self" : ""} ${itemStateClass(item)}">
       <div class="message-stack ${self ? "right" : ""}">
         <div class="message-meta ${self ? "text-right" : ""}">
-          <span>${escapeHtml(self ? "You" : item.sender)}</span>
+          <span>${escapeHtml(actor)}</span>
           <time>${escapeHtml(formatTime(item.time))}</time>
         </div>
         <p class="bubble">${escapeHtml(item.body)}</p>
@@ -2674,10 +2727,13 @@ function timelineIcon(item) {
 }
 
 function renderOfferCard(item) {
+  const actorName = item.actor || (item.self || item.sender === "You" ? "Alice" : item.sender) || "System";
+  const actor = `<span class="timeline-actor">${escapeHtml(actorName)}</span>`;
   return `
     <article class="timeline-event offer-timeline ${itemStateClass(item)}">
       <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
       <div class="timeline-card">
+        ${actor}
         <strong>${escapeHtml(item.title)}</strong>
         <b>${escapeHtml(item.amount)}</b>
         <small>${escapeHtml(item.subtitle)}</small>
@@ -2689,13 +2745,16 @@ function renderOfferCard(item) {
 }
 
 function renderInlineEvent(item) {
+  const actorName = item.actor || (item.self || item.sender === "You" ? "Alice" : item.sender) || "System";
+  const actor = `<span class="timeline-actor">${escapeHtml(actorName)}</span>`;
   return `
     <article class="timeline-event ${itemStateClass(item)}">
       <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
       <div class="timeline-card">
+        ${actor}
         <strong>${escapeHtml(item.title)}</strong>
         <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
-        ${item.offchain ? "" : renderChainMeta(item)}
+        ${renderChainMeta(item)}
       </div>
     </article>
   `;
@@ -2713,6 +2772,7 @@ function currentOfferProofItem() {
     ...(offerItem || {}),
     type: "inline",
     title: offerItem?.title || "Current offer",
+    actor: offerItem?.actor || "System",
     time: offerItem?.time || now - 2 * minute,
     mode: CHAT_DISPLAY_MODE,
   };
@@ -2749,9 +2809,14 @@ function estimateVeilFee(kind, amountLabel, options = {}) {
   const total = amount + totalFee;
   return {
     amount,
+    networkFee: VEIL_FEE_MODEL.networkFeeStrk,
+    privacyFee,
     protocolFee,
     totalFee,
     total,
+    networkFeeLabel: formatStrk(VEIL_FEE_MODEL.networkFeeStrk),
+    privacyFeeLabel: formatStrk(privacyFee),
+    protocolFeeLabel: formatStrk(protocolFee),
     feeLabel: formatStrk(totalFee),
     totalLabel: formatStrk(total),
   };
@@ -2774,11 +2839,11 @@ function awardReward(ruleKey) {
 }
 
 function offerPrivacyMode() {
-  return state.defaultPrivacyMode === "unshield" ? "unshield" : "shield";
+  return "shield";
 }
 
 function offerPrivacyLabel() {
-  return offerPrivacyMode() === "shield" ? "Shielded" : "Unshielded";
+  return "Shielded";
 }
 
 function normalizeOfferAmount(value) {
@@ -2813,10 +2878,10 @@ function channelHasOfferActivity() {
 
 function dealActivityLabel(item) {
   const label = `${item?.title || ""} ${item?.subtitle || ""}`.toLowerCase();
-  if (label.includes("counter")) return "Counter Offer Created";
-  if (label.includes("accepted")) return "Offer Accepted";
-  if (label.includes("offer")) return "Offer Submitted";
-  return "Offer Activity";
+  if (label.includes("counter")) return item?.title || "Bob created a counter offer";
+  if (label.includes("accepted")) return "Alice accepted Bob's counter offer";
+  if (label.includes("offer")) return item?.title || "Alice created an offer";
+  return "Deal Activity";
 }
 
 function renderDealTransactionSummary() {
@@ -2984,14 +3049,16 @@ function escrowFundingProofItem() {
     const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
     return label.includes("deposit")
       || label.includes("locked asset")
+      || label.includes("bob locked")
       || label.includes("seller locked")
-      || label.includes("escrow is ready")
-      || label.includes("offer accepted");
+      || label.includes("escrow contract created")
+      || label.includes("accepted bob");
   });
   return {
     ...(item || {}),
     type: "inline",
     title: item?.title || "Escrow funding",
+    actor: item?.actor || "System",
     time: item?.time || now - 3 * minute,
     mode: CHAT_DISPLAY_MODE,
   };
@@ -3000,12 +3067,13 @@ function escrowFundingProofItem() {
 function escrowReleaseProofItem() {
   const item = latestChannelItem((entry) => {
     const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
-    return label.includes("escrow released") || label.includes("settlement can complete");
+    return label.includes("assets released") || label.includes("settlement complete") || label.includes("escrow released") || label.includes("settlement can complete");
   });
   return {
     ...(item || {}),
     type: "inline",
-    title: item?.title || "Escrow release",
+    title: item?.title || "Assets released",
+    actor: item?.actor || "System",
     time: item?.time || (state.escrowReleased ? Date.now() : undefined),
     mode: CHAT_DISPLAY_MODE,
   };
@@ -3030,8 +3098,8 @@ function escrowDepositComplete(key) {
   if (state.escrowReleased || state.paymentSent) return true;
   if (state.escrowDeposits?.[key]) return true;
   return key === "buyer"
-    ? escrowEventMatches(["buyer deposited", "buyer deposit completed", "funds deposited", "deposited funds"])
-    : escrowEventMatches(["seller locked", "seller deposited", "asset locked", "nft locked", "locked asset"]);
+    ? escrowEventMatches(["alice deposited", "buyer deposited", "buyer deposit completed", "funds deposited", "deposited funds"])
+    : escrowEventMatches(["bob locked", "seller locked", "seller deposited", "asset locked", "nft locked", "locked asset"]);
 }
 
 function escrowFundingComplete() {
@@ -3042,8 +3110,8 @@ function escrowApprovalComplete(key) {
   if (state.escrowReleased || state.paymentSent) return true;
   if (state.escrowConfirmations?.[key]) return true;
   return key === "buyer"
-    ? escrowEventMatches(["buyer approved release", "buyer approved"])
-    : escrowEventMatches(["seller approved release", "seller approved"]);
+    ? escrowEventMatches(["alice approved release", "buyer approved release", "buyer approved"])
+    : escrowEventMatches(["bob approved release", "seller approved release", "seller approved"]);
 }
 
 function setLucideIcon(container, iconName, sizeClass = "size-5") {
@@ -3059,7 +3127,7 @@ function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const timelineHasOffer = channelHasOfferActivity();
   const negotiationStep = accepted ? "accepted" : timelineHasOffer ? state.negotiationStep || "decision" : "draft";
-  const currentStatus = accepted ? "Accepted" : "Negotiating";
+  const currentStatus = accepted ? "Negotiation completed" : "Negotiating";
   const currentAmount = currentDealOfferAmount();
   const initialAmount = state.initialOfferAmount || currentAmount;
   const waitingForCounterparty = negotiationStep === "waiting";
@@ -3091,7 +3159,7 @@ function renderDeal() {
   if (nextStepPanel) nextStepPanel.hidden = !hasActiveOffer || editingOffer;
   if (activityPanel) activityPanel.hidden = !hasActiveOffer;
   if (createOfferPanel) createOfferPanel.hidden = !editingOffer || accepted;
-  if (createOfferEyebrow) createOfferEyebrow.textContent = negotiationStep === "counter" ? "Counter Offer" : "Create Offer";
+  if (createOfferEyebrow) createOfferEyebrow.textContent = negotiationStep === "counter" ? "Revise Offer" : "Create Offer";
   if (createOfferTitle) createOfferTitle.textContent = negotiationStep === "counter" ? "Revise terms" : "Start negotiation";
   if (createOfferCopy) {
     createOfferCopy.textContent = negotiationStep === "counter"
@@ -3111,7 +3179,7 @@ function renderDeal() {
   if (createOfferCancel) createOfferCancel.hidden = negotiationStep !== "counter";
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
-    dealStatusEl.className = accepted ? "status-pill escrow-active" : statusPillClass(currentStatus);
+    dealStatusEl.className = accepted ? "status-pill waiting-deposit" : statusPillClass(currentStatus);
   }
   if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted || waitingForCounterparty);
   if (counterAction) {
@@ -3121,25 +3189,25 @@ function renderDeal() {
   }
   if (dealTurnLabel) dealTurnLabel.textContent = accepted ? "Escrow Funding" : waitingForCounterparty ? "Waiting for Bob" : "Your Decision";
   if (nextStepCopy) nextStepCopy.textContent = accepted
-    ? "Offer accepted. Escrow funding is ready."
+    ? "Negotiation completed. Escrow funding is ready."
     : waitingForCounterparty
       ? "Offer created. Waiting for Bob to accept or counter."
       : `Bob offered ${currentAmount}. Accept to continue to escrow, or counter again before it expires.`;
   if (offerHistoryList) {
     offerHistoryList.innerHTML = accepted
       ? `
-        <li class="complete"><span>Initial Offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
-        <li class="complete"><span>Bob Counter Offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
-        <li class="complete active"><span>Proposal Accepted</span><strong>Ready</strong></li>
+        <li class="complete"><span>Alice created an offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
+        <li class="complete"><span>Bob created a counter offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
+        <li class="complete active"><span>Alice accepted Bob's counter offer</span><strong>Ready</strong></li>
       `
       : waitingForCounterparty
         ? `
-          <li class="complete active"><span>Initial Offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
+          <li class="complete active"><span>Alice created an offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
           <li><span>Waiting for Bob</span><strong>Pending</strong></li>
         `
         : `
-          <li class="complete"><span>Initial Offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
-          <li class="complete active"><span>Bob Counter Offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
+          <li class="complete"><span>Alice created an offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
+          <li class="complete active"><span>Bob created a counter offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
           <li><span>Your Decision</span><strong>Pending</strong></li>
         `;
   }
@@ -3173,7 +3241,7 @@ function renderEscrow() {
     : fundingComplete
       ? "Confirmation"
       : buyerDeposited
-        ? "Buyer deposited"
+        ? "Alice deposited 450 STRK"
         : "Waiting deposits";
   const fundingCopy = releaseDone || fundingComplete
     ? "Funding complete. Buyer and seller deposits are locked in escrow."
@@ -3182,11 +3250,17 @@ function renderEscrow() {
       : "Step 1 of 2. Waiting for Alice and Bob deposits.";
 
   renderEscrowTransactionSummary();
+  const escrowFee = estimateVeilFee("escrow", currentDealOfferAmount(), { shielded: true });
 
   setElementText("#escrow-page-eyebrow", fundingComplete ? "Escrow Confirmation" : "Escrow Funding");
   setElementText("#escrow-page-title", title);
   setElementText("#escrow-funding-step", fundingComplete ? "Funding Complete" : buyerDeposited ? "Step 2 of 2" : "Step 1 of 2");
   setElementText("#escrow-funding-copy", fundingCopy);
+  setElementText("#escrow-buyer-protocol-fee", escrowFee.protocolFeeLabel);
+  setElementText("#escrow-buyer-privacy-fee", escrowFee.privacyFeeLabel);
+  setElementText("#escrow-buyer-network-fee", escrowFee.networkFeeLabel);
+  setElementText("#escrow-buyer-reward", `+${VEIL_REWARD_POINTS.escrowCreated} VEIL Points`);
+  setElementText("#escrow-seller-reward", `+${VEIL_REWARD_POINTS.escrowCreated} VEIL Points`);
   const fundingStepBadge = document.querySelector("#escrow-funding-step");
   if (fundingStepBadge) fundingStepBadge.className = fundingComplete ? "status-pill escrow-active" : "status-pill waiting-deposit";
 
@@ -3220,17 +3294,17 @@ function renderEscrow() {
 
   renderDepositCard("buyer", buyerDeposited, {
     completeStatus: "Deposited",
-    waitingStatus: "Waiting",
+    waitingStatus: "Deposit Required",
     completeDetail: `${currentDealOfferAmount()} locked in escrow`,
     waitingDetail: "Waiting for Alice",
-    actionLabel: "Deposit Funds",
+    actionLabel: "Deposit to Escrow",
     doneAction: "Deposited",
     actionIcon: "wallet",
   });
   renderDepositCard("seller", sellerDeposited, {
     completeStatus: "Locked",
-    waitingStatus: buyerDeposited ? "Waiting for Bob" : "Waiting for Bob",
-    completeDetail: "NFT #88 locked in escrow",
+    waitingStatus: buyerDeposited ? "Asset Required" : "Waiting for Bob",
+    completeDetail: "Rights Package NFT locked in escrow",
     waitingDetail: buyerDeposited ? "Waiting for Bob" : "Waiting for buyer deposit",
     actionLabel: "Lock Asset",
     doneAction: "Locked",
@@ -3259,7 +3333,7 @@ function renderEscrow() {
   const confirmationStep = document.querySelector("#escrow-confirmation-step");
   if (confirmationStep) confirmationStep.className = fundingComplete ? "status-pill escrow-active" : "status-pill public";
   setElementText("#escrow-confirmation-copy", releaseDone
-    ? "Both approvals are complete. Escrow has been released."
+    ? "Both approvals are complete. Assets have been released."
     : fundingComplete
       ? "Funding complete. Buyer and seller can approve release."
       : "Complete both deposits before buyer and seller approvals.");
@@ -3267,7 +3341,7 @@ function renderEscrow() {
   setElementText("#escrow-funding-status", fundingComplete ? "Funding complete" : buyerDeposited ? "Waiting seller deposit" : "Waiting deposits");
   setElementText("#escrow-release-status", releaseDone ? "Released" : releaseReady ? "Ready" : fundingComplete ? "Waiting approvals" : "Funding required");
   setElementText("#escrow-release-copy", releaseDone
-    ? "Escrow released. Settlement proof is ready."
+    ? "Assets released. Settlement proof is ready."
     : releaseReady
       ? "Ready for wallet signature."
       : fundingComplete
@@ -3665,6 +3739,7 @@ function directPaymentProofItem() {
     ...(item || {}),
     type: "inline",
     title: item?.title || "Direct payment",
+    actor: item?.actor || "Alice",
     time: item?.time || (state.paymentSent ? Date.now() : undefined),
     mode: state.paymentMode,
   };
@@ -3679,15 +3754,15 @@ function escrowSettlementProofMarkup() {
     <div class="proof-group">
       <h2>Negotiation</h2>
       <ol>
-        ${proofStepMarkup("Offer", "500 STRK")}
-        ${proofStepMarkup("Counter Offer", "450 STRK")}
+        ${proofStepMarkup("Alice created an offer", "500 STRK")}
+        ${proofStepMarkup("Bob created a counter offer", "450 STRK")}
       </ol>
     </div>
     <div class="proof-group">
       <h2>Funding</h2>
       <ol>
-        ${proofStepMarkup("Buyer locked", "450 STRK")}
-        ${proofStepMarkup("Seller locked", "NFT / Work Result")}
+        ${proofStepMarkup("Alice deposited", "450 STRK")}
+        ${proofStepMarkup("Bob locked NFT", "Rights Package NFT")}
       </ol>
     </div>
     <div class="proof-group">
@@ -3699,8 +3774,8 @@ function escrowSettlementProofMarkup() {
     <div class="proof-group">
       <h2>Settlement</h2>
       <ol>
-        ${proofStepMarkup("Asset delivered", "Buyer")}
-        ${proofStepMarkup("Funds delivered", "Seller")}
+        ${proofStepMarkup("NFT delivered to Alice", "Complete")}
+        ${proofStepMarkup("450 STRK delivered to Bob", "Complete")}
       </ol>
     </div>
   `;
@@ -3927,6 +4002,7 @@ async function sendChat(message) {
     {
       type: "message",
       sender: "You",
+      actor: "Alice",
       body: message,
       self: true,
       time: Date.now(),
@@ -4002,7 +4078,8 @@ async function createOffer() {
     }),
     {
       type: "offer",
-      title: "Offer Created",
+      title: "Alice created an offer",
+      actor: "Alice",
       amount: amountLabel,
       subtitle: asset,
       time: Date.now(),
@@ -4039,7 +4116,8 @@ async function counterOffer() {
     }),
     {
       type: "offer",
-      title: "Counter Offer Created",
+      title: "Alice created a counter offer",
+      actor: "Alice",
       amount: amountLabel,
       subtitle: asset,
       time: Date.now(),
@@ -4070,11 +4148,12 @@ async function acceptOffer() {
     }),
     {
       type: "inline",
-      title: "Offer accepted",
-      subtitle: "Escrow is ready.",
+      title: "Alice accepted Bob's counter offer",
+      subtitle: "Negotiation completed. Escrow contract created.",
+      actor: "Alice",
       time: Date.now(),
     },
-    "Offer accepted.",
+    "Counter offer accepted.",
   );
   if (!submitted) return;
   awardReward("acceptProposal");
@@ -4085,6 +4164,15 @@ async function acceptOffer() {
   state.escrowReleased = false;
   state.escrowDisputeOpened = false;
   currentChannel().status = "Waiting Deposit";
+  currentChannel().last = "Waiting for escrow deposits";
+  addLocalItem({
+    type: "inline",
+    title: "Waiting for escrow deposits",
+    subtitle: "Waiting for: Alice deposits 450 STRK; Bob locks NFT.",
+    actor: "System",
+    time: Date.now(),
+    ...confirmedTimelineMeta(`${state.channelId}-waiting-deposits`, 20),
+  });
   renderDeal();
   renderWorkflowProgress();
   showScreen("escrow");
@@ -4106,6 +4194,7 @@ async function sendPayment() {
       type: "inline",
       title: "Payment completed",
       subtitle: `${amount} ${asset} to Bob`,
+      actor: "Alice",
       time: Date.now(),
       mode: state.paymentMode,
     },
@@ -4132,8 +4221,8 @@ async function submitEscrowDeposit(key) {
     return;
   }
   const amount = currentDealOfferAmount();
-  const title = isBuyer ? "Buyer deposited" : "Seller locked asset";
-  const subtitle = isBuyer ? `${amount} locked in escrow` : "NFT #88 locked in escrow";
+  const title = isBuyer ? `Alice deposited ${amount}` : "Bob locked Rights Package NFT";
+  const subtitle = isBuyer ? `${amount} locked in escrow.` : "Asset secured in escrow.";
   const submitted = await safeSubmit(
     () => veilClient.recordEscrowStatus({
       channelId: state.channelId,
@@ -4145,6 +4234,7 @@ async function submitEscrowDeposit(key) {
       type: "inline",
       title,
       subtitle,
+      actor: isBuyer ? "Alice" : "Bob",
       time: Date.now(),
       mode: CHAT_DISPLAY_MODE,
     },
@@ -4155,6 +4245,16 @@ async function submitEscrowDeposit(key) {
   if (isBuyer) awardReward("escrowCreated");
   currentChannel().status = escrowFundingComplete() ? "Funding Complete" : "Waiting Deposit";
   currentChannel().last = title;
+  if (!isBuyer && escrowFundingComplete()) {
+    addLocalItem({
+      type: "inline",
+      title: "Escrow funded",
+      subtitle: "Waiting for approvals.",
+      actor: "System",
+      time: Date.now(),
+      ...confirmedTimelineMeta(`${state.channelId}-escrow-funded`, 30),
+    });
+  }
   renderEscrow();
   renderWorkflowProgress();
 }
@@ -4170,7 +4270,7 @@ async function approveEscrowRelease(key) {
     return;
   }
   const isBuyer = key === "buyer";
-  const title = isBuyer ? "Buyer approved release" : "Seller approved release";
+  const title = isBuyer ? "Alice approved release" : "Bob approved release";
   const submitted = await safeSubmit(
     () => veilClient.recordEscrowStatus({
       channelId: state.channelId,
@@ -4182,6 +4282,7 @@ async function approveEscrowRelease(key) {
       type: "inline",
       title,
       subtitle: "Release approval recorded",
+      actor: isBuyer ? "Alice" : "Bob",
       time: Date.now(),
       mode: CHAT_DISPLAY_MODE,
     },
@@ -4189,7 +4290,7 @@ async function approveEscrowRelease(key) {
   );
   if (!submitted) return;
   state.escrowConfirmations[key] = true;
-  currentChannel().status = escrowConfirmationsComplete() ? "Escrow Active" : "Funding Complete";
+  currentChannel().status = escrowConfirmationsComplete() ? "Approvals Complete" : "Funding Complete";
   currentChannel().last = title;
   renderEscrow();
   renderWorkflowProgress();
@@ -4210,21 +4311,31 @@ async function releaseEscrow() {
     () => veilClient.recordEscrowStatus({
       channelId: state.channelId,
       status: "settled",
-      details: "Escrow released.",
+      details: "Assets released. 450 STRK to Bob. NFT to Alice.",
       sender: "system",
     }),
     {
       type: "inline",
-      title: "Escrow released",
-      subtitle: "Settlement can complete.",
+      title: "Assets released",
+      subtitle: "450 STRK to Bob. NFT to Alice.",
+      actor: "System",
       time: Date.now(),
     },
-    "Escrow released.",
+    "Assets released.",
   );
   if (!submitted) return;
   awardReward("escrowCompleted");
   state.escrowReleased = true;
   currentChannel().status = "Settlement";
+  currentChannel().last = "Settlement complete";
+  addLocalItem({
+    type: "inline",
+    title: "Settlement complete",
+    subtitle: "Deal settled and proof is ready.",
+    actor: "System",
+    time: Date.now(),
+    ...confirmedTimelineMeta(`${state.channelId}-settlement-complete`, 40),
+  });
   renderEscrow();
   renderWorkflowProgress();
   showScreen("settlement");
