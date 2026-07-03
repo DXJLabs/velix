@@ -848,7 +848,7 @@ function getInjectedStarknetWalletEntry() {
 }
 
 function walletPriority(entry) {
-  const label = `${entry.key} ${walletSourceLabel(entry.wallet)}`;
+  const label = `${entry.key} ${walletSourceLabel(entry.wallet, entry.key)}`;
   if (/argent|ready/i.test(label)) return 0;
   if (/braavos/i.test(label)) return 1;
   if (entry.key === "starknet") return 2;
@@ -869,10 +869,12 @@ async function waitForInjectedStarknetWallet(timeout = 2_000) {
   return null;
 }
 
-function walletSourceLabel(wallet) {
+function walletSourceLabel(wallet, key = "") {
   const name = wallet?.name || wallet?.id || wallet?.metadata?.name || "";
-  if (/argent|ready/i.test(name)) return "Argent";
-  if (/braavos/i.test(name)) return "Braavos";
+  const label = `${key} ${name}`;
+  if (/ready/i.test(label)) return "Ready";
+  if (/argent/i.test(label)) return "Argent";
+  if (/braavos/i.test(label)) return "Braavos";
   return name || "Starknet wallet";
 }
 
@@ -1911,7 +1913,7 @@ async function connectWallet(options = {}) {
       tracePrivyStarkZap(traceId, "injected_wallet.fallback.result", {
         where: "connectWallet",
         found: Boolean(injectedWallet),
-        source: injectedWallet ? walletSourceLabel(injectedWallet) : undefined,
+        source: injectedWallet ? walletSourceLabel(injectedWallet, injectedWalletEntry?.key) : undefined,
       });
       if (!injectedWallet) {
         return failWalletInitialization(error, traceId, {
@@ -1922,7 +1924,7 @@ async function connectWallet(options = {}) {
       veilLog("warn", "wallet.init.injected_fallback.used", {
         traceId,
         where: "connectWallet",
-        source: walletSourceLabel(injectedWallet),
+        source: walletSourceLabel(injectedWallet, injectedWalletEntry?.key),
         why: "Privy StarkZap onboarding failed, but an injected Starknet wallet was available.",
       });
     }
@@ -1937,7 +1939,7 @@ async function connectWallet(options = {}) {
     tracePrivyStarkZap(traceId, "injected_wallet.result", {
       where: "connectWallet",
       found: Boolean(injectedWallet),
-      source: injectedWallet ? walletSourceLabel(injectedWallet) : undefined,
+      source: injectedWallet ? walletSourceLabel(injectedWallet, injectedWalletEntry?.key) : undefined,
     });
   }
 
@@ -2033,7 +2035,7 @@ async function connectWallet(options = {}) {
 
   state.walletConnected = true;
   state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
-  if (injectedWallet) state.walletSource = walletSourceLabel(injectedWallet);
+  if (injectedWallet) state.walletSource = walletSourceLabel(injectedWallet, injectedWalletEntry?.key);
   completeWalletInitialization(traceId);
   renderWallet();
   refreshConnectLabels();
