@@ -2090,12 +2090,10 @@ function directHelperRequiresUnshield() {
 }
 
 function renderShieldBadge(statusInfo, item) {
-  const mode = effectivePrivacyMode(item?.mode || INITIAL_PRIVACY_MODE);
-  const label = mode === "shield" ? "Shielded" : "Unshielded";
   const warning = statusInfo.kind === "failed"
     ? `<span class="shield-warning" aria-label="Failed">⚠</span>`
     : "";
-  return `<span class="shield-badge ${mode}">Shield ${label}${warning}</span>`;
+  return `<span class="shield-badge shield">Shielded${warning}</span>`;
 }
 
 function renderFailureActions(item, statusInfo) {
@@ -2480,7 +2478,7 @@ function offerPrivacyMode() {
 }
 
 function offerPrivacyLabel() {
-  return offerPrivacyMode() === "shield" ? "Shielded" : "Unshielded";
+  return "Shielded";
 }
 
 function normalizeOfferAmount(value) {
@@ -2523,7 +2521,7 @@ function dealActivityLabel(item) {
 
 function renderDealTransactionSummary() {
   const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-    shielded: offerPrivacyMode() === "shield",
+    shielded: true,
   });
   setElementText("#deal-price", currentDealOfferAmount());
   setElementText("#offer-review-amount", currentDealOfferAmount());
@@ -2597,9 +2595,8 @@ function hidePaymentReview() {
 }
 
 function renderEscrowTransactionSummary() {
-  const mode = effectivePrivacyMode("shield");
   const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-    shielded: mode === "shield",
+    shielded: true,
   });
   setElementText("#escrow-fee-amount", currentDealOfferAmount());
   setElementText("#escrow-total-fee", fee.feeLabel);
