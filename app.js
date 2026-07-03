@@ -148,6 +148,12 @@ const now = Date.now();
 const minute = 60_000;
 const activeDealId = "20260625";
 const LOCAL_CHANNELS_KEY = "veil:local:channels:v1";
+const knownVeilCounterparties = new Set([
+  "alice.stark",
+  "bob.stark",
+  "mira.stark",
+  "northline.stark",
+]);
 
 const channels = [
   {
@@ -331,6 +337,7 @@ const state = {
   proofExported: false,
   inviteCode: "8Hsj3K",
   inviteFormOpen: false,
+  dealSequence: 381,
 };
 
 let toastTimer;
@@ -710,12 +717,73 @@ function counterpartyAvatar(name) {
   return normalized ? normalized[0].toUpperCase() : "C";
 }
 
+function counterpartyLookup(value = newDealCounterpartyValue()) {
+  const raw = String(value || "").trim();
+  const normalized = raw.toLowerCase();
+  const displayName = counterpartyDisplayName(raw);
+  const isStarkName = normalized.endsWith(".stark");
+  const isWallet = normalized.startsWith("0x");
+  const veilAvailable = knownVeilCounterparties.has(normalized);
+  if (veilAvailable) {
+    return {
+      status: "available",
+      displayName,
+      detail: "Resolved to 0x0b...71e9",
+      badge: "VEIL Available",
+      badgeClass: "status-pill escrow-active",
+      action: "Create Deal",
+      hint: `Creates a private deal request and sends ${displayName} an in-app notification.`,
+    };
+  }
+  if (isStarkName || isWallet) {
+    return {
+      status: "not_on_veil",
+      displayName,
+      detail: isStarkName ? "Resolved on Starknet, not a VEIL user yet" : "Wallet found, not a VEIL user yet",
+      badge: "Not on VEIL",
+      badgeClass: "status-pill waiting-deposit",
+      action: "Create Invite",
+      hint: "Generates an invite link for Telegram, Discord, X, Email, or WhatsApp.",
+    };
+  }
+  return {
+    status: "unknown",
+    displayName,
+    detail: "Enter a .stark name or wallet address",
+    badge: "Search",
+    badgeClass: "status-pill public",
+    action: "Create Invite",
+    hint: "Use an invite link when the counterparty is not available inside VEIL.",
+  };
+}
+
+function nextDealId() {
+  const id = `Deal #${state.dealSequence}`;
+  state.dealSequence += 1;
+  return id;
+}
+
+function resetDealStateForPendingChannel() {
+  state.offerAccepted = false;
+  state.paymentSent = false;
+  state.escrowDeposits = { buyer: false, seller: false };
+  state.escrowConfirmations = { buyer: false, seller: false };
+  state.escrowReleased = false;
+  state.escrowDisputeOpened = false;
+  state.negotiationStep = "draft";
+  state.initialOfferAmount = "500 STRK";
+  state.latestOfferAmount = DEAL_OFFER_AMOUNT;
+}
+
 function createLocalChannelModel({
   title = "Rights Transfer",
   person = "Bob",
   status = "Negotiating",
   last = "Bob joined the deal",
   invited = false,
+  pendingJoin = false,
+  counterpartyOnVeil = true,
+  dealId = "",
 } = {}) {
   const channelNumber = channels.length + 1;
   const channelId = `channel-${Date.now().toString(36)}`;
@@ -730,19 +798,42 @@ function createLocalChannelModel({
     time: "now",
     last,
     channelNumber,
+    dealId,
     inviteLink: invited ? createDealInviteLink() : "",
+    invited,
+    pendingJoin,
+    counterpartyOnVeil,
     local: true,
   };
 }
 
-function seedDealTimeline(channel, inviteOnly) {
-  if (inviteOnly) {
+function seedDealTimeline(channel) {
+  if (channel.pendingJoin && channel.invited) {
     return [
       {
         type: "event",
-        title: "Invitation sent",
-        subtitle: `Waiting for ${channel.person} to join.`,
+        title: "Invite link generated",
+        subtitle: `${channel.dealId} is waiting for ${channel.person}.`,
         time: Date.now(),
+        offchain: true,
+      },
+    ];
+  }
+
+  if (channel.pendingJoin) {
+    return [
+      {
+        type: "event",
+        title: `${channel.dealId} created`,
+        subtitle: `Private deal request sent to ${channel.person}.`,
+        time: Date.now(),
+        offchain: true,
+      },
+      {
+        type: "event",
+        title: "Notification sent",
+        subtitle: `${channel.person} must accept before negotiation opens.`,
+        time: Date.now() + 1,
         offchain: true,
       },
     ];
@@ -766,23 +857,33 @@ async function createDealChannel({ inviteOnly = false } = {}) {
   }
 
   const rawCounterparty = inviteOnly ? inviteTargetValue() : newDealCounterpartyValue();
-  const person = counterpartyDisplayName(rawCounterparty);
+  const lookup = inviteOnly ? {
+    ...counterpartyLookup(rawCounterparty),
+    status: "not_on_veil",
+  } : counterpartyLookup(rawCounterparty);
+  const requiresInvite = inviteOnly || lookup.status !== "available";
+  const person = lookup.displayName;
+  const dealId = nextDealId();
   const channel = createLocalChannelModel({
     title: newDealTitleValue(),
     person,
-    status: inviteOnly ? "Waiting for Counterparty" : "Negotiating",
-    last: inviteOnly ? "Invitation sent" : `${person} joined the deal`,
-    invited: inviteOnly,
+    status: requiresInvite ? "Waiting for Counterparty" : "Waiting for Bob",
+    last: requiresInvite ? "Invite link generated" : "Deal request sent",
+    invited: requiresInvite,
+    pendingJoin: true,
+    counterpartyOnVeil: !requiresInvite,
+    dealId,
   });
   channels.unshift(channel);
-  messages[channel.id] = seedDealTimeline(channel, inviteOnly);
+  messages[channel.id] = seedDealTimeline(channel);
+  resetDealStateForPendingChannel();
   if (conversationSearch) conversationSearch.value = "";
   saveLocalChannels();
   renderConversationList();
   openChannel(channel.id);
 
-  if (inviteOnly) {
-    showToast("Invitation ready.");
+  if (requiresInvite) {
+    showToast("Invite link ready.");
     return;
   }
 
@@ -791,15 +892,65 @@ async function createDealChannel({ inviteOnly = false } = {}) {
       channelId: channel.id,
       title: channel.title,
     });
-    showToast("Deal created.");
+    showToast(`${dealId} created. Waiting for Bob.`);
   } catch (error) {
     veilError("channel.create.failed", error, {
       where: "createDealChannel",
       channelId: channel.id,
       howToFix: "Confirm wallet connection and helper transport before creating a production on-chain channel.",
     });
-    showToast("Deal saved locally.");
+    showToast(`${dealId} saved locally. Waiting for Bob.`);
   }
+}
+
+function channelRequiresJoin(channel = currentChannel()) {
+  if (!channel) return false;
+  const status = String(channel.status || "").toLowerCase();
+  return Boolean(channel.pendingJoin || status.includes("waiting for counterparty") || status.includes("waiting for bob"));
+}
+
+function acceptPendingCounterparty(channel = currentChannel()) {
+  if (!channel || !channelRequiresJoin(channel)) return;
+  channel.pendingJoin = false;
+  channel.status = "Negotiating";
+  channel.last = `${channel.person} joined the deal`;
+  channel.time = "now";
+  resetDealStateForPendingChannel();
+  state.channelId = channel.id;
+  messages[channel.id] ||= [];
+  messages[channel.id].push({
+    type: "event",
+    title: `${channel.person} joined the deal`,
+    subtitle: "Negotiation is ready.",
+    time: Date.now(),
+    offchain: true,
+  });
+  if (channel.invited) awardReward("inviteUserJoined");
+  saveLocalChannels();
+  renderConversationList();
+  renderChannel();
+  renderWorkflowProgress();
+  showToast(`${channel.person} accepted the deal.`);
+}
+
+function declinePendingCounterparty(channel = currentChannel()) {
+  if (!channel || !channelRequiresJoin(channel)) return;
+  channel.pendingJoin = false;
+  channel.status = "Declined";
+  channel.last = `${channel.person} declined the deal`;
+  channel.time = "now";
+  messages[channel.id] ||= [];
+  messages[channel.id].push({
+    type: "event",
+    title: `${channel.person} declined the deal`,
+    subtitle: "Deal request closed.",
+    time: Date.now(),
+    offchain: true,
+  });
+  saveLocalChannels();
+  renderConversationList();
+  renderChannel();
+  showToast("Deal request declined.");
 }
 
 function getWallet() {
@@ -2387,16 +2538,29 @@ function renderConversationList() {
 function renderNewDeal() {
   const resultName = document.querySelector("#counterparty-result-name");
   const resultDetail = document.querySelector("#counterparty-result-detail");
+  const resultStatus = document.querySelector("#counterparty-result-status");
+  const actionHint = document.querySelector("#counterparty-action-hint");
+  const primaryAction = document.querySelector("#new-deal-primary-action");
+  const inviteTarget = document.querySelector("#invite-target");
   const inviteFormPanel = document.querySelector("#invite-form-panel");
   const showInviteForm = document.querySelector("#show-invite-form");
   const query = newDealCounterpartyValue();
+  const lookup = counterpartyLookup(query);
 
-  if (resultName) resultName.textContent = counterpartyDisplayName(query);
-  if (resultDetail) resultDetail.textContent = query.endsWith(".stark")
-    ? "Resolved to 0x0b...71e9"
-    : query.startsWith("0x")
-      ? ".stark name not attached"
-      : "Search by .stark name or wallet address";
+  if (resultName) resultName.textContent = lookup.displayName;
+  if (resultDetail) resultDetail.textContent = lookup.detail;
+  if (resultStatus) {
+    resultStatus.textContent = lookup.badge;
+    resultStatus.className = lookup.badgeClass;
+  }
+  if (actionHint) actionHint.textContent = lookup.hint;
+  if (primaryAction) {
+    primaryAction.dataset.newDealAction = lookup.status === "available" ? "existing" : "invite";
+    primaryAction.innerHTML = lookup.status === "available"
+      ? `<i data-lucide="plus" class="size-5"></i><span>${escapeHtml(lookup.action)}</span>`
+      : `<i data-lucide="link" class="size-5"></i><span>${escapeHtml(lookup.action)}</span>`;
+  }
+  if (inviteTarget && document.activeElement !== inviteTarget) inviteTarget.value = query;
   if (inviteFormPanel) inviteFormPanel.hidden = !state.inviteFormOpen;
   if (showInviteForm) showInviteForm.hidden = state.inviteFormOpen;
   iconRefresh();
@@ -2404,7 +2568,7 @@ function renderNewDeal() {
 
 function renderChannel() {
   const channel = currentChannel();
-  const waitingForCounterparty = String(channel.status || "").toLowerCase().includes("waiting for counterparty");
+  const waitingForCounterparty = channelRequiresJoin(channel);
   document.querySelector("#channel-title").textContent = channel.title;
   document.querySelector("#channel-meta").textContent = `${channel.person} - ${channel.status}`;
   const contextTitle = document.querySelector("#channel-context-title");
@@ -2426,15 +2590,54 @@ function renderChannel() {
 }
 
 function renderInviteWaitingCard(channel) {
+  if (!channel.invited) {
+    return `
+      <section class="invite-wait-card">
+        <span class="invite-wait-icon"><i data-lucide="bell" class="size-5"></i></span>
+        <div>
+          <strong>Waiting for ${escapeHtml(channel.person)}</strong>
+          <p>${escapeHtml(channel.dealId || "Deal request")} created. ${escapeHtml(channel.person)} received an in-app notification and must accept before negotiation opens.</p>
+          <small>New private deal request - Accept or Decline</small>
+        </div>
+        <div class="invite-wait-actions">
+          <button class="primary-action" type="button" data-counterparty-accept>
+            <i data-lucide="check" class="size-5"></i>
+            <span>Preview Bob Accept</span>
+          </button>
+          <button class="secondary-action" type="button" data-counterparty-decline>
+            <i data-lucide="x" class="size-5"></i>
+            <span>Decline</span>
+          </button>
+        </div>
+      </section>
+    `;
+  }
+  const link = channel.inviteLink || createDealInviteLink();
   return `
     <section class="invite-wait-card">
       <span class="invite-wait-icon"><i data-lucide="send" class="size-5"></i></span>
       <div>
-        <strong>Waiting for Counterparty</strong>
-        <p>Invitation sent to ${escapeHtml(channel.person)}. Chat and offers unlock after they join.</p>
-        <small>${escapeHtml(channel.inviteLink || createDealInviteLink())}</small>
+        <strong>Invite link ready</strong>
+        <p>${escapeHtml(channel.person)} is not on VEIL yet. Share the invite link; after they connect wallet and accept, the deal opens.</p>
+        <small>${escapeHtml(link)}</small>
       </div>
-      <button class="secondary-action" type="button" data-copy-invite>Copy Link</button>
+      <div class="invite-share-grid" aria-label="Share invite">
+        <button type="button" data-share-invite="telegram">Telegram</button>
+        <button type="button" data-share-invite="discord">Discord</button>
+        <button type="button" data-share-invite="x">X</button>
+        <button type="button" data-share-invite="email">Email</button>
+        <button type="button" data-share-invite="whatsapp">WhatsApp</button>
+      </div>
+      <div class="invite-wait-actions">
+        <button class="secondary-action" type="button" data-copy-invite>
+          <i data-lucide="copy" class="size-5"></i>
+          <span>Copy Link</span>
+        </button>
+        <button class="primary-action" type="button" data-counterparty-accept>
+          <i data-lucide="user-plus" class="size-5"></i>
+          <span>Preview Accept Invitation</span>
+        </button>
+      </div>
     </section>
   `;
 }
@@ -3384,6 +3587,15 @@ async function copyInviteLink() {
   }
 }
 
+async function shareInvite(channelName) {
+  const link = currentChannel()?.inviteLink || createDealInviteLink();
+  try {
+    await navigator.clipboard.writeText(link);
+  } catch {}
+  const label = channelName ? `${channelName[0].toUpperCase()}${channelName.slice(1)}` : "Share";
+  showToast(`${label} invite ready.`);
+}
+
 function resetWalletConnection() {
   clearTimeout(walletInitTimer);
   directTransport = undefined;
@@ -4328,6 +4540,22 @@ function bindEvents() {
 
     if (event.target.closest("[data-copy-invite]")) {
       copyInviteLink();
+      return;
+    }
+
+    const shareInviteAction = event.target.closest("[data-share-invite]");
+    if (shareInviteAction) {
+      shareInvite(shareInviteAction.dataset.shareInvite);
+      return;
+    }
+
+    if (event.target.closest("[data-counterparty-accept]")) {
+      acceptPendingCounterparty();
+      return;
+    }
+
+    if (event.target.closest("[data-counterparty-decline]")) {
+      declinePendingCounterparty();
       return;
     }
 

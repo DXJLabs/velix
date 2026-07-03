@@ -1649,9 +1649,40 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 850;
 }
 
-.invite-wait-card button {
+.invite-wait-actions,
+.invite-share-grid {
+  grid-column: 1 / -1;
+}
+
+.invite-share-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .4rem;
+}
+
+.invite-share-grid button {
+  min-height: 2.45rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .65rem;
+  background: rgb(248 250 252);
+  color: rgb(15 23 42);
+  font-size: .74rem;
+  font-weight: 900;
+}
+
+.invite-wait-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem;
+}
+
+.invite-wait-actions button {
   grid-column: 1 / -1;
   min-height: 2.65rem;
+}
+
+.invite-wait-actions button {
+  grid-column: auto;
 }
 
 .channel-security-banner {
@@ -2578,6 +2609,14 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
 
   .invite-link-card div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invite-share-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invite-wait-actions {
+    grid-template-columns: 1fr;
   }
 
   .counterparty-result {
