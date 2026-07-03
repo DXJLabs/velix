@@ -13,12 +13,11 @@ const debugLogsEnabled = (import.meta.env.VITE_VEIL_DEBUG_LOGS || "false").toLow
 const timelineMode = demoRuntimeMode ? "mock" : import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
 const privyAppId = demoRuntimeMode ? "" : import.meta.env.VITE_PRIVY_APP_ID || "";
 const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
-const configuredPrivyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,google")
+const configuredPrivyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "google,wallet")
   .split(",")
   .map((method) => method.trim())
   .filter(Boolean);
-const privyLoginMethods = configuredPrivyLoginMethods
-  .filter((method) => !(timelineMode === "direct-helper" && method === "wallet"));
+const privyLoginMethods = [...configuredPrivyLoginMethods];
 if (!privyLoginMethods.length && privyAppId) {
   privyLoginMethods.push("google");
 }
@@ -135,14 +134,13 @@ const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "d
 
 function defaultStarknetRpcUrl(chainId = expectedChainId) {
   return normalizeChainId(chainId) === "SN_MAIN"
-    ? "https://starknet-mainnet.public.blastapi.io/rpc/v0_8"
-    : "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
+    ? "https://api.zan.top/public/starknet-mainnet/rpc/v0_8"
+    : "https://api.zan.top/public/starknet-sepolia/rpc/v0_8";
 }
 
 function reliableRpcUrl(url, fallback) {
   const value = String(url || "").trim();
   if (!value || value === "mock-rpc") return fallback;
-  if (/^https:\/\/api\.zan\.top\/public\//i.test(value)) return fallback;
   return value;
 }
 
@@ -621,13 +619,8 @@ async function mountPrivy() {
           appearance: {
             accentColor: "#10b981",
             theme: "light",
-            walletChainType: "ethereum-only",
           },
           loginMethods: privyLoginMethods,
-          externalWallets: {
-            disableAllExternalWallets: true,
-            walletConnect: { enabled: false },
-          },
         },
       },
       React.createElement(PrivyStateBridge),

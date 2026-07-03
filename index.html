@@ -12,7 +12,6 @@
           "ObjectMultiplex - orphaned data",
           "ObjectMultiplex - malformed chunk",
           "MaxListenersExceededWarning",
-          "ws://localhost:8081",
         ];
         const shouldSuppress = (args) => noisyPatterns.some((pattern) => args.some((arg) => String(arg).includes(pattern)));
         ["warn", "error"].forEach((method) => {
@@ -22,29 +21,6 @@
             original.apply(console, args);
           };
         });
-        const NativeWebSocket = window.WebSocket;
-        if (NativeWebSocket) {
-          const isNoisySocket = (url) => String(url || "").startsWith("ws://localhost:8081");
-          const createClosedSocket = (url) => {
-            const socket = new EventTarget();
-            socket.url = String(url);
-            socket.readyState = NativeWebSocket.CLOSED;
-            socket.bufferedAmount = 0;
-            socket.extensions = "";
-            socket.protocol = "";
-            socket.binaryType = "blob";
-            socket.close = () => {};
-            socket.send = () => {};
-            setTimeout(() => socket.dispatchEvent(new Event("close")), 0);
-            return socket;
-          };
-          window.WebSocket = function QuietWebSocket(url, protocols) {
-            if (isNoisySocket(url)) return createClosedSocket(url);
-            return protocols === undefined ? new NativeWebSocket(url) : new NativeWebSocket(url, protocols);
-          };
-          window.WebSocket.prototype = NativeWebSocket.prototype;
-          Object.setPrototypeOf(window.WebSocket, NativeWebSocket);
-        }
       })();
     </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
