@@ -3309,6 +3309,10 @@ function chatTransportMode() {
   return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : CHAT_DISPLAY_MODE;
 }
 
+function transactionTransportMode(requestedMode) {
+  return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : requestedMode;
+}
+
 async function safeSubmit(action, localItem, success) {
   const pendingItem = {
     ...localItem,
@@ -3536,7 +3540,7 @@ async function createOffer() {
       amount,
       currency: "STRK",
       terms,
-      mode: offerPrivacyMode(),
+      mode: transactionTransportMode(offerPrivacyMode()),
       sender: "you",
     }),
     {
@@ -3570,7 +3574,7 @@ async function counterOffer() {
       amount,
       currency: "STRK",
       terms,
-      mode: offerPrivacyMode(),
+      mode: transactionTransportMode(offerPrivacyMode()),
       sender: "you",
     }),
     {
@@ -3598,7 +3602,7 @@ async function acceptOffer() {
       channelId: state.channelId,
       offerId: currentDealOfferAmount(),
       reason: "Accepted.",
-      mode: offerPrivacyMode(),
+      mode: transactionTransportMode(offerPrivacyMode()),
       sender: "you",
     }),
     {
@@ -3628,7 +3632,7 @@ async function sendPayment() {
       channelId: state.channelId,
       amount: `${amount} ${asset}`,
       memo,
-      mode: state.paymentMode,
+      mode: transactionTransportMode(state.paymentMode),
       sender: "you",
     }),
     {
