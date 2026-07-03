@@ -1351,6 +1351,92 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   text-align: right;
 }
 
+.wallet-rewards-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  padding: 1rem;
+}
+
+.wallet-rewards-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: .25rem;
+}
+
+.wallet-rewards-summary span,
+.wallet-reward-subsection h3 {
+  color: rgb(100 116 139);
+  font-size: .74rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.wallet-rewards-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: 1.18rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-rewards-summary small,
+.wallet-reward-note {
+  color: rgb(100 116 139);
+  font-size: .8rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.wallet-reward-note {
+  border-top: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+}
+
+.wallet-reward-subsection {
+  display: grid;
+  gap: .2rem;
+  border-top: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+}
+
+.reward-list {
+  display: grid;
+  gap: 0;
+}
+
+.reward-list li {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  min-height: 2.65rem;
+  align-items: center;
+  gap: .75rem;
+  border-bottom: 1px solid rgb(241 245 249);
+}
+
+.reward-list li:last-child {
+  border-bottom: 0;
+}
+
+.reward-list strong {
+  color: rgb(4 120 87);
+  font-size: .95rem;
+  font-weight: 950;
+}
+
+.reward-list span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .9rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .copy-value {
   display: inline-flex;
   min-width: 0;

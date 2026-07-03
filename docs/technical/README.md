@@ -13,6 +13,10 @@ VEIL is product-first. The documents here are important, but they are not the re
 - [VEIL SDK](sdk.md)
 - [Package SDK Developer Reference](../../packages/veil-sdk/README.md)
 
+## Fees And Rewards
+
+- [Fee And Rewards Flow](fee-and-rewards-flow.md)
+
 ## Transport
 
 - [Production Onchain Messaging](production-onchain-messaging.md)

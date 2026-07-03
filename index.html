@@ -477,6 +477,30 @@
               </button>
             </section>
 
+            <section class="wallet-section wallet-rewards" aria-labelledby="wallet-rewards-heading">
+              <h2 id="wallet-rewards-heading">Rewards</h2>
+              <div class="wallet-rewards-summary">
+                <div>
+                  <span>VEIL Points</span>
+                  <strong id="wallet-reward-points">4,580 pts</strong>
+                </div>
+                <div>
+                  <span>Next Tier</span>
+                  <strong id="wallet-reward-tier">Gold</strong>
+                  <small id="wallet-reward-remaining">+420 pts remaining</small>
+                </div>
+              </div>
+              <p class="wallet-reward-note">Points are loyalty rewards. They are not tokens and are not tradable.</p>
+              <div class="wallet-reward-subsection">
+                <h3>Recent Rewards</h3>
+                <ol id="wallet-recent-rewards" class="reward-list"></ol>
+              </div>
+              <div class="wallet-reward-subsection">
+                <h3>Rewards History</h3>
+                <ol id="wallet-rewards-history" class="reward-list"></ol>
+              </div>
+            </section>
+
             <section class="wallet-section" aria-labelledby="wallet-connection-heading">
               <h2 id="wallet-connection-heading">Connection</h2>
               <div class="wallet-setting-row">
@@ -703,7 +727,7 @@
               </label>
               <div class="create-offer-meta">
                 <span><i data-lucide="shield" class="size-4"></i> Shielded</span>
-                <small>Fee will be calculated before wallet signature</small>
+                <small>Total fee shown before signing</small>
               </div>
               <div class="offer-form-actions">
                 <button id="create-offer-cancel" class="secondary-action" type="button" data-deal-action="cancel-offer-form" hidden>Cancel</button>
@@ -792,6 +816,15 @@
               <div id="escrow-funding-proof" class="chain-meta escrow-stage-proof"></div>
             </section>
 
+            <section class="plain-panel transaction-summary-panel">
+              <h2 class="section-title">Fee Summary</h2>
+              <div class="transaction-summary-list">
+                <div><span>Escrow Amount</span><strong id="escrow-fee-amount">450 STRK</strong></div>
+                <div><span>Total Fee</span><strong id="escrow-total-fee">2.263 STRK</strong></div>
+                <div class="summary-total"><span>Total</span><strong id="escrow-fee-total">452.263 STRK</strong></div>
+              </div>
+            </section>
+
             <section class="plain-panel">
               <h2 class="section-title">Confirmation</h2>
               <div class="escrow-checks">
@@ -867,9 +900,8 @@
               <h2 class="section-title">Fee Summary</h2>
               <div class="transaction-summary-list">
                 <div><span>Amount</span><strong id="payment-summary-amount">450 STRK</strong></div>
-                <div><span>Estimated Network Fee</span><strong id="payment-network-fee">Fee will be calculated before wallet signature</strong></div>
-                <div id="payment-privacy-fee-row"><span>Privacy Fee</span><strong id="payment-privacy-fee">Fee will be calculated before wallet signature</strong></div>
-                <div class="summary-total"><span>Total</span><strong id="payment-summary-total">Calculated in wallet</strong></div>
+                <div><span>Total Fee</span><strong id="payment-total-fee">0.688 STRK</strong></div>
+                <div class="summary-total"><span>Total</span><strong id="payment-summary-total">450.688 STRK</strong></div>
               </div>
             </section>
             <input id="payment-recipient" type="hidden" value="Bob" />
@@ -1022,8 +1054,9 @@
         <div class="review-summary-list">
           <div><span>Amount</span><strong id="offer-review-amount">450 STRK</strong></div>
           <div><span>Privacy</span><strong id="offer-review-privacy">Shielded</strong></div>
-          <div><span>Estimated Fee</span><strong id="offer-review-fee">Fee will be calculated before wallet signature</strong></div>
-          <div class="summary-total"><span>Total</span><strong id="offer-review-total">Calculated in wallet</strong></div>
+          <div><span>Total Fee</span><strong id="offer-review-fee">2.263 STRK</strong></div>
+          <div><span>Rewards</span><strong id="offer-review-reward">+10 VEIL Points</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="offer-review-total">452.263 STRK</strong></div>
         </div>
         <button class="primary-action w-full" type="button" data-offer-review-sign>Sign Transaction</button>
         <button class="secondary-action w-full" type="button" data-offer-review-close>Cancel</button>
@@ -1041,12 +1074,31 @@
           <div><span>Recipient</span><strong id="payment-review-recipient">Bob</strong></div>
           <div><span>Amount</span><strong id="payment-review-amount">450 STRK</strong></div>
           <div><span>Privacy</span><strong id="payment-review-privacy">Shield</strong></div>
-          <div><span>Estimated Fee</span><strong id="payment-review-fee">Fee will be calculated before wallet signature</strong></div>
+          <div><span>Total Fee</span><strong id="payment-review-fee">0.688 STRK</strong></div>
+          <div><span>Rewards</span><strong id="payment-review-reward">+20 VEIL Points</strong></div>
           <div><span>AI Memo</span><strong id="payment-review-memo">Final settlement for rights transfer.</strong></div>
-          <div class="summary-total"><span>Total</span><strong id="payment-review-total">Calculated in wallet</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="payment-review-total">450.688 STRK</strong></div>
         </div>
         <button class="primary-action w-full" type="button" data-payment-review-sign>Sign Transaction</button>
         <button class="secondary-action w-full" type="button" data-payment-review-close>Cancel</button>
+      </section>
+    </div>
+    <div id="escrow-review-modal" class="review-modal hidden" role="dialog" aria-modal="true" aria-labelledby="escrow-review-title">
+      <div class="review-modal-backdrop" data-escrow-review-close></div>
+      <section class="review-modal-sheet">
+        <button class="icon-button ghost review-modal-close" type="button" data-escrow-review-close aria-label="Close review">
+          <i data-lucide="x" class="size-5"></i>
+        </button>
+        <p class="eyebrow">Review Transaction</p>
+        <h2 id="escrow-review-title">Release Escrow</h2>
+        <div class="review-summary-list">
+          <div><span>Escrow Amount</span><strong id="escrow-review-amount">450 STRK</strong></div>
+          <div><span>Total Fee</span><strong id="escrow-review-fee">2.263 STRK</strong></div>
+          <div><span>Rewards</span><strong id="escrow-review-reward">+50 VEIL Points</strong></div>
+          <div class="summary-total"><span>Total</span><strong id="escrow-review-total">452.263 STRK</strong></div>
+        </div>
+        <button class="primary-action w-full" type="button" data-escrow-review-sign>Sign Transaction</button>
+        <button class="secondary-action w-full" type="button" data-escrow-review-close>Cancel</button>
       </section>
     </div>
     <div id="privy-auth-root" hidden></div>

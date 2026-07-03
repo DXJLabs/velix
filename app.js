@@ -47,9 +47,43 @@ const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID 
 const CHAT_DISPLAY_MODE = "shield";
 const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const DEAL_OFFER_AMOUNT = "450 STRK";
-const FEE_ESTIMATE_PENDING = "Fee will be calculated before wallet signature";
-const TOTAL_ESTIMATE_PENDING = "Calculated in wallet";
 const PAYMENT_RECIPIENT = "Bob";
+const STRK_SYMBOL = "STRK";
+const VEIL_FEE_MODEL = Object.freeze({
+  networkFeeStrk: 0.003,
+  strk20PrivacyFeeStrk: 0.01,
+  protocolRates: {
+    directPayment: 0.0015,
+    escrow: 0.005,
+    digitalAsset: 0.0075,
+    highValueEscrow: 0.01,
+  },
+});
+const VEIL_REWARD_POINTS = Object.freeze({
+  sendMessage: 1,
+  createOffer: 5,
+  counterOffer: 5,
+  acceptProposal: 10,
+  directPayment: 20,
+  escrowCreated: 30,
+  escrowCompleted: 50,
+  inviteUserJoined: 100,
+});
+const VEIL_REWARD_LABELS = Object.freeze({
+  sendMessage: "Shielded Message",
+  createOffer: "Offer Created",
+  counterOffer: "Counter Offer",
+  acceptProposal: "Accept Proposal",
+  directPayment: "Direct Payment",
+  escrowCreated: "Escrow Created",
+  escrowCompleted: "Escrow Completed",
+  inviteUserJoined: "Invite User Joined",
+});
+const rewardTiers = [
+  { name: "Gold", threshold: 5_000 },
+  { name: "Platinum", threshold: 10_000 },
+  { name: "Diamond", threshold: 25_000 },
+];
 const VEIL_INVITE_BASE_URL = import.meta.env.VITE_VEIL_INVITE_URL || "https://veil.xyz/invite";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
@@ -227,6 +261,13 @@ const messages = {
   ],
 };
 
+const initialRewardHistory = [
+  { points: 50, label: "Escrow Completed", time: now - 2 * 60 * minute },
+  { points: 20, label: "Direct Payment", time: now - 5 * 60 * minute },
+  { points: 5, label: "Offer Created", time: now - 24 * 60 * minute },
+  { points: 1, label: "Shielded Message", time: now - 26 * 60 * minute },
+];
+
 const state = {
   screen: "unlock",
   channelId: activeDealId,
@@ -253,6 +294,8 @@ const state = {
   walletAssetBalances: createDefaultWalletAssetBalances(),
   walletAssetSyncKey: "",
   walletAssetSyncStatus: "idle",
+  rewardPoints: 4_580,
+  rewardHistory: [...initialRewardHistory],
   negotiationStep: "decision",
   initialOfferAmount: "500 STRK",
   latestOfferAmount: DEAL_OFFER_AMOUNT,
@@ -290,6 +333,7 @@ const attachmentInput = document.querySelector("#attachment-input");
 const toast = document.querySelector("#toast");
 const offerReviewModal = document.querySelector("#offer-review-modal");
 const paymentReviewModal = document.querySelector("#payment-review-modal");
+const escrowReviewModal = document.querySelector("#escrow-review-modal");
 const privyAuthRoot = document.querySelector("#privy-auth-root");
 
 function createClient(transport) {
@@ -2369,6 +2413,56 @@ function setElementText(selector, value) {
   if (element) element.textContent = value;
 }
 
+function parseStrkAmount(value, fallback = 0) {
+  const match = String(value || "").match(/\d+(?:[.,]\d+)?/);
+  if (!match) return fallback;
+  const parsed = Number(match[0].replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatStrk(value) {
+  const rounded = Math.round((Number(value) + Number.EPSILON) * 1_000) / 1_000;
+  return `${rounded.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${STRK_SYMBOL}`;
+}
+
+function formatPoints(value) {
+  return Number(value || 0).toLocaleString("en-US");
+}
+
+function estimateVeilFee(kind, amountLabel, options = {}) {
+  const amount = parseStrkAmount(amountLabel);
+  const rate = VEIL_FEE_MODEL.protocolRates[kind] || 0;
+  const shielded = options.shielded !== false;
+  const privacyFee = shielded ? VEIL_FEE_MODEL.strk20PrivacyFeeStrk : 0;
+  const protocolFee = amount * rate;
+  const totalFee = VEIL_FEE_MODEL.networkFeeStrk + privacyFee + protocolFee;
+  const total = amount + totalFee;
+  return {
+    amount,
+    protocolFee,
+    totalFee,
+    total,
+    feeLabel: formatStrk(totalFee),
+    totalLabel: formatStrk(total),
+  };
+}
+
+function nextRewardTier(points = state.rewardPoints) {
+  return rewardTiers.find((tier) => points < tier.threshold) || rewardTiers[rewardTiers.length - 1];
+}
+
+function awardReward(ruleKey) {
+  const points = VEIL_REWARD_POINTS[ruleKey] || 0;
+  if (!points) return;
+  state.rewardPoints += points;
+  state.rewardHistory.unshift({
+    points,
+    label: VEIL_REWARD_LABELS[ruleKey] || "VEIL Reward",
+    time: Date.now(),
+  });
+  if (state.screen === "wallet") renderWalletRewards();
+}
+
 function offerPrivacyMode() {
   return state.defaultPrivacyMode === "unshield" ? "unshield" : "shield";
 }
@@ -2416,11 +2510,15 @@ function dealActivityLabel(item) {
 }
 
 function renderDealTransactionSummary() {
+  const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
+    shielded: offerPrivacyMode() === "shield",
+  });
   setElementText("#deal-price", currentDealOfferAmount());
   setElementText("#offer-review-amount", currentDealOfferAmount());
   setElementText("#offer-review-privacy", offerPrivacyLabel());
-  setElementText("#offer-review-fee", FEE_ESTIMATE_PENDING);
-  setElementText("#offer-review-total", TOTAL_ESTIMATE_PENDING);
+  setElementText("#offer-review-fee", fee.feeLabel);
+  setElementText("#offer-review-reward", `+${VEIL_REWARD_POINTS.acceptProposal} VEIL Points`);
+  setElementText("#offer-review-total", fee.totalLabel);
 }
 
 function showOfferReview() {
@@ -2453,21 +2551,21 @@ function paymentMemoValue() {
 }
 
 function renderPaymentTransactionSummary() {
-  const isShielded = state.paymentMode === "shield";
-  const privacyFeeRow = document.querySelector("#payment-privacy-fee-row");
+  const amountLabel = paymentAmountLabel();
+  const fee = estimateVeilFee("directPayment", amountLabel, {
+    shielded: state.paymentMode === "shield",
+  });
 
-  setElementText("#payment-summary-amount", paymentAmountLabel());
-  setElementText("#payment-network-fee", FEE_ESTIMATE_PENDING);
-  setElementText("#payment-privacy-fee", FEE_ESTIMATE_PENDING);
-  setElementText("#payment-summary-total", TOTAL_ESTIMATE_PENDING);
+  setElementText("#payment-summary-amount", amountLabel);
+  setElementText("#payment-total-fee", fee.feeLabel);
+  setElementText("#payment-summary-total", fee.totalLabel);
   setElementText("#payment-review-recipient", PAYMENT_RECIPIENT);
-  setElementText("#payment-review-amount", paymentAmountLabel());
+  setElementText("#payment-review-amount", amountLabel);
   setElementText("#payment-review-privacy", paymentPrivacyLabel());
-  setElementText("#payment-review-fee", FEE_ESTIMATE_PENDING);
+  setElementText("#payment-review-fee", fee.feeLabel);
+  setElementText("#payment-review-reward", `+${VEIL_REWARD_POINTS.directPayment} VEIL Points`);
   setElementText("#payment-review-memo", paymentMemoValue());
-  setElementText("#payment-review-total", TOTAL_ESTIMATE_PENDING);
-
-  if (privacyFeeRow) privacyFeeRow.classList.toggle("hidden", !isShielded);
+  setElementText("#payment-review-total", fee.totalLabel);
 }
 
 function showPaymentReview() {
@@ -2482,6 +2580,34 @@ function showPaymentReview() {
 function hidePaymentReview() {
   if (!paymentReviewModal) return;
   paymentReviewModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function renderEscrowTransactionSummary() {
+  const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
+    shielded: true,
+  });
+  setElementText("#escrow-fee-amount", currentDealOfferAmount());
+  setElementText("#escrow-total-fee", fee.feeLabel);
+  setElementText("#escrow-fee-total", fee.totalLabel);
+  setElementText("#escrow-review-amount", currentDealOfferAmount());
+  setElementText("#escrow-review-fee", fee.feeLabel);
+  setElementText("#escrow-review-reward", `+${VEIL_REWARD_POINTS.escrowCompleted} VEIL Points`);
+  setElementText("#escrow-review-total", fee.totalLabel);
+}
+
+function showEscrowReview() {
+  renderEscrowTransactionSummary();
+  if (!escrowReviewModal) return;
+  escrowReviewModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  iconRefresh();
+  escrowReviewModal.querySelector("[data-escrow-review-sign]")?.focus();
+}
+
+function hideEscrowReview() {
+  if (!escrowReviewModal) return;
+  escrowReviewModal.classList.add("hidden");
   document.body.classList.remove("modal-open");
 }
 
@@ -2695,6 +2821,8 @@ function renderEscrow() {
   const settlementAction = document.querySelector("#escrow-settlement-action");
   const disputeAction = document.querySelector("#escrow-dispute-action");
   const escrowChannelStatus = document.querySelector("#escrow-channel-status");
+
+  renderEscrowTransactionSummary();
 
   if (escrowChannelStatus) {
     escrowChannelStatus.textContent = escrowDisplayStatus;
@@ -2928,6 +3056,7 @@ function renderWallet() {
   if (walletConnectRow) walletConnectRow.hidden = connected;
   if (walletSettingsRow) walletSettingsRow.hidden = !connected;
   renderWalletAssets();
+  renderWalletRewards();
   void refreshWalletAssets();
   document.querySelectorAll("[data-default-privacy]").forEach((button) => {
     button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
@@ -2960,6 +3089,26 @@ function renderWalletAssets() {
         : "Connect wallet";
     }
   });
+}
+
+function renderWalletRewards() {
+  const tier = nextRewardTier();
+  const remaining = Math.max(tier.threshold - state.rewardPoints, 0);
+  setElementText("#wallet-reward-points", `${formatPoints(state.rewardPoints)} pts`);
+  setElementText("#wallet-reward-tier", tier.name);
+  setElementText("#wallet-reward-remaining", remaining > 0 ? `+${formatPoints(remaining)} pts remaining` : "Top tier reached");
+
+  const recent = document.querySelector("#wallet-recent-rewards");
+  const history = document.querySelector("#wallet-rewards-history");
+  const renderRows = (items) => items.map((item) => `
+    <li>
+      <strong>+${formatPoints(item.points)}</strong>
+      <span>${escapeHtml(item.label)}</span>
+    </li>
+  `).join("");
+
+  if (recent) recent.innerHTML = renderRows(state.rewardHistory.slice(0, 3));
+  if (history) history.innerHTML = renderRows(state.rewardHistory.slice(0, 8));
 }
 
 function renderSettings() {
@@ -3312,7 +3461,7 @@ function updateLocalItem(item, updates) {
 
 async function sendChat(message) {
   const mode = chatTransportMode();
-  await safeSubmit(
+  const submitted = await safeSubmit(
     () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message, mode }),
     {
       type: "message",
@@ -3324,6 +3473,7 @@ async function sendChat(message) {
     },
     "Message sent.",
   );
+  if (submitted) awardReward("sendMessage");
 }
 
 function formatFileSize(bytes) {
@@ -3399,6 +3549,7 @@ async function createOffer() {
     "Offer created.",
   );
   if (!submitted) return;
+  awardReward("createOffer");
   state.offerAccepted = false;
   state.negotiationStep = "waiting";
   state.initialOfferAmount = amountLabel;
@@ -3432,6 +3583,7 @@ async function counterOffer() {
     "Counter sent.",
   );
   if (!submitted) return;
+  awardReward("counterOffer");
   state.offerAccepted = false;
   state.negotiationStep = "waiting";
   state.latestOfferAmount = amountLabel;
@@ -3458,6 +3610,7 @@ async function acceptOffer() {
     "Offer accepted.",
   );
   if (!submitted) return;
+  awardReward("acceptProposal");
   state.offerAccepted = true;
   state.negotiationStep = "accepted";
   currentChannel().status = "Escrow Active";
@@ -3488,6 +3641,7 @@ async function sendPayment() {
     "Payment sent.",
   );
   if (!submitted) return;
+  awardReward("directPayment");
   state.paymentSent = true;
   currentChannel().status = "Settlement";
   renderPayment();
@@ -3517,6 +3671,7 @@ async function releaseEscrow() {
     "Escrow released.",
   );
   if (!submitted) return;
+  awardReward("escrowCompleted");
   state.escrowReleased = true;
   currentChannel().status = "Settlement";
   renderEscrow();
@@ -3626,6 +3781,17 @@ function bindEvents() {
     if (event.target.closest("[data-payment-review-sign]")) {
       hidePaymentReview();
       sendPayment();
+      return;
+    }
+
+    if (event.target.closest("[data-escrow-review-close]")) {
+      hideEscrowReview();
+      return;
+    }
+
+    if (event.target.closest("[data-escrow-review-sign]")) {
+      hideEscrowReview();
+      releaseEscrow();
       return;
     }
 
@@ -3769,7 +3935,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-escrow-release]")) {
-      releaseEscrow();
+      showEscrowReview();
       return;
     }
 
@@ -3848,6 +4014,9 @@ function bindEvents() {
     }
     if (event.key === "Escape" && !paymentReviewModal?.classList.contains("hidden")) {
       hidePaymentReview();
+    }
+    if (event.key === "Escape" && !escrowReviewModal?.classList.contains("hidden")) {
+      hideEscrowReview();
     }
   });
 
