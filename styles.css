@@ -802,28 +802,6 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 800;
 }
 
-.invite-methods {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: .35rem;
-}
-
-.invite-methods button {
-  min-height: 2.45rem;
-  border: 1px solid rgb(226 232 240);
-  border-radius: .65rem;
-  background: white;
-  color: rgb(100 116 139);
-  font-size: .78rem;
-  font-weight: 950;
-}
-
-.invite-methods button.active {
-  border-color: rgb(15 23 42);
-  background: rgb(15 23 42);
-  color: white;
-}
-
 .invite-link-card {
   display: grid;
   gap: .55rem;
@@ -2502,7 +2480,6 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
     grid-template-columns: 1fr;
   }
 
-  .invite-methods,
   .invite-link-card div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

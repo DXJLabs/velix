@@ -265,7 +265,6 @@ const state = {
   },
   escrowDisputeOpened: false,
   proofExported: false,
-  inviteMethod: "username",
   inviteCode: "8Hsj3K",
 };
 
@@ -616,16 +615,26 @@ function newDealTitleValue() {
 }
 
 function newDealCounterpartyValue() {
-  return document.querySelector("#new-deal-counterparty")?.value.trim() || "Bob";
+  return document.querySelector("#new-deal-counterparty")?.value.trim() || "bob.stark";
 }
 
 function inviteTargetValue() {
   return document.querySelector("#invite-target")?.value.trim() || "Counterparty";
 }
 
+function counterpartyDisplayName(value) {
+  const text = String(value || "").trim();
+  if (!text) return "Counterparty";
+  if (text.includes("@")) return text.split("@")[0] || text;
+  if (text.endsWith(".stark")) return text;
+  if (text.startsWith("0x")) return shortHash(text);
+  return text;
+}
+
 function counterpartyAvatar(name) {
   const value = String(name || "C").trim();
-  return value ? value[0].toUpperCase() : "C";
+  const normalized = value.startsWith("0x") ? "W" : value.replace("@", "");
+  return normalized ? normalized[0].toUpperCase() : "C";
 }
 
 function createLocalChannelModel({
@@ -683,7 +692,8 @@ async function createDealChannel({ inviteOnly = false } = {}) {
     if (!connected) return;
   }
 
-  const person = inviteOnly ? inviteTargetValue() : newDealCounterpartyValue();
+  const rawCounterparty = inviteOnly ? inviteTargetValue() : newDealCounterpartyValue();
+  const person = counterpartyDisplayName(rawCounterparty);
   const channel = createLocalChannelModel({
     title: newDealTitleValue(),
     person,
@@ -2224,29 +2234,17 @@ function renderConversationList() {
 
 function renderNewDeal() {
   const inviteLink = document.querySelector("#invite-link-preview");
-  const inviteTargetLabel = document.querySelector("#invite-target-label");
-  const inviteTarget = document.querySelector("#invite-target");
-  const methodLabels = {
-    username: "VEIL Username",
-    wallet: "Wallet Address",
-    email: "Email Address",
-    link: "Share Link",
-  };
-  const methodValues = {
-    username: "@bob.veil",
-    wallet: "0x0b...71e9",
-    email: "bob@example.com",
-    link: createDealInviteLink(),
-  };
+  const resultName = document.querySelector("#counterparty-result-name");
+  const resultDetail = document.querySelector("#counterparty-result-detail");
+  const query = newDealCounterpartyValue();
 
   if (inviteLink) inviteLink.textContent = createDealInviteLink();
-  if (inviteTargetLabel) inviteTargetLabel.textContent = methodLabels[state.inviteMethod] || "Invite Target";
-  if (inviteTarget && (!inviteTarget.value || ["@bob.veil", "0x0b...71e9", "bob@example.com", createDealInviteLink()].includes(inviteTarget.value))) {
-    inviteTarget.value = methodValues[state.inviteMethod] || "";
-  }
-  document.querySelectorAll("[data-invite-method]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.inviteMethod === state.inviteMethod);
-  });
+  if (resultName) resultName.textContent = counterpartyDisplayName(query);
+  if (resultDetail) resultDetail.textContent = query.endsWith(".stark")
+    ? "Resolved to 0x0b...71e9"
+    : query.startsWith("0x")
+      ? ".stark name not attached"
+      : "Search by .stark name or wallet address";
   iconRefresh();
 }
 
@@ -3806,20 +3804,8 @@ function bindEvents() {
       return;
     }
 
-    const inviteMethod = event.target.closest("[data-invite-method]");
-    if (inviteMethod) {
-      state.inviteMethod = inviteMethod.dataset.inviteMethod || "username";
-      renderNewDeal();
-      return;
-    }
-
     if (event.target.closest("[data-copy-invite]")) {
       copyInviteLink();
-      return;
-    }
-
-    if (event.target.closest("[data-share-invite]")) {
-      showToast("Share sheet ready.");
       return;
     }
 
@@ -3873,6 +3859,7 @@ function bindEvents() {
   });
 
   conversationSearch?.addEventListener("input", renderConversationList);
+  document.querySelector("#new-deal-counterparty")?.addEventListener("input", renderNewDeal);
 
   composerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
