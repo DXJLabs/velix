@@ -6,6 +6,23 @@
     <title>VEIL</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
+    <script>
+      (() => {
+        const noisyPatterns = [
+          "ObjectMultiplex - orphaned data",
+          "ObjectMultiplex - malformed chunk",
+          "MaxListenersExceededWarning",
+        ];
+        const shouldSuppress = (args) => noisyPatterns.some((pattern) => args.some((arg) => String(arg).includes(pattern)));
+        ["warn", "error"].forEach((method) => {
+          const original = console[method];
+          console[method] = (...args) => {
+            if (shouldSuppress(args)) return;
+            original.apply(console, args);
+          };
+        });
+      })();
+    </script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     <script type="module" src="/app.js"></script>
   </head>
@@ -126,8 +143,8 @@
               </div>
               <div class="home-resource-grid">
                 <a href="#" data-home-link="docs"><i data-lucide="book-open" class="size-5"></i><span>Documentation</span></a>
-                <a href="#" data-home-link="github"><i data-lucide="github" class="size-5"></i><span>GitHub</span></a>
-                <a href="#" data-home-link="x"><i data-lucide="twitter" class="size-5"></i><span>X (Twitter)</span></a>
+                <a href="#" data-home-link="github"><i data-lucide="code-2" class="size-5"></i><span>GitHub</span></a>
+                <a href="#" data-home-link="x"><i data-lucide="at-sign" class="size-5"></i><span>X (Twitter)</span></a>
                 <a href="#" data-home-link="community"><i data-lucide="messages-square" class="size-5"></i><span>Telegram / Discord</span></a>
               </div>
             </section>

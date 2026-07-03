@@ -9,6 +9,7 @@ import { OnboardStrategy } from "starkzap-onboard";
 
 const runtimeParams = new URLSearchParams(window.location.search);
 const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") === "demo";
+const debugLogsEnabled = (import.meta.env.VITE_VEIL_DEBUG_LOGS || "false").toLowerCase() === "true";
 const timelineMode = demoRuntimeMode ? "mock" : import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
 const privyAppId = demoRuntimeMode ? "" : import.meta.env.VITE_PRIVY_APP_ID || "";
 const configuredPrivyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,google")
@@ -431,6 +432,7 @@ function createFailClosedTransport() {
 }
 
 function veilLog(level, event, details = {}) {
+  if (!shouldEmitVeilLog(level)) return;
   const payload = {
     timestamp: new Date().toISOString(),
     level,
@@ -439,6 +441,11 @@ function veilLog(level, event, details = {}) {
   };
   const method = level === "error" ? "error" : level === "warn" ? "warn" : "info";
   console[method](JSON.stringify(payload));
+}
+
+function shouldEmitVeilLog(level) {
+  if (level === "error") return true;
+  return debugLogsEnabled || import.meta.env.DEV;
 }
 
 function veilError(event, error, details = {}) {
@@ -595,8 +602,13 @@ async function mountPrivy() {
           appearance: {
             accentColor: "#10b981",
             theme: "light",
+            walletChainType: "ethereum-only",
           },
           loginMethods: privyLoginMethods,
+          externalWallets: {
+            disableAllExternalWallets: true,
+            walletConnect: { enabled: false },
+          },
         },
       },
       React.createElement(PrivyStateBridge),
