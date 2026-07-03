@@ -266,6 +266,7 @@ const state = {
   escrowDisputeOpened: false,
   proofExported: false,
   inviteCode: "8Hsj3K",
+  inviteFormOpen: false,
 };
 
 let toastTimer;
@@ -2233,18 +2234,20 @@ function renderConversationList() {
 }
 
 function renderNewDeal() {
-  const inviteLink = document.querySelector("#invite-link-preview");
   const resultName = document.querySelector("#counterparty-result-name");
   const resultDetail = document.querySelector("#counterparty-result-detail");
+  const inviteFormPanel = document.querySelector("#invite-form-panel");
+  const showInviteForm = document.querySelector("#show-invite-form");
   const query = newDealCounterpartyValue();
 
-  if (inviteLink) inviteLink.textContent = createDealInviteLink();
   if (resultName) resultName.textContent = counterpartyDisplayName(query);
   if (resultDetail) resultDetail.textContent = query.endsWith(".stark")
     ? "Resolved to 0x0b...71e9"
     : query.startsWith("0x")
       ? ".stark name not attached"
       : "Search by .stark name or wallet address";
+  if (inviteFormPanel) inviteFormPanel.hidden = !state.inviteFormOpen;
+  if (showInviteForm) showInviteForm.hidden = state.inviteFormOpen;
   iconRefresh();
 }
 
@@ -3790,6 +3793,7 @@ function bindEvents() {
     }
 
     if (event.target.closest("[data-new-conversation]")) {
+      state.inviteFormOpen = false;
       showScreen("new-deal");
       return;
     }
@@ -3797,6 +3801,16 @@ function bindEvents() {
     const newDealAction = event.target.closest("[data-new-deal-action]");
     if (newDealAction?.dataset.newDealAction === "existing") {
       createDealChannel({ inviteOnly: false });
+      return;
+    }
+    if (newDealAction?.dataset.newDealAction === "show-invite") {
+      state.inviteFormOpen = true;
+      renderNewDeal();
+      return;
+    }
+    if (newDealAction?.dataset.newDealAction === "cancel-invite") {
+      state.inviteFormOpen = false;
+      renderNewDeal();
       return;
     }
     if (newDealAction?.dataset.newDealAction === "invite") {

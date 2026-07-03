@@ -838,6 +838,16 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-size: .78rem;
 }
 
+.invite-form-panel {
+  display: grid;
+  gap: .75rem;
+}
+
+.invite-form-panel[hidden],
+#show-invite-form[hidden] {
+  display: none;
+}
+
 .new-deal-flow ol {
   display: grid;
   gap: .5rem;
