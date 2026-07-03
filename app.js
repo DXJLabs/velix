@@ -12,6 +12,7 @@ const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") =
 const debugLogsEnabled = (import.meta.env.VITE_VEIL_DEBUG_LOGS || "false").toLowerCase() === "true";
 const timelineMode = demoRuntimeMode ? "mock" : import.meta.env.VITE_VEIL_TIMELINE_MODE || "direct-helper";
 const privyAppId = demoRuntimeMode ? "" : import.meta.env.VITE_PRIVY_APP_ID || "";
+const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
 const configuredPrivyLoginMethods = (import.meta.env.VITE_PRIVY_LOGIN_METHODS || "email,google")
   .split(",")
   .map((method) => method.trim())
@@ -30,7 +31,8 @@ const helperAddress = configuredHelperAddress.toLowerCase() === LEGACY_CHANNEL_H
   ? DEPLOYED_CHANNEL_HELPER_ADDRESS
   : configuredHelperAddress || DEPLOYED_CHANNEL_HELPER_ADDRESS;
 const privacyPoolAddress = import.meta.env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool";
-const rpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "mock-rpc";
+const configuredRpcUrl = import.meta.env.VITE_STARKNET_RPC_URL || "";
+const rpcUrl = reliableRpcUrl(configuredRpcUrl, defaultStarknetRpcUrl());
 const configuredChannelKey = import.meta.env.VITE_VEIL_CHANNEL_KEY || "";
 const browserFallbackChannelKey = !configuredChannelKey && timelineMode === "direct-helper"
   ? readOrCreateBrowserFallbackChannelKey()
@@ -41,10 +43,11 @@ const channelKeyId = configuredChannelKey ? "veil-env-channel" : browserFallback
 const onchainPayloads = (import.meta.env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true"
   || helperAddress.toLowerCase() === DEPLOYED_CHANNEL_HELPER_ADDRESS;
 const STARKNET_SEPOLIA_EXPLORER_URL = "https://sepolia.voyager.online";
-const privyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL
-  || rpcUrl.replace("/v0_10", "/v0_8")
-  || "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
-const expectedChainId = normalizeChainId(import.meta.env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
+const configuredPrivyStarknetRpcUrl = import.meta.env.VITE_PRIVY_STARKNET_RPC_URL || "";
+const privyStarknetRpcUrl = reliableRpcUrl(
+  configuredPrivyStarknetRpcUrl || rpcUrl.replace("/v0_10", "/v0_8"),
+  defaultStarknetRpcUrl(),
+);
 const CHAT_DISPLAY_MODE = "shield";
 const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const DEAL_OFFER_AMOUNT = "450 STRK";
@@ -129,6 +132,19 @@ const walletAssetConfig = [
 const avnuPaymasterEnabled = (import.meta.env.VITE_AVNU_PAYMASTER_ENABLED || "true").toLowerCase() !== "false";
 const WALLET_INIT_TIMEOUT_MS = 30_000;
 const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "deploying", "connecting_paymaster"]);
+
+function defaultStarknetRpcUrl(chainId = expectedChainId) {
+  return normalizeChainId(chainId) === "SN_MAIN"
+    ? "https://starknet-mainnet.public.blastapi.io/rpc/v0_8"
+    : "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
+}
+
+function reliableRpcUrl(url, fallback) {
+  const value = String(url || "").trim();
+  if (!value || value === "mock-rpc") return fallback;
+  if (/^https:\/\/api\.zan\.top\/public\//i.test(value)) return fallback;
+  return value;
+}
 
 const now = Date.now();
 const minute = 60_000;
@@ -292,6 +308,8 @@ const state = {
   walletInitError: "",
   walletInitStartedAt: 0,
   walletInitTraceId: "",
+  loadingAction: "",
+  loadingMessage: "",
   walletAssetBalances: createDefaultWalletAssetBalances(),
   walletAssetSyncKey: "",
   walletAssetSyncStatus: "idle",
@@ -316,6 +334,7 @@ const state = {
 let toastTimer;
 let walletInitTimer;
 let directTransport;
+let transactionSubmitInFlight = false;
 let encryptionConfigWarningShown = false;
 let veilClient = createClient();
 let starknetReadProvider;
@@ -1007,6 +1026,7 @@ function setWalletInitializationState(nextState, details = {}) {
 function beginWalletInitialization(traceId) {
   clearTimeout(walletInitTimer);
   setWalletInitializationState("connecting", { traceId });
+  setAppLoading("wallet", "Connecting wallet...");
   walletInitTimer = setTimeout(() => {
     if (state.walletInitTraceId !== traceId || !isWalletInitializationPending()) return;
     veilLog("warn", "wallet.init.timeout", {
@@ -1029,11 +1049,15 @@ function updateWalletInitialization(step, traceId, details = {}) {
   if (state.walletInitTraceId && state.walletInitTraceId !== traceId) return;
   if (!isWalletInitializationPending(step) && step !== "ready" && step !== "failed") return;
   setWalletInitializationState(step, { traceId, ...details });
+  if (isWalletInitializationPending(step)) {
+    setAppLoading("wallet", details.message || walletInitLabel(step));
+  }
 }
 
 function completeWalletInitialization(traceId) {
   clearTimeout(walletInitTimer);
   setWalletInitializationState("ready", { traceId, message: "Wallet connected" });
+  clearAppLoading("wallet");
 }
 
 function failWalletInitialization(error, traceId, details = {}) {
@@ -1049,6 +1073,7 @@ function failWalletInitialization(error, traceId, details = {}) {
     where: details.where || "failWalletInitialization",
     howToFix: details.howToFix || "Open the browser console and Vercel function logs for the matching traceId, then retry wallet connection.",
   });
+  clearAppLoading("wallet");
   showToast("Unable to connect wallet.");
   return false;
 }
@@ -2031,15 +2056,83 @@ async function connectWallet(options = {}) {
   return true;
 }
 
-function showToast(message) {
+function showToast(message, options = {}) {
   toast.textContent = message;
   toast.classList.add("visible");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
+  toast.dataset.sticky = options.sticky ? "true" : "false";
+  if (!options.sticky) {
+    toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
+  }
+}
+
+function hideToastIfLoading() {
+  if (toast.dataset.sticky !== "true") return;
+  clearTimeout(toastTimer);
+  toast.classList.remove("visible");
+  toast.dataset.sticky = "false";
+}
+
+function setAppLoading(action, message) {
+  state.loadingAction = action;
+  state.loadingMessage = message || "Processing...";
+  renderLoadingState();
+  showToast(state.loadingMessage, { sticky: true });
+}
+
+function clearAppLoading(action, options = {}) {
+  if (action && state.loadingAction && state.loadingAction !== action) return;
+  state.loadingAction = "";
+  state.loadingMessage = "";
+  renderLoadingState();
+  if (!options.keepToast) hideToastIfLoading();
+}
+
+function setButtonBusy(button, busy) {
+  if (!button) return;
+  if (busy) {
+    if (!button.dataset.loadingPrevDisabled) {
+      button.dataset.loadingPrevDisabled = button.disabled ? "true" : "false";
+    }
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.classList.add("is-loading");
+    return;
+  }
+  if (button.dataset.loadingPrevDisabled) {
+    button.disabled = button.dataset.loadingPrevDisabled === "true";
+    delete button.dataset.loadingPrevDisabled;
+  }
+  button.removeAttribute("aria-busy");
+  button.classList.remove("is-loading");
+}
+
+function setBusyButtons(selector, busy) {
+  document.querySelectorAll(selector).forEach((button) => setButtonBusy(button, busy));
+}
+
+function renderLoadingState() {
+  const walletBusy = state.loadingAction === "wallet" || isWalletInitializationPending();
+  const transactionBusy = state.loadingAction === "transaction";
+  const busy = walletBusy || transactionBusy;
+
+  document.body.classList.toggle("app-loading", busy);
+  document.body.dataset.loadingMessage = state.loadingMessage || "";
+  setBusyButtons("[data-connect-wallet], [data-refresh-wallet]", walletBusy);
+  setBusyButtons([
+    "[data-offer-review-sign]",
+    "[data-payment-review-sign]",
+    "[data-escrow-review-sign]",
+    "#create-offer-action",
+    "#deal-accept-action",
+    "[data-escrow-release]",
+    "#composer-form .composer-input button[type='submit']",
+  ].join(", "), transactionBusy);
 }
 
 function iconRefresh() {
   if (window.lucide) window.lucide.createIcons();
+  renderLoadingState();
 }
 
 function escapeHtml(value) {
@@ -3326,6 +3419,12 @@ function transactionTransportMode(requestedMode) {
 }
 
 async function safeSubmit(action, localItem, success) {
+  if (transactionSubmitInFlight) {
+    showToast("Transaction is still processing.");
+    return false;
+  }
+  transactionSubmitInFlight = true;
+  setAppLoading("transaction", "Preparing transaction...");
   const pendingItem = {
     ...localItem,
     status: "encrypting",
@@ -3341,15 +3440,19 @@ async function safeSubmit(action, localItem, success) {
           errorLabel: "Cancelled",
           errorMessage: "Wallet connection was not completed.",
         });
+        clearAppLoading("transaction", { keepToast: true });
         return false;
       }
     }
+    setAppLoading("transaction", "Checking network...");
     if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
       updateLocalItem(pendingItem, {
         status: "failed",
         errorLabel: "Failed",
         errorMessage: "Helper contract verification failed on the configured network.",
       });
+      clearAppLoading("transaction");
+      showToast("Network check failed.");
       return false;
     }
     veilLog("info", "transaction.submit.start", {
@@ -3359,7 +3462,9 @@ async function safeSubmit(action, localItem, success) {
       eventType: localItem?.type,
     });
     updateLocalItem(pendingItem, { status: "signing" });
+    setAppLoading("transaction", "Confirm in wallet...");
     const result = await action();
+    setAppLoading("transaction", "Submitting onchain...");
     veilLog("info", "transaction.submit.success", {
       where: "safeSubmit",
       timelineMode,
@@ -3373,6 +3478,7 @@ async function safeSubmit(action, localItem, success) {
       mode: pendingItem.mode,
       time: result?.timestamp || pendingItem.time,
     });
+    clearAppLoading("transaction");
     showToast(success);
     return true;
   } catch (error) {
@@ -3398,8 +3504,12 @@ async function safeSubmit(action, localItem, success) {
       errorLabel: errorDetails.label,
       errorMessage: errorDetails.why,
     });
+    clearAppLoading("transaction");
     showToast(errorDetails.toast);
     return false;
+  } finally {
+    transactionSubmitInFlight = false;
+    renderLoadingState();
   }
 }
 

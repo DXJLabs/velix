@@ -3100,6 +3100,32 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   transform: none;
 }
 
+button[aria-busy="true"] {
+  cursor: progress;
+}
+
+button[aria-busy="true"]::after {
+  content: "";
+  width: .9rem;
+  height: .9rem;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  opacity: .9;
+  animation: veil-spin 760ms linear infinite;
+}
+
+.composer-input button[aria-busy="true"] svg {
+  display: none;
+}
+
+@keyframes veil-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .success-screen {
   display: grid;
   min-height: 100dvh;
