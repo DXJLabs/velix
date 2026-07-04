@@ -1326,6 +1326,7 @@ function setWalletInitializationState(nextState, details = {}) {
 
 function beginWalletInitialization(traceId) {
   clearTimeout(walletInitTimer);
+  beginWalletModal();
   setWalletInitializationState("connecting", { traceId });
   setAppLoading("wallet", "Connecting wallet...");
   walletInitTimer = setTimeout(() => {
@@ -1342,7 +1343,11 @@ function beginWalletInitialization(traceId) {
       message: "Unable to connect wallet.",
       errorMessage: `Wallet initialization exceeded ${WALLET_INIT_TIMEOUT_MS / 1000} seconds.`,
     });
-    showToast("Unable to connect wallet.");
+    failWalletModal({
+      title: "Wallet Connection Failed",
+      subtitle: "Unable to connect wallet.",
+      detail: `Wallet initialization exceeded ${WALLET_INIT_TIMEOUT_MS / 1000} seconds.`,
+    });
   }, WALLET_INIT_TIMEOUT_MS);
 }
 
@@ -1351,6 +1356,7 @@ function updateWalletInitialization(step, traceId, details = {}) {
   if (!isWalletInitializationPending(step) && step !== "ready" && step !== "failed") return;
   setWalletInitializationState(step, { traceId, ...details });
   if (isWalletInitializationPending(step)) {
+    updateWalletModalStage(step, details);
     setAppLoading("wallet", details.message || walletInitLabel(step));
   }
 }
@@ -1359,6 +1365,7 @@ function completeWalletInitialization(traceId) {
   clearTimeout(walletInitTimer);
   setWalletInitializationState("ready", { traceId, message: "Wallet connected" });
   clearAppLoading("wallet");
+  finishWalletModal();
 }
 
 function failWalletInitialization(error, traceId, details = {}) {
@@ -1375,7 +1382,11 @@ function failWalletInitialization(error, traceId, details = {}) {
     howToFix: details.howToFix || "Open the browser console and Vercel function logs for the matching traceId, then retry wallet connection.",
   });
   clearAppLoading("wallet");
-  showToast("Unable to connect wallet.");
+  failWalletModal({
+    title: "Wallet Connection Failed",
+    subtitle: "Unable to connect wallet.",
+    detail: errorMessage,
+  });
   return false;
 }
 
@@ -2159,7 +2170,6 @@ async function connectWallet(options = {}) {
     completeWalletInitialization(traceId);
     renderWallet();
     refreshConnectLabels();
-    showToast("Wallet connected.");
     if (goToInbox) showScreen("conversations");
     tracePrivyStarkZap(traceId, "connect.success", {
       where: "connectWallet",
@@ -2346,7 +2356,6 @@ async function connectWallet(options = {}) {
   completeWalletInitialization(traceId);
   renderWallet();
   refreshConnectLabels();
-  showToast("Wallet connected.");
   if (goToInbox) showScreen("conversations");
   tracePrivyStarkZap(traceId, "connect.success", {
     where: "connectWallet",
@@ -2487,6 +2496,80 @@ function beginTransactionModal(localItem, success, options = {}) {
   });
 }
 
+function beginWalletModal() {
+  clearTimeout(transactionModalTimer);
+  setTransactionModal({
+    visible: true,
+    stage: "wallet",
+    actionLabel: "Connecting Wallet",
+    title: "Connecting Wallet",
+    subtitle: "Preparing secure Starknet access.",
+    detail: "Opening wallet session...",
+    progress: 22,
+    successTitle: "Wallet Connected",
+    successSubtitle: "Secure Starknet access is ready.",
+    txHash: "",
+  });
+}
+
+function updateWalletModalStage(step, details = {}) {
+  const stageCopy = {
+    connecting: {
+      title: "Connecting Wallet",
+      detail: "Opening wallet session...",
+      progress: 24,
+    },
+    creating_account: {
+      title: "Preparing Wallet",
+      detail: "Creating or loading your Starknet account...",
+      progress: 42,
+    },
+    deploying: {
+      title: "Deploying Account",
+      detail: "Preparing Starknet account deployment...",
+      progress: 58,
+    },
+    connecting_paymaster: {
+      title: "Connecting Paymaster",
+      detail: "Preparing sponsored account access...",
+      progress: 70,
+    },
+  };
+  const copy = stageCopy[step] || stageCopy.connecting;
+  setTransactionModal({
+    visible: true,
+    stage: "wallet",
+    actionLabel: "Connecting Wallet",
+    subtitle: "Preparing secure Starknet access.",
+    ...copy,
+    ...(details.message ? { detail: details.message } : {}),
+  });
+}
+
+function finishWalletModal() {
+  updateTransactionModalStage("success", {
+    title: "Wallet Connected",
+    subtitle: "Secure Starknet access is ready.",
+    detail: "Opening your deal workspace.",
+    txHash: "",
+    progress: 100,
+  });
+  clearTimeout(transactionModalTimer);
+  transactionModalTimer = setTimeout(() => {
+    setTransactionModal({ visible: false, stage: "idle", txHash: "" });
+  }, 1300);
+}
+
+function failWalletModal({ title = "Wallet Connection Failed", subtitle = "Unable to connect wallet.", detail = "Retry wallet connection." } = {}) {
+  clearTimeout(transactionModalTimer);
+  updateTransactionModalStage("error", {
+    title,
+    subtitle,
+    detail,
+    progress: 100,
+  });
+}
+
 function updateTransactionModalStage(stage, updates = {}) {
   const stageDefaults = {
     preparing: {
@@ -2610,7 +2693,7 @@ function setAppLoading(action, message) {
   state.loadingAction = action;
   state.loadingMessage = message || "Processing...";
   renderLoadingState();
-  if (action === "transaction") {
+  if (action === "transaction" || action === "wallet") {
     hideToastIfLoading();
     return;
   }

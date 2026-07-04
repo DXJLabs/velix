@@ -3599,6 +3599,15 @@ body.transaction-modal-open {
 }
 
 @media (min-width: 48rem) {
+  .transaction-loading-card {
+    width: min(100%, 28rem);
+    padding: 1.45rem;
+  }
+
+  .transaction-loading-card h2 {
+    font-size: 1.5rem;
+  }
+
   .review-modal {
     align-items: center;
   }
