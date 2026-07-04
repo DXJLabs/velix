@@ -52,6 +52,9 @@ const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const DEAL_OFFER_AMOUNT = "450 STRK";
 const PAYMENT_RECIPIENT = "Bob";
 const STRK_SYMBOL = "STRK";
+const BOB_IDENTITY = "bob.stark";
+const BOB_WALLET_ADDRESS = "0x04c8a3d2f10b7e4c93f6a58219d0de8fa2";
+const BOB_WALLET_SHORT = "0x04...8fa2";
 const VEIL_FEE_MODEL = Object.freeze({
   networkFeeStrk: 0.003,
   strk20PrivacyFeeStrk: 0.01,
@@ -179,6 +182,24 @@ function settlementProofMeta(channel = currentChannel?.()) {
   };
 }
 
+function bobIdentityDetails(name = BOB_IDENTITY) {
+  const identity = String(name || BOB_IDENTITY).toLowerCase().endsWith(".stark")
+    ? String(name || BOB_IDENTITY).toLowerCase()
+    : `${String(name || "bob").toLowerCase()}.stark`;
+  return [
+    ["Identity", identity],
+    ["Wallet Connected", BOB_WALLET_SHORT],
+    ["Status", "Shielded Identity Verified"],
+  ];
+}
+
+function inviteAcceptedDetails() {
+  return [
+    ["Invite Status", "Accepted"],
+    ["Reuse", "This invite can no longer be used."],
+  ];
+}
+
 function confirmedTimelineMeta(seed, offset = 0) {
   return {
     status: "confirmed",
@@ -207,7 +228,7 @@ const channels = [
     person: "Bob",
     avatar: "B",
     mode: "Private",
-    status: "Waiting Deposit",
+    status: "Escrow Active",
     unread: 2,
     time: "9:41 AM",
     last: "Waiting for escrow deposits",
@@ -265,16 +286,26 @@ const messages = {
       title: "Invitation accepted",
       subtitle: "bob.stark joined.",
       actor: "Bob",
+      details: bobIdentityDetails(),
       time: now - 52 * minute,
       ...confirmedTimelineMeta("bob-joined", 0),
     },
     {
       type: "event",
-      title: "ECDH session established",
-      subtitle: "Secure channel created.",
+      title: "Secure channel established",
+      subtitle: "ECDH key exchange completed. Shielded messaging enabled.",
       actor: "System",
       time: now - 51 * minute,
       ...confirmedTimelineMeta("ecdh-session-established", 1),
+    },
+    {
+      type: "event",
+      title: "Invite Status",
+      subtitle: "Accepted. This invite can no longer be used.",
+      actor: "System",
+      details: inviteAcceptedDetails(),
+      time: now - 50 * minute,
+      ...confirmedTimelineMeta("invite-accepted-expired", 2),
     },
     {
       type: "message",
@@ -283,7 +314,7 @@ const messages = {
       body: "Hello Bob, here is my offer.",
       time: now - 48 * minute,
       self: true,
-      ...confirmedTimelineMeta("alice-message", 2),
+      ...confirmedTimelineMeta("alice-message", 3),
     },
     {
       type: "offer",
@@ -292,7 +323,7 @@ const messages = {
       amount: "500 STRK",
       subtitle: "Rights Package / NFT",
       time: now - 44 * minute,
-      ...confirmedTimelineMeta("alice-offer", 3),
+      ...confirmedTimelineMeta("alice-offer", 4),
     },
     {
       type: "offer",
@@ -301,7 +332,7 @@ const messages = {
       amount: "450 STRK",
       subtitle: "Rights Package / NFT",
       time: now - 34 * minute,
-      ...confirmedTimelineMeta("bob-counter", 4),
+      ...confirmedTimelineMeta("bob-counter", 5),
     },
     {
       type: "event",
@@ -309,7 +340,7 @@ const messages = {
       subtitle: "Negotiation completed. Escrow contract created.",
       actor: "Alice",
       time: now - 24 * minute,
-      ...confirmedTimelineMeta("alice-accepted-counter", 5),
+      ...confirmedTimelineMeta("alice-accepted-counter", 6),
     },
     {
       type: "event",
@@ -317,7 +348,7 @@ const messages = {
       subtitle: "Waiting for: Alice deposits 450 STRK; Bob locks NFT.",
       actor: "System",
       time: now - 20 * minute,
-      ...confirmedTimelineMeta("waiting-escrow-deposits", 6),
+      ...confirmedTimelineMeta("waiting-escrow-deposits", 7),
     },
   ],
   "design-milestone": [
@@ -850,7 +881,7 @@ function resetDealStateForPendingChannel() {
 function createLocalChannelModel({
   title = "Rights Transfer",
   person = "Bob",
-  status = "Negotiating",
+  status = "Negotiation Active",
   last = "Bob joined the deal",
   invited = false,
   pendingJoin = false,
@@ -884,7 +915,7 @@ function seedDealTimeline(channel) {
     return [
       {
         type: "event",
-        title: "Invite Link",
+        title: "Invite link generated",
         subtitle: `${channel.dealId} is waiting for ${channel.person}.`,
         inviteLink: channel.inviteLink || createDealInviteLink(),
         time: Date.now(),
@@ -993,7 +1024,7 @@ function channelRequiresJoin(channel = currentChannel()) {
 function acceptPendingCounterparty(channel = currentChannel()) {
   if (!channel || !channelRequiresJoin(channel)) return;
   channel.pendingJoin = false;
-  channel.status = "Negotiating";
+  channel.status = "Negotiation Active";
   channel.last = `${channel.person} joined the deal`;
   channel.time = "now";
   resetDealStateForPendingChannel();
@@ -1006,16 +1037,27 @@ function acceptPendingCounterparty(channel = currentChannel()) {
     time: Date.now(),
     offchain: true,
     actor: channel.person,
+    details: bobIdentityDetails(channel.person),
     ...confirmedTimelineMeta(`${channel.id}-accepted`, 12),
   });
   messages[channel.id].push({
     type: "event",
-    title: "ECDH session established",
-    subtitle: "Secure channel created.",
+    title: "Secure channel established",
+    subtitle: "ECDH key exchange completed. Shielded messaging enabled.",
     time: Date.now() + 1,
     offchain: true,
     actor: "System",
     ...confirmedTimelineMeta(`${channel.id}-ecdh`, 13),
+  });
+  messages[channel.id].push({
+    type: "event",
+    title: "Invite Status",
+    subtitle: "Accepted. This invite can no longer be used.",
+    time: Date.now() + 2,
+    offchain: true,
+    actor: "System",
+    details: inviteAcceptedDetails(),
+    ...confirmedTimelineMeta(`${channel.id}-invite-accepted`, 14),
   });
   if (channel.invited) awardReward("inviteUserJoined");
   saveLocalChannels();
@@ -2592,7 +2634,8 @@ function timelinePayloadToFeedItem(item, payload) {
 
 function statusPillClass(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized.includes("negotiating")) return "status-pill negotiating";
+  if (normalized.includes("negotiating") || normalized.includes("negotiation")) return "status-pill negotiating";
+  if (normalized.includes("deal completed") || normalized.includes("closed")) return "status-pill settlement";
   if (normalized.includes("escrow")) return "status-pill escrow-active";
   if (normalized.includes("funding complete")) return "status-pill escrow-active";
   if (normalized.includes("approvals complete")) return "status-pill escrow-active";
@@ -2803,6 +2846,7 @@ function renderOfferCard(item) {
 
 function renderTimelineDetails(item) {
   const rows = [];
+  if (Array.isArray(item.details)) rows.push(...item.details);
   if (item.inviteLink) rows.push(["Invite Link", item.inviteLink]);
   if (item.proofId) rows.push(["Proof ID", item.proofId]);
   if (item.settlementHash) rows.push(["Settlement Hash", item.settlementHash]);
@@ -3112,8 +3156,8 @@ function workflowStageData() {
   const status = String(currentChannel().status || "").toLowerCase();
   const escrowSettlementComplete = state.escrowReleased && !state.paymentSent;
   const settlementReady = status.includes("settlement ready");
-  const settlementStatusComplete = status.includes("settlement") && !status.includes("ready");
-  const channelInEscrow = status.includes("escrow") || status.includes("settlement");
+  const settlementStatusComplete = status.includes("deal completed") || (status.includes("settlement") && !status.includes("ready"));
+  const channelInEscrow = status.includes("escrow") || status.includes("settlement") || status.includes("deal completed");
   const negotiationComplete = state.offerAccepted || settlementReady || escrowSettlementComplete || state.paymentSent || channelInEscrow;
   const escrowComplete = escrowSettlementComplete || settlementReady || state.paymentSent || settlementStatusComplete;
   const settlementComplete = escrowSettlementComplete || state.paymentSent || settlementStatusComplete;
@@ -3252,7 +3296,7 @@ function renderDeal() {
   const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
   const timelineHasOffer = channelHasOfferActivity();
   const negotiationStep = accepted ? "accepted" : timelineHasOffer ? state.negotiationStep || "decision" : "draft";
-  const currentStatus = accepted ? "Negotiation completed" : "Negotiating";
+  const currentStatus = accepted ? "Escrow Active" : "Negotiation Active";
   const currentAmount = currentDealOfferAmount();
   const initialAmount = state.initialOfferAmount || currentAmount;
   const waitingForCounterparty = negotiationStep === "waiting";
@@ -3304,7 +3348,7 @@ function renderDeal() {
   if (createOfferCancel) createOfferCancel.hidden = negotiationStep !== "counter";
   if (dealStatusEl) {
     dealStatusEl.textContent = currentStatus;
-    dealStatusEl.className = accepted ? "status-pill waiting-deposit" : statusPillClass(currentStatus);
+    dealStatusEl.className = statusPillClass(currentStatus);
   }
   if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted || waitingForCounterparty);
   if (counterAction) {
@@ -3349,7 +3393,7 @@ function renderEscrow() {
   const buyerApproved = escrowApprovalComplete("buyer");
   const sellerApproved = escrowApprovalComplete("seller");
   const releaseReady = releaseDone || (fundingComplete && escrowConfirmationsComplete());
-  const escrowDisplayStatus = releaseDone ? "Settlement" : fundingComplete ? "Funding Complete" : "Waiting Deposit";
+  const escrowDisplayStatus = releaseDone ? "Deal Completed" : state.offerAccepted || fundingComplete || buyerDeposited ? "Escrow Active" : "Waiting Deposit";
   const fundingItem = escrowFundingProofItem();
   const releaseItem = escrowReleaseProofItem();
   const fundingProof = document.querySelector("#escrow-funding-proof");
@@ -4233,7 +4277,7 @@ async function createOffer() {
   state.negotiationStep = "waiting";
   state.initialOfferAmount = amountLabel;
   state.latestOfferAmount = amountLabel;
-  currentChannel().status = "Negotiating";
+  currentChannel().status = "Negotiation Active";
   renderDeal();
   renderWorkflowProgress();
 }
@@ -4270,7 +4314,7 @@ async function counterOffer() {
   state.escrowReleased = false;
   state.negotiationStep = "waiting";
   state.latestOfferAmount = amountLabel;
-  currentChannel().status = "Negotiating";
+  currentChannel().status = "Negotiation Active";
   renderDeal();
   renderWorkflowProgress();
 }
@@ -4301,7 +4345,7 @@ async function acceptOffer() {
   state.escrowConfirmations = { buyer: false, seller: false };
   state.escrowReleased = false;
   state.escrowDisputeOpened = false;
-  currentChannel().status = "Waiting Deposit";
+  currentChannel().status = "Escrow Active";
   currentChannel().last = "Waiting for escrow deposits";
   addLocalItem({
     type: "inline",
@@ -4341,7 +4385,7 @@ async function sendPayment() {
   if (!submitted) return;
   awardReward("directPayment");
   state.paymentSent = true;
-  currentChannel().status = "Settlement";
+  currentChannel().status = "Deal Completed";
   renderPayment();
   renderWorkflowProgress();
   showScreen("settlement");
@@ -4381,7 +4425,7 @@ async function submitEscrowDeposit(key) {
   if (!submitted) return;
   state.escrowDeposits[key] = true;
   if (isBuyer) awardReward("escrowCreated");
-  currentChannel().status = escrowFundingComplete() ? "Funding Complete" : "Waiting Deposit";
+  currentChannel().status = "Escrow Active";
   currentChannel().last = title;
   if (!isBuyer && escrowFundingComplete()) {
     addLocalItem({
@@ -4428,7 +4472,7 @@ async function approveEscrowRelease(key) {
   );
   if (!submitted) return;
   state.escrowConfirmations[key] = true;
-  currentChannel().status = escrowConfirmationsComplete() ? "Approvals Complete" : "Funding Complete";
+  currentChannel().status = "Escrow Active";
   currentChannel().last = title;
   renderEscrow();
   renderWorkflowProgress();
@@ -4464,7 +4508,7 @@ async function releaseEscrow() {
   if (!submitted) return;
   awardReward("escrowCompleted");
   state.escrowReleased = true;
-  currentChannel().status = "Settlement";
+  currentChannel().status = "Deal Completed";
   currentChannel().last = "Secure deal completed";
   const proof = settlementProofMeta();
   addLocalItem({
@@ -4510,7 +4554,7 @@ function continueCompletedChannel() {
 function startNewEscrowInCurrentChannel() {
   resetDealStateForPendingChannel();
   const channel = currentChannel();
-  channel.status = "Negotiating";
+  channel.status = "Negotiation Active";
   channel.last = "New escrow draft ready";
   channel.time = "now";
   state.channelId = channel.id;
