@@ -87,7 +87,7 @@ const rewardTiers = [
   { name: "Platinum", threshold: 10_000 },
   { name: "Diamond", threshold: 25_000 },
 ];
-const VEIL_INVITE_BASE_URL = import.meta.env.VITE_VEIL_INVITE_URL || "https://veil.xyz/invite";
+const VEIL_INVITE_BASE_URL = import.meta.env.VITE_VEIL_INVITE_URL || "https://veil.app/invite";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
   github: import.meta.env.VITE_VEIL_GITHUB_URL || "https://github.com/DXJLabs/velix",
@@ -151,6 +151,32 @@ function demoTxHash(seed) {
     hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
   }
   return `mock-${hash.toString(16).padStart(8, "0")}`;
+}
+
+function deterministicHex(seed, length = 64) {
+  const text = String(seed || "veil");
+  let hash = 2166136261;
+  let output = "";
+  let round = 0;
+  while (output.length < length) {
+    const value = `${text}:${round}`;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    output += hash.toString(16).padStart(8, "0");
+    round += 1;
+  }
+  return `0x${output.slice(0, length)}`;
+}
+
+function settlementProofMeta(channel = currentChannel?.()) {
+  const source = channel?.dealId || channel?.id || state?.channelId || activeDealId;
+  const hash = deterministicHex(`settlement:${source}`, 64);
+  return {
+    proofId: `VP-${String(source).replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase() || "DEAL"}-${hash.slice(2, 8).toUpperCase()}`,
+    settlementHash: hash,
+  };
 }
 
 function confirmedTimelineMeta(seed, offset = 0) {
@@ -236,11 +262,19 @@ const messages = {
   [activeDealId]: [
     {
       type: "event",
-      title: "Bob joined the deal",
-      subtitle: "Negotiation is ready.",
+      title: "Invitation accepted",
+      subtitle: "bob.stark joined.",
       actor: "Bob",
       time: now - 52 * minute,
       ...confirmedTimelineMeta("bob-joined", 0),
+    },
+    {
+      type: "event",
+      title: "ECDH session established",
+      subtitle: "Secure channel created.",
+      actor: "System",
+      time: now - 51 * minute,
+      ...confirmedTimelineMeta("ecdh-session-established", 1),
     },
     {
       type: "message",
@@ -249,7 +283,7 @@ const messages = {
       body: "Hello Bob, here is my offer.",
       time: now - 48 * minute,
       self: true,
-      ...confirmedTimelineMeta("alice-message", 1),
+      ...confirmedTimelineMeta("alice-message", 2),
     },
     {
       type: "offer",
@@ -258,7 +292,7 @@ const messages = {
       amount: "500 STRK",
       subtitle: "Rights Package / NFT",
       time: now - 44 * minute,
-      ...confirmedTimelineMeta("alice-offer", 2),
+      ...confirmedTimelineMeta("alice-offer", 3),
     },
     {
       type: "offer",
@@ -267,7 +301,7 @@ const messages = {
       amount: "450 STRK",
       subtitle: "Rights Package / NFT",
       time: now - 34 * minute,
-      ...confirmedTimelineMeta("bob-counter", 3),
+      ...confirmedTimelineMeta("bob-counter", 4),
     },
     {
       type: "event",
@@ -275,7 +309,7 @@ const messages = {
       subtitle: "Negotiation completed. Escrow contract created.",
       actor: "Alice",
       time: now - 24 * minute,
-      ...confirmedTimelineMeta("alice-accepted-counter", 4),
+      ...confirmedTimelineMeta("alice-accepted-counter", 5),
     },
     {
       type: "event",
@@ -283,7 +317,7 @@ const messages = {
       subtitle: "Waiting for: Alice deposits 450 STRK; Bob locks NFT.",
       actor: "System",
       time: now - 20 * minute,
-      ...confirmedTimelineMeta("waiting-escrow-deposits", 5),
+      ...confirmedTimelineMeta("waiting-escrow-deposits", 6),
     },
   ],
   "design-milestone": [
@@ -850,8 +884,9 @@ function seedDealTimeline(channel) {
     return [
       {
         type: "event",
-        title: "Invite link generated",
+        title: "Invite Link",
         subtitle: `${channel.dealId} is waiting for ${channel.person}.`,
+        inviteLink: channel.inviteLink || createDealInviteLink(),
         time: Date.now(),
         offchain: true,
         actor: "System",
@@ -966,12 +1001,21 @@ function acceptPendingCounterparty(channel = currentChannel()) {
   messages[channel.id] ||= [];
   messages[channel.id].push({
     type: "event",
-    title: `${channel.person} joined the deal`,
-    subtitle: "Negotiation is ready.",
+    title: "Invitation accepted",
+    subtitle: `${channel.person} joined.`,
     time: Date.now(),
     offchain: true,
     actor: channel.person,
     ...confirmedTimelineMeta(`${channel.id}-accepted`, 12),
+  });
+  messages[channel.id].push({
+    type: "event",
+    title: "ECDH session established",
+    subtitle: "Secure channel created.",
+    time: Date.now() + 1,
+    offchain: true,
+    actor: "System",
+    ...confirmedTimelineMeta(`${channel.id}-ecdh`, 13),
   });
   if (channel.invited) awardReward("inviteUserJoined");
   saveLocalChannels();
@@ -2671,7 +2715,24 @@ function renderInviteWaitingCard(channel) {
       <div>
         <strong>Invite link ready</strong>
         <p>${escapeHtml(channel.person)} is not on VEIL yet. Share the invite link; after they connect wallet and accept, the deal opens.</p>
-        <small>${escapeHtml(link)}</small>
+      </div>
+      <div class="invite-link-card">
+        <span>Invite Link</span>
+        <strong>${escapeHtml(link)}</strong>
+        <div>
+          <button class="secondary-action" type="button" data-copy-invite>
+            <i data-lucide="copy" class="size-4"></i>
+            <small>Copy</small>
+          </button>
+          <button class="secondary-action" type="button" data-share-invite="share">
+            <i data-lucide="send" class="size-4"></i>
+            <small>Share</small>
+          </button>
+          <button class="secondary-action" type="button" data-qr-invite>
+            <i data-lucide="qr-code" class="size-4"></i>
+            <small>QR Code</small>
+          </button>
+        </div>
       </div>
       <div class="invite-share-grid" aria-label="Share invite">
         <button type="button" data-share-invite="telegram">Telegram</button>
@@ -2681,10 +2742,6 @@ function renderInviteWaitingCard(channel) {
         <button type="button" data-share-invite="whatsapp">WhatsApp</button>
       </div>
       <div class="invite-wait-actions">
-        <button class="secondary-action" type="button" data-copy-invite>
-          <i data-lucide="copy" class="size-5"></i>
-          <span>Copy Link</span>
-        </button>
         <button class="primary-action" type="button" data-counterparty-accept>
           <i data-lucide="user-plus" class="size-5"></i>
           <span>Preview Accept Invitation</span>
@@ -2744,6 +2801,53 @@ function renderOfferCard(item) {
   `;
 }
 
+function renderTimelineDetails(item) {
+  const rows = [];
+  if (item.inviteLink) rows.push(["Invite Link", item.inviteLink]);
+  if (item.proofId) rows.push(["Proof ID", item.proofId]);
+  if (item.settlementHash) rows.push(["Settlement Hash", item.settlementHash]);
+  if (!rows.length) return "";
+  return `
+    <dl class="timeline-detail-list">
+      ${rows.map(([label, value]) => `
+        <div>
+          <dt>${escapeHtml(label)}</dt>
+          <dd>${escapeHtml(value)}</dd>
+        </div>
+      `).join("")}
+    </dl>
+  `;
+}
+
+function renderTimelineActions(item) {
+  if (item.inviteLink) {
+    return `
+      <div class="timeline-action-row">
+        <button type="button" data-copy-invite>Copy</button>
+        <button type="button" data-share-invite="share">Share</button>
+        <button type="button" data-qr-invite>QR Code</button>
+      </div>
+    `;
+  }
+  if (item.proofId || item.settlementHash) {
+    return `
+      <div class="timeline-action-row">
+        <button type="button" data-open-route="proof">View Proof</button>
+      </div>
+    `;
+  }
+  if (item.channelActions) {
+    return `
+      <div class="timeline-action-row three">
+        <button type="button" data-channel-complete-action="continue">Continue chatting</button>
+        <button type="button" data-channel-complete-action="new-escrow">Create new escrow</button>
+        <button type="button" data-channel-complete-action="close">Close deal</button>
+      </div>
+    `;
+  }
+  return "";
+}
+
 function renderInlineEvent(item) {
   const actorName = item.actor || (item.self || item.sender === "You" ? "Alice" : item.sender) || "System";
   const actor = `<span class="timeline-actor">${escapeHtml(actorName)}</span>`;
@@ -2754,7 +2858,9 @@ function renderInlineEvent(item) {
         ${actor}
         <strong>${escapeHtml(item.title)}</strong>
         <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
+        ${renderTimelineDetails(item)}
         ${renderChainMeta(item)}
+        ${renderTimelineActions(item)}
       </div>
     </article>
   `;
@@ -3044,6 +3150,24 @@ function latestChannelItem(predicate) {
   return [...channelMessages()].reverse().find(predicate);
 }
 
+function escrowDepositProofItem(key) {
+  const buyer = key === "buyer";
+  const item = latestChannelItem((entry) => {
+    const label = `${entry.title || ""} ${entry.subtitle || ""} ${entry.details || ""}`.toLowerCase();
+    return buyer
+      ? label.includes("alice deposited") || label.includes("buyer deposited")
+      : label.includes("bob locked") || label.includes("seller locked") || label.includes("asset secured");
+  });
+  return item
+    ? {
+      ...item,
+      type: "inline",
+      actor: item.actor || (buyer ? "Alice" : "Bob"),
+      mode: CHAT_DISPLAY_MODE,
+    }
+    : null;
+}
+
 function escrowFundingProofItem() {
   const item = latestChannelItem((entry) => {
     const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
@@ -3051,6 +3175,7 @@ function escrowFundingProofItem() {
       || label.includes("locked asset")
       || label.includes("bob locked")
       || label.includes("seller locked")
+      || label.includes("escrow funded")
       || label.includes("escrow contract created")
       || label.includes("accepted bob");
   });
@@ -3236,6 +3361,8 @@ function renderEscrow() {
   const settlementAction = document.querySelector("#escrow-settlement-action");
   const disputeAction = document.querySelector("#escrow-dispute-action");
   const escrowChannelStatus = document.querySelector("#escrow-channel-status");
+  const buyerDepositProof = escrowDepositProofItem("buyer");
+  const sellerDepositProof = escrowDepositProofItem("seller");
   const title = releaseDone
     ? "Settlement ready"
     : fundingComplete
@@ -3312,6 +3439,10 @@ function renderEscrow() {
     locked: !buyerDeposited,
     secondaryWhenReady: true,
   });
+  const buyerDepositProofEl = document.querySelector("#escrow-buyer-deposit-proof");
+  const sellerDepositProofEl = document.querySelector("#escrow-seller-deposit-proof");
+  if (buyerDepositProofEl) buyerDepositProofEl.innerHTML = buyerDeposited && buyerDepositProof ? renderChainMeta(buyerDepositProof) : "";
+  if (sellerDepositProofEl) sellerDepositProofEl.innerHTML = sellerDeposited && sellerDepositProof ? renderChainMeta(sellerDepositProof) : "";
 
   [
     ["#escrow-buyer-confirmed", "buyer", buyerApproved],
@@ -3728,7 +3859,11 @@ function clearLocalVeilCache() {
   showToast(keys.length ? "Local VEIL cache cleared." : "No local VEIL cache.");
 }
 
-function renderSettlement() {}
+function renderSettlement() {
+  const proof = settlementProofMeta();
+  setElementText("#settlement-complete-proof-id", proof.proofId);
+  setElementText("#settlement-complete-hash", proof.settlementHash);
+}
 
 function directPaymentProofItem() {
   const item = latestChannelItem((entry) => {
@@ -3810,6 +3945,9 @@ function renderProof() {
 
   setElementText("#settlement-proof-title", directPaymentProof ? "Trusted Transfer" : currentChannel().title || "Rights Transfer");
   setElementText("#settlement-proof-parties", "Alice <-> Bob");
+  const proof = settlementProofMeta();
+  setElementText("#settlement-proof-id", proof.proofId);
+  setElementText("#settlement-proof-settlement-hash", proof.settlementHash);
   if (proofFlow) proofFlow.innerHTML = directPaymentProof ? directPaymentProofMarkup() : escrowSettlementProofMarkup();
   setElementText("#settlement-proof-hash", txHash || "Available after wallet confirmation");
   if (proofLink) {
@@ -4327,18 +4465,87 @@ async function releaseEscrow() {
   awardReward("escrowCompleted");
   state.escrowReleased = true;
   currentChannel().status = "Settlement";
-  currentChannel().last = "Settlement complete";
+  currentChannel().last = "Secure deal completed";
+  const proof = settlementProofMeta();
+  addLocalItem({
+    type: "inline",
+    title: "Settlement proof generated",
+    subtitle: "Proof attached to this private channel.",
+    proofId: proof.proofId,
+    settlementHash: proof.settlementHash,
+    actor: "System",
+    time: Date.now() + 1,
+    ...confirmedTimelineMeta(`${state.channelId}-settlement-proof`, 39),
+  });
   addLocalItem({
     type: "inline",
     title: "Settlement complete",
     subtitle: "Deal settled and proof is ready.",
     actor: "System",
-    time: Date.now(),
+    time: Date.now() + 2,
     ...confirmedTimelineMeta(`${state.channelId}-settlement-complete`, 40),
+  });
+  addLocalItem({
+    type: "inline",
+    title: "Secure deal completed.",
+    subtitle: "Encrypted channel remains available.",
+    actor: "System",
+    channelActions: true,
+    time: Date.now() + 3,
+    ...confirmedTimelineMeta(`${state.channelId}-secure-channel-open`, 41),
   });
   renderEscrow();
   renderWorkflowProgress();
   showScreen("settlement");
+}
+
+function continueCompletedChannel() {
+  showScreen("channel");
+  requestAnimationFrame(() => {
+    messageInput?.focus();
+  });
+  showToast("Encrypted channel remains available.");
+}
+
+function startNewEscrowInCurrentChannel() {
+  resetDealStateForPendingChannel();
+  const channel = currentChannel();
+  channel.status = "Negotiating";
+  channel.last = "New escrow draft ready";
+  channel.time = "now";
+  state.channelId = channel.id;
+  addLocalItem({
+    type: "inline",
+    title: "New escrow draft started",
+    subtitle: "Use the same encrypted channel for the next deal.",
+    actor: "System",
+    time: Date.now(),
+    ...confirmedTimelineMeta(`${state.channelId}-new-escrow`, 42),
+  });
+  saveLocalChannels();
+  renderConversationList();
+  showScreen("deal");
+  showToast("New escrow draft ready.");
+}
+
+function closeCurrentDeal() {
+  const channel = currentChannel();
+  channel.status = "Closed";
+  channel.last = "Deal closed";
+  channel.time = "now";
+  addLocalItem({
+    type: "inline",
+    title: "Deal closed",
+    subtitle: "Encrypted channel archived.",
+    actor: "System",
+    time: Date.now(),
+    ...confirmedTimelineMeta(`${state.channelId}-deal-closed`, 43),
+  });
+  saveLocalChannels();
+  renderConversationList();
+  renderChannel();
+  renderWorkflowProgress();
+  showToast("Deal closed.");
 }
 
 function bindEvents() {
@@ -4477,6 +4684,20 @@ function bindEvents() {
     const route = event.target.closest("[data-open-route]");
     if (route) {
       showScreen(route.dataset.openRoute);
+      return;
+    }
+
+    const channelCompleteAction = event.target.closest("[data-channel-complete-action]");
+    if (channelCompleteAction?.dataset.channelCompleteAction === "continue") {
+      continueCompletedChannel();
+      return;
+    }
+    if (channelCompleteAction?.dataset.channelCompleteAction === "new-escrow") {
+      startNewEscrowInCurrentChannel();
+      return;
+    }
+    if (channelCompleteAction?.dataset.channelCompleteAction === "close") {
+      closeCurrentDeal();
       return;
     }
 

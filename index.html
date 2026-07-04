@@ -829,6 +829,7 @@
                     <i data-lucide="wallet" class="size-5"></i>
                     <span>Deposit to Escrow</span>
                   </button>
+                  <div id="escrow-buyer-deposit-proof" class="chain-meta deposit-chain-meta"></div>
                 </article>
                 <article id="escrow-seller-deposit-card" class="escrow-deposit-card" data-escrow-deposit-card="seller">
                   <div class="deposit-card-top">
@@ -846,6 +847,7 @@
                     <i data-lucide="lock-keyhole" class="size-5"></i>
                     <span>Lock Asset</span>
                   </button>
+                  <div id="escrow-seller-deposit-proof" class="chain-meta deposit-chain-meta"></div>
                 </article>
               </div>
               <div id="escrow-funding-proof" class="chain-meta escrow-stage-proof"></div>
@@ -988,10 +990,24 @@
             <section class="workflow-progress" data-workflow-progress></section>
             <section class="settlement-complete-card">
               <div class="success-icon"><i data-lucide="check" class="size-9"></i></div>
-              <h2>Settlement complete.</h2>
+              <h2>Settlement proof generated</h2>
               <p>Proof generated and attached to the deal.</p>
+              <div class="settlement-proof-summary">
+                <div>
+                  <span>Proof ID</span>
+                  <strong id="settlement-complete-proof-id">VP-DEAL-F38BA0</strong>
+                </div>
+                <div>
+                  <span>Settlement Hash</span>
+                  <strong id="settlement-complete-hash">0x3a7dfdeb...f38ba0</strong>
+                </div>
+              </div>
               <button class="primary-action w-full" type="button" data-open-route="proof">View Proof</button>
-              <button class="secondary-action w-full" type="button" data-nav="channel">Back to Channel</button>
+              <div class="settlement-action-grid">
+                <button class="secondary-action" type="button" data-channel-complete-action="continue">Continue chatting</button>
+                <button class="secondary-action" type="button" data-channel-complete-action="new-escrow">Create new escrow</button>
+                <button class="secondary-action" type="button" data-channel-complete-action="close">Close deal</button>
+              </div>
             </section>
           </div>
         </section>
@@ -1048,6 +1064,14 @@
 
             <section class="plain-panel settlement-transaction-card">
               <h2 class="section-title">Settlement Transaction</h2>
+              <div class="settlement-tx-row">
+                <span>Proof ID</span>
+                <strong id="settlement-proof-id">VP-DEAL-F38BA0</strong>
+              </div>
+              <div class="settlement-tx-row">
+                <span>Settlement Hash</span>
+                <strong id="settlement-proof-settlement-hash">0x3a7dfdeb...f38ba0</strong>
+              </div>
               <div class="settlement-tx-row">
                 <span>Tx</span>
                 <strong id="settlement-proof-hash">Available after wallet confirmation</strong>

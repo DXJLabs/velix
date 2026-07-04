@@ -838,6 +838,12 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-size: .78rem;
 }
 
+.invite-link-card .secondary-action small {
+  margin: 0;
+  color: inherit;
+  font-size: .74rem;
+}
+
 .invite-form-panel {
   display: grid;
   gap: .75rem;
@@ -2042,6 +2048,56 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   font-weight: 950;
 }
 
+.timeline-detail-list {
+  display: grid;
+  gap: .45rem;
+  margin-top: .6rem;
+}
+
+.timeline-detail-list div {
+  display: grid;
+  gap: .18rem;
+  border-radius: .55rem;
+  background: rgb(248 250 252);
+  padding: .55rem;
+}
+
+.timeline-detail-list dt {
+  color: rgb(100 116 139);
+  font-size: .68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.timeline-detail-list dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(15 23 42);
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.timeline-action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .4rem;
+  margin-top: .65rem;
+}
+
+.timeline-action-row:not(.three) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.timeline-action-row.three {
+  grid-template-columns: 1fr;
+}
+
+.timeline-action-row button {
+  min-height: 2.35rem;
+  padding-inline: .45rem;
+  white-space: normal;
+}
+
 .timeline-event button {
   min-height: 2.2rem;
   border-radius: .55rem;
@@ -2948,6 +3004,18 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   white-space: nowrap;
 }
 
+.deposit-chain-meta {
+  margin-top: .25rem;
+}
+
+.deposit-chain-meta:empty {
+  display: none;
+}
+
+.deposit-chain-meta .chain-meta {
+  margin-top: 0;
+}
+
 .escrow-checks {
   display: grid;
   gap: .6rem;
@@ -3270,6 +3338,45 @@ button[aria-busy="true"]::after {
   color: rgb(71 85 105);
   font-weight: 700;
   line-height: 1.45;
+}
+
+.settlement-proof-summary {
+  display: grid;
+  gap: .55rem;
+  text-align: left;
+}
+
+.settlement-proof-summary div {
+  display: grid;
+  gap: .2rem;
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .72rem;
+}
+
+.settlement-proof-summary span {
+  color: rgb(100 116 139);
+  font-size: .72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.settlement-proof-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(15 23 42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.settlement-action-grid {
+  display: grid;
+  gap: .55rem;
+}
+
+.settlement-action-grid .secondary-action {
+  width: 100%;
 }
 
 .toast {
