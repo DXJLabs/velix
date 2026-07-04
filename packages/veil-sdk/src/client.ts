@@ -156,7 +156,7 @@ export class VeilClient {
       amount: input.amount,
       ...(input.currency ? { currency: input.currency } : {}),
       ...(input.terms ? { terms: input.terms } : {}),
-      sender: input.sender ?? "you",
+      sender: input.sender ?? "seller",
     }, input.mode ?? "unshield", input.privacyPool);
   }
 

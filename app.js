@@ -990,42 +990,76 @@ async function createDealChannel({ inviteOnly = false } = {}) {
   const requiresInvite = inviteOnly || lookup.status !== "available";
   const person = lookup.displayName;
   const dealId = nextDealId();
-  const channel = createLocalChannelModel({
-    title: newDealTitleValue(),
-    person,
-    status: requiresInvite ? "Waiting for Counterparty" : "Waiting for Bob",
-    last: requiresInvite ? "Invite link generated" : "Deal request sent",
-    invited: requiresInvite,
-    pendingJoin: true,
-    counterpartyOnVeil: !requiresInvite,
-    dealId,
-  });
-  channels.unshift(channel);
-  messages[channel.id] = seedDealTimeline(channel);
-  resetDealStateForPendingChannel();
-  if (conversationSearch) conversationSearch.value = "";
-  saveLocalChannels();
-  renderConversationList();
-  openChannel(channel.id);
-
-  if (requiresInvite) {
-    showToast("Invite link ready.");
-    return;
-  }
-
+  beginChannelModal({ inviteOnly: requiresInvite, person, dealId });
+  setAppLoading("channel", requiresInvite ? "Creating Invite Link" : "Creating Deal Channel");
   try {
-    await veilClient.createChannel({
-      channelId: channel.id,
-      title: channel.title,
+    await transactionDelay(450);
+    const channel = createLocalChannelModel({
+      title: newDealTitleValue(),
+      person,
+      status: requiresInvite ? "Waiting for Counterparty" : "Waiting for Bob",
+      last: requiresInvite ? "Invite link generated" : "Deal request sent",
+      invited: requiresInvite,
+      pendingJoin: true,
+      counterpartyOnVeil: !requiresInvite,
+      dealId,
     });
-    showToast(`${dealId} created. Waiting for Bob.`);
+    channels.unshift(channel);
+    messages[channel.id] = seedDealTimeline(channel);
+    resetDealStateForPendingChannel();
+    if (conversationSearch) conversationSearch.value = "";
+    saveLocalChannels();
+    renderConversationList();
+    openChannel(channel.id);
+
+    if (requiresInvite) {
+      await transactionDelay(550);
+      clearAppLoading("channel");
+      finishChannelModal({
+        title: "Invite Link Ready",
+        subtitle: `${dealId} is waiting for ${person}.`,
+      });
+      return;
+    }
+
+    setTransactionModal({
+      subtitle: "Sending private deal request.",
+      detail: `Waiting for ${person} to accept...`,
+    });
+    try {
+      await veilClient.createChannel({
+        channelId: channel.id,
+        title: channel.title,
+      });
+      clearAppLoading("channel");
+      finishChannelModal({
+        title: "Deal Channel Created",
+        subtitle: `${dealId} is waiting for ${person}.`,
+      });
+    } catch (error) {
+      veilError("channel.create.failed", error, {
+        where: "createDealChannel",
+        channelId: channel.id,
+        howToFix: "Confirm wallet connection and helper transport before creating a production on-chain channel.",
+      });
+      clearAppLoading("channel");
+      finishChannelModal({
+        title: "Deal Saved",
+        subtitle: `${dealId} is waiting for ${person}.`,
+      });
+    }
   } catch (error) {
     veilError("channel.create.failed", error, {
       where: "createDealChannel",
-      channelId: channel.id,
+      channelId: "local",
       howToFix: "Confirm wallet connection and helper transport before creating a production on-chain channel.",
     });
-    showToast(`${dealId} saved locally. Waiting for Bob.`);
+    clearAppLoading("channel");
+    failChannelModal({
+      title: "Channel Setup Failed",
+      subtitle: "Unable to create this deal channel.",
+      detail: error?.message || "Retry channel creation.",
+    });
   }
 }
 
@@ -2509,6 +2543,46 @@ function beginWalletModal() {
   });
 }
 
+function beginChannelModal({ inviteOnly = false, person = "Bob", dealId = "" } = {}) {
+  clearTimeout(transactionModalTimer);
+  const title = inviteOnly ? "Creating Invite Link" : "Creating Deal Channel";
+  setTransactionModal({
+    visible: true,
+    stage: "channel",
+    actionLabel: title,
+    title,
+    subtitle: inviteOnly ? "Generating private invitation." : "Preparing private deal channel.",
+    detail: inviteOnly ? "Creating invite..." : "Creating channel...",
+    successTitle: inviteOnly ? "Invite Link Ready" : "Deal Channel Created",
+    successSubtitle: inviteOnly
+      ? `${dealId || "Deal"} is waiting for ${person}.`
+      : `Waiting for ${person} to accept.`,
+    txHash: "",
+  });
+}
+
+function finishChannelModal({ title, subtitle, detail = "" } = {}) {
+  updateTransactionModalStage("success", {
+    title: title || state.transactionModal.successTitle,
+    subtitle: subtitle || state.transactionModal.successSubtitle,
+    detail,
+    txHash: "",
+  });
+  clearTimeout(transactionModalTimer);
+  transactionModalTimer = setTimeout(() => {
+    setTransactionModal({ visible: false, stage: "idle", txHash: "" });
+  }, 1200);
+}
+
+function failChannelModal({ title = "Channel Setup Failed", subtitle = "Unable to finish this channel setup.", detail = "Retry the action." } = {}) {
+  clearTimeout(transactionModalTimer);
+  updateTransactionModalStage("error", {
+    title,
+    subtitle,
+    detail,
+  });
+}
+
 function updateWalletModalStage(step, details = {}) {
   const stageCopy = {
     connecting: {
@@ -2680,7 +2754,7 @@ function setAppLoading(action, message) {
   state.loadingAction = action;
   state.loadingMessage = message || "Processing...";
   renderLoadingState();
-  if (action === "transaction" || action === "wallet") {
+  if (action === "transaction" || action === "wallet" || action === "channel") {
     hideToastIfLoading();
     return;
   }
@@ -2721,11 +2795,13 @@ function setBusyButtons(selector, busy) {
 function renderLoadingState() {
   const walletBusy = state.loadingAction === "wallet" || isWalletInitializationPending();
   const transactionBusy = state.loadingAction === "transaction";
-  const busy = walletBusy || transactionBusy;
+  const channelBusy = state.loadingAction === "channel";
+  const busy = walletBusy || transactionBusy || channelBusy;
 
   document.body.classList.toggle("app-loading", busy);
   document.body.dataset.loadingMessage = state.loadingMessage || "";
   setBusyButtons("[data-connect-wallet], [data-refresh-wallet]", walletBusy);
+  setBusyButtons("[data-new-deal-action]", channelBusy);
   setBusyButtons([
     "[data-offer-review-sign]",
     "[data-payment-review-sign]",
@@ -2936,10 +3012,12 @@ function timelinePayloadToFeedItem(item, payload) {
   }
 
   if (payload.kind === "offer" || payload.kind === "counter_offer") {
+    const counterOffer = payload.kind === "counter_offer";
     return {
       ...base,
       type: "offer",
-      title: payload.kind === "counter_offer" ? "Counter offer" : "Offer",
+      title: counterOffer ? "Bob created a counter offer" : "Alice created an offer",
+      actor: counterOffer ? "Bob" : "Alice",
       amount: `${payload.amount}${payload.currency ? ` ${payload.currency}` : ""}`,
       subtitle: payload.terms || "Private terms",
     };
@@ -4657,12 +4735,12 @@ async function counterOffer() {
       currency: "STRK",
       terms,
       mode: transactionTransportMode(offerPrivacyMode()),
-      sender: "you",
+      sender: "seller",
     }),
     {
       type: "offer",
-      title: "Alice created a counter offer",
-      actor: "Alice",
+      title: "Bob created a counter offer",
+      actor: "Bob",
       amount: amountLabel,
       subtitle: asset,
       time: Date.now(),
@@ -4680,9 +4758,10 @@ async function counterOffer() {
   state.escrowDeposits = { buyer: false, seller: false };
   state.escrowConfirmations = { buyer: false, seller: false };
   state.escrowReleased = false;
-  state.negotiationStep = "waiting";
+  state.negotiationStep = "decision";
   state.latestOfferAmount = amountLabel;
   currentChannel().status = "Negotiation Active";
+  currentChannel().last = `Bob created a counter offer`;
   renderDeal();
   renderWorkflowProgress();
 }
