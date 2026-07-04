@@ -178,22 +178,10 @@ function settlementProofMeta(channel = currentChannel?.()) {
   };
 }
 
-function bobIdentityDetails(name = BOB_IDENTITY) {
-  const identity = String(name || BOB_IDENTITY).toLowerCase().endsWith(".stark")
+function starkIdentityName(name = BOB_IDENTITY) {
+  return String(name || BOB_IDENTITY).toLowerCase().endsWith(".stark")
     ? String(name || BOB_IDENTITY).toLowerCase()
     : `${String(name || "bob").toLowerCase()}.stark`;
-  return [
-    ["Identity", identity],
-    ["Wallet Connected", BOB_WALLET_SHORT],
-    ["Status", "Shielded Identity Verified"],
-  ];
-}
-
-function inviteAcceptedDetails() {
-  return [
-    ["Invite Status", "Accepted"],
-    ["Reuse", "This invite can no longer be used."],
-  ];
 }
 
 function confirmedTimelineMeta(seed, offset = 0) {
@@ -280,10 +268,9 @@ const messages = {
   [activeDealId]: [
     {
       type: "event",
-      title: "Invitation accepted",
-      subtitle: "bob.stark joined.",
+      title: "bob.stark joined the deal",
+      subtitle: "Invite accepted by bob.stark.",
       actor: "Bob",
-      details: bobIdentityDetails(),
       time: now - 52 * minute,
       ...confirmedTimelineMeta("bob-joined", 0),
     },
@@ -294,15 +281,6 @@ const messages = {
       actor: "System",
       time: now - 51 * minute,
       ...confirmedTimelineMeta("ecdh-session-established", 1),
-    },
-    {
-      type: "event",
-      title: "Invite Status",
-      subtitle: "Accepted. This invite can no longer be used.",
-      actor: "System",
-      details: inviteAcceptedDetails(),
-      time: now - 50 * minute,
-      ...confirmedTimelineMeta("invite-accepted-expired", 2),
     },
     {
       type: "message",
@@ -1087,14 +1065,14 @@ async function acceptPendingCounterparty(channel = currentChannel()) {
     resetDealStateForPendingChannel();
     state.channelId = channel.id;
     messages[channel.id] ||= [];
+    const identity = starkIdentityName(channel.person);
     messages[channel.id].push({
       type: "event",
-      title: "Invitation accepted",
-      subtitle: `${channel.person} joined.`,
+      title: `${identity} joined the deal`,
+      subtitle: `Invite accepted by ${identity}.`,
       time: Date.now(),
       offchain: true,
       actor: channel.person,
-      details: bobIdentityDetails(channel.person),
       ...confirmedTimelineMeta(`${channel.id}-accepted`, 12),
     });
     messages[channel.id].push({
@@ -1105,16 +1083,6 @@ async function acceptPendingCounterparty(channel = currentChannel()) {
       offchain: true,
       actor: "System",
       ...confirmedTimelineMeta(`${channel.id}-ecdh`, 13),
-    });
-    messages[channel.id].push({
-      type: "event",
-      title: "Invite Status",
-      subtitle: "Accepted. This invite can no longer be used.",
-      time: Date.now() + 2,
-      offchain: true,
-      actor: "System",
-      details: inviteAcceptedDetails(),
-      ...confirmedTimelineMeta(`${channel.id}-invite-accepted`, 14),
     });
     if (channel.invited) awardReward("inviteUserJoined");
     saveLocalChannels();
@@ -3254,9 +3222,46 @@ function renderInviteWaitingCard(channel) {
 }
 
 function renderFeedItem(item) {
+  if (isInviteMetadataEvent(item)) return "";
+  if (isInviteAcceptedEvent(item)) return renderInlineEvent(compactInviteAcceptedEvent(item));
   if (item.type === "message") return renderMessage(item);
   if (item.type === "offer") return renderOfferCard(item);
   return renderInlineEvent(item);
+}
+
+function isInviteMetadataEvent(item = {}) {
+  const title = String(item.title || "").trim().toLowerCase();
+  const subtitle = String(item.subtitle || "").trim().toLowerCase();
+  const detailLabels = Array.isArray(item.details)
+    ? item.details.map(([label]) => String(label || "").trim().toLowerCase())
+    : [];
+  return title === "invite status"
+    || (subtitle.includes("invite can no longer be used") && detailLabels.includes("reuse"));
+}
+
+function isInviteAcceptedEvent(item = {}) {
+  const title = String(item.title || "").trim().toLowerCase();
+  const subtitle = String(item.subtitle || "").trim().toLowerCase();
+  return title === "invitation accepted"
+    || (title.includes("joined the deal") && subtitle.includes("invite accepted"));
+}
+
+function compactInviteAcceptedEvent(item = {}) {
+  const identityFromSubtitle = String(item.subtitle || "").match(/[a-z0-9._-]+\.stark/i)?.[0];
+  const identity = starkIdentityName(identityFromSubtitle || item.actor || item.sender || BOB_IDENTITY);
+  const {
+    details,
+    inviteLink,
+    channelActions,
+    proofId,
+    settlementHash,
+    ...compactItem
+  } = item;
+  return {
+    ...compactItem,
+    title: `${identity} joined the deal`,
+    subtitle: `Invite accepted by ${identity}.`,
+  };
 }
 
 function renderMessage(item) {
