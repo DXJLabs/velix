@@ -1743,6 +1743,23 @@ body:has(.bottom-nav:not(.hidden-nav)) .app-shell {
   white-space: nowrap;
 }
 
+.channel-security-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .32rem;
+  margin-top: .5rem;
+}
+
+.channel-security-badges span {
+  border-radius: 999px;
+  background: rgb(236 253 245);
+  padding: .2rem .45rem;
+  color: rgb(4 120 87);
+  font-size: .68rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
 .timeline-day {
   display: flex;
   justify-content: center;

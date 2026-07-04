@@ -642,7 +642,7 @@
             </button>
             <button class="min-w-0 flex-1 text-left" type="button" data-open-route="deal">
               <h1 id="channel-title" class="truncate text-base font-black">Rights Transfer</h1>
-              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Bob - Negotiation completed</p>
+              <p id="channel-meta" class="mt-0.5 truncate text-xs font-bold text-slate-500">Deal #381 · Bob - Escrow Active</p>
             </button>
             <button class="icon-button ghost" type="button" data-open-route="deal" aria-label="Deal menu">
               <i data-lucide="more-horizontal" class="size-5"></i>
@@ -657,8 +657,13 @@
               <strong>Shielded Chat</strong>
               <small>ECDH encrypted channel</small>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
+              <div class="channel-security-badges" aria-label="Encryption status">
+                <span>ECDH Encrypted</span>
+                <span>End-to-End</span>
+                <span>STRK20 Privacy</span>
+              </div>
             </div>
-            <span id="channel-context-status" class="status-pill waiting-deposit">Waiting Deposit</span>
+            <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
           </section>
 
           <div id="message-feed" class="message-feed"></div>
@@ -695,13 +700,14 @@
             <section id="current-offer-panel" class="deal-proposal-card">
               <div class="proposal-topline">
                 <span class="eyebrow">Current Offer</span>
-                <span id="deal-status" class="status-pill negotiating">Negotiating</span>
+                <span id="deal-status" class="status-pill escrow-active">Escrow Active</span>
               </div>
               <div class="proposal-amount-block">
                 <div class="proposal-amount" id="deal-price">450 STRK</div>
                 <small id="deal-fiat-estimate">≈ $315.00</small>
               </div>
               <div class="deal-info-grid">
+                <div><span>Deal ID</span><strong id="deal-id">Deal #381</strong></div>
                 <div><span>Counterparty</span><strong>Bob</strong></div>
                 <div><span>Asset</span><strong>Rights Transfer</strong></div>
                 <div><span>Turn</span><strong id="deal-turn-label">Your Decision</strong></div>
@@ -798,9 +804,9 @@
               <div>
                 <p class="eyebrow">Channel</p>
                 <h2>Rights Transfer</h2>
-                <small>Alice / Bob</small>
+                <small id="escrow-channel-meta">Deal #381 · Alice / Bob</small>
               </div>
-              <span id="escrow-channel-status" class="status-pill waiting-deposit">Waiting Deposit</span>
+              <span id="escrow-channel-status" class="status-pill escrow-active">Escrow Active</span>
             </section>
 
             <section class="plain-panel">
@@ -994,6 +1000,10 @@
               <p>Proof generated and attached to the deal.</p>
               <div class="settlement-proof-summary">
                 <div>
+                  <span>Deal ID</span>
+                  <strong id="settlement-complete-deal-id">Deal #381</strong>
+                </div>
+                <div>
                   <span>Proof ID</span>
                   <strong id="settlement-complete-proof-id">VP-DEAL-F38BA0</strong>
                 </div>
@@ -1028,7 +1038,7 @@
               <div>
                 <p class="eyebrow">Settlement Complete</p>
                 <h2 id="settlement-proof-title">Rights Transfer</h2>
-                <small id="settlement-proof-parties">Alice <span>&lt;-&gt;</span> Bob</small>
+                <small id="settlement-proof-parties">Deal #381 <span>·</span> Alice <span>&lt;-&gt;</span> Bob</small>
               </div>
             </section>
 

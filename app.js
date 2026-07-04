@@ -50,6 +50,7 @@ const privyStarknetRpcUrl = reliableRpcUrl(
 const CHAT_DISPLAY_MODE = "shield";
 const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const DEAL_OFFER_AMOUNT = "450 STRK";
+const ACTIVE_DEAL_LABEL = "Deal #381";
 const PAYMENT_RECIPIENT = "Bob";
 const STRK_SYMBOL = "STRK";
 const BOB_IDENTITY = "bob.stark";
@@ -148,12 +149,7 @@ function reliableRpcUrl(url, fallback) {
 }
 
 function demoTxHash(seed) {
-  const text = String(seed || "veil");
-  let hash = 0;
-  for (let index = 0; index < text.length; index += 1) {
-    hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
-  }
-  return `mock-${hash.toString(16).padStart(8, "0")}`;
+  return deterministicHex(`tx:${seed}`, 64);
 }
 
 function deterministicHex(seed, length = 64) {
@@ -174,7 +170,7 @@ function deterministicHex(seed, length = 64) {
 }
 
 function settlementProofMeta(channel = currentChannel?.()) {
-  const source = channel?.dealId || channel?.id || state?.channelId || activeDealId;
+  const source = currentDealId(channel);
   const hash = deterministicHex(`settlement:${source}`, 64);
   return {
     proofId: `VP-${String(source).replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase() || "DEAL"}-${hash.slice(2, 8).toUpperCase()}`,
@@ -228,6 +224,7 @@ const channels = [
     person: "Bob",
     avatar: "B",
     mode: "Private",
+    dealId: ACTIVE_DEAL_LABEL,
     status: "Escrow Active",
     unread: 2,
     time: "9:41 AM",
@@ -440,7 +437,7 @@ const state = {
   proofExported: false,
   inviteCode: "8Hsj3K",
   inviteFormOpen: false,
-  dealSequence: 381,
+  dealSequence: 382,
 };
 
 let toastTimer;
@@ -748,6 +745,10 @@ async function mountPrivy() {
 
 function currentChannel() {
   return channels.find((channel) => channel.id === state.channelId) || channels[0];
+}
+
+function currentDealId(channel = currentChannel()) {
+  return channel?.dealId || ACTIVE_DEAL_LABEL;
 }
 
 function channelMessages() {
@@ -2442,8 +2443,15 @@ function transactionExplorerUrl(txHash) {
   return `${STARKNET_SEPOLIA_EXPLORER_URL}/tx/${encodeURIComponent(txHash)}`;
 }
 
-function shortHash(value) {
+function displayTransactionHash(value) {
   const text = String(value || "");
+  if (!text) return "";
+  if (text.startsWith("mock-")) return deterministicHex(`legacy:${text}`, 64);
+  return text;
+}
+
+function shortHash(value) {
+  const text = displayTransactionHash(value);
   if (!text) return "";
   return text.length > 18 ? `${text.slice(0, 10)}...${text.slice(-6)}` : text;
 }
@@ -2465,11 +2473,12 @@ function transactionStatusInfo(item) {
 
 function renderTransactionLink(item) {
   const txUrl = transactionExplorerUrl(item.txHash);
+  const displayHash = displayTransactionHash(item.txHash);
   if (!txUrl) {
-    const title = item.txHash ? `Transaction hash: ${item.txHash}` : "Transaction hash is not available yet";
+    const title = displayHash ? `Transaction hash: ${displayHash}` : "Transaction hash is not available yet";
     return `<a class="tx-link" href="${STARKNET_SEPOLIA_EXPLORER_URL}" target="_blank" rel="noreferrer" data-transaction-pending title="${escapeHtml(title)}">View Transaction</a>`;
   }
-  return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.txHash)}">View Transaction</a>`;
+  return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(displayHash)}">View Transaction</a>`;
 }
 
 function renderShieldBadge(statusInfo) {
@@ -2709,7 +2718,7 @@ function renderChannel() {
   const channel = currentChannel();
   const waitingForCounterparty = channelRequiresJoin(channel);
   document.querySelector("#channel-title").textContent = channel.title;
-  document.querySelector("#channel-meta").textContent = `${channel.person} - ${channel.status}`;
+  document.querySelector("#channel-meta").textContent = `${currentDealId(channel)} · ${channel.person} - ${channel.status}`;
   const contextTitle = document.querySelector("#channel-context-title");
   const contextParty = document.querySelector("#channel-context-party");
   const contextStatus = document.querySelector("#channel-context-status");
@@ -3323,6 +3332,7 @@ function renderDeal() {
   const offerProof = document.querySelector("#deal-offer-proof");
   const activityItem = currentOfferProofItem();
   renderDealTransactionSummary();
+  setElementText("#deal-id", currentDealId());
   if (currentOfferPanel) currentOfferPanel.hidden = !hasActiveOffer;
   if (offerHistoryPanel) offerHistoryPanel.hidden = !hasActiveOffer;
   if (nextStepPanel) nextStepPanel.hidden = !hasActiveOffer || editingOffer;
@@ -3425,6 +3435,7 @@ function renderEscrow() {
 
   setElementText("#escrow-page-eyebrow", fundingComplete ? "Escrow Confirmation" : "Escrow Funding");
   setElementText("#escrow-page-title", title);
+  setElementText("#escrow-channel-meta", `${currentDealId()} · Alice / Bob`);
   setElementText("#escrow-funding-step", fundingComplete ? "Funding Complete" : buyerDeposited ? "Step 2 of 2" : "Step 1 of 2");
   setElementText("#escrow-funding-copy", fundingCopy);
   setElementText("#escrow-buyer-protocol-fee", escrowFee.protocolFeeLabel);
@@ -3693,7 +3704,7 @@ function renderWallet() {
         ? state.privyAccount && !state.privyAccountDeployed
           ? "Account funding needed"
           : state.helperVerified ? "Verified" : "Check required"
-        : "Mock demo";
+        : "Demo session";
   const walletTitle = document.querySelector("#wallet-state-title");
   const walletSubtitle = document.querySelector("#wallet-state-subtitle");
   const walletStatus = document.querySelector("#wallet-status-pill");
@@ -3905,6 +3916,7 @@ function clearLocalVeilCache() {
 
 function renderSettlement() {
   const proof = settlementProofMeta();
+  setElementText("#settlement-complete-deal-id", currentDealId());
   setElementText("#settlement-complete-proof-id", proof.proofId);
   setElementText("#settlement-complete-hash", proof.settlementHash);
 }
@@ -3988,7 +4000,7 @@ function renderProof() {
   const proofLink = document.querySelector("#settlement-proof-link");
 
   setElementText("#settlement-proof-title", directPaymentProof ? "Trusted Transfer" : currentChannel().title || "Rights Transfer");
-  setElementText("#settlement-proof-parties", "Alice <-> Bob");
+  setElementText("#settlement-proof-parties", `${currentDealId()} · Alice <-> Bob`);
   const proof = settlementProofMeta();
   setElementText("#settlement-proof-id", proof.proofId);
   setElementText("#settlement-proof-settlement-hash", proof.settlementHash);
