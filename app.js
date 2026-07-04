@@ -1069,72 +1069,109 @@ function channelRequiresJoin(channel = currentChannel()) {
   return Boolean(channel.pendingJoin || status.includes("waiting for counterparty") || status.includes("waiting for bob"));
 }
 
-function acceptPendingCounterparty(channel = currentChannel()) {
+async function acceptPendingCounterparty(channel = currentChannel()) {
   if (!channel || !channelRequiresJoin(channel)) return;
-  channel.pendingJoin = false;
-  channel.status = "Negotiation Active";
-  channel.last = `${channel.person} joined the deal`;
-  channel.time = "now";
-  resetDealStateForPendingChannel();
-  state.channelId = channel.id;
-  messages[channel.id] ||= [];
-  messages[channel.id].push({
-    type: "event",
-    title: "Invitation accepted",
-    subtitle: `${channel.person} joined.`,
-    time: Date.now(),
-    offchain: true,
-    actor: channel.person,
-    details: bobIdentityDetails(channel.person),
-    ...confirmedTimelineMeta(`${channel.id}-accepted`, 12),
-  });
-  messages[channel.id].push({
-    type: "event",
-    title: "Secure channel established",
-    subtitle: "ECDH key exchange completed. Shielded messaging enabled.",
-    time: Date.now() + 1,
-    offchain: true,
-    actor: "System",
-    ...confirmedTimelineMeta(`${channel.id}-ecdh`, 13),
-  });
-  messages[channel.id].push({
-    type: "event",
-    title: "Invite Status",
-    subtitle: "Accepted. This invite can no longer be used.",
-    time: Date.now() + 2,
-    offchain: true,
-    actor: "System",
-    details: inviteAcceptedDetails(),
-    ...confirmedTimelineMeta(`${channel.id}-invite-accepted`, 14),
-  });
-  if (channel.invited) awardReward("inviteUserJoined");
-  saveLocalChannels();
-  renderConversationList();
-  renderChannel();
-  renderWorkflowProgress();
-  showToast(`${channel.person} accepted the deal.`);
+  beginCounterpartyDecisionModal({ accepting: true, person: channel.person });
+  setAppLoading("channel", "Accepting Invitation");
+  try {
+    await transactionDelay(360);
+    setTransactionModal({
+      subtitle: "Creating secure channel.",
+      detail: "Enabling shielded messaging...",
+    });
+    await transactionDelay(520);
+    channel.pendingJoin = false;
+    channel.status = "Negotiation Active";
+    channel.last = `${channel.person} joined the deal`;
+    channel.time = "now";
+    resetDealStateForPendingChannel();
+    state.channelId = channel.id;
+    messages[channel.id] ||= [];
+    messages[channel.id].push({
+      type: "event",
+      title: "Invitation accepted",
+      subtitle: `${channel.person} joined.`,
+      time: Date.now(),
+      offchain: true,
+      actor: channel.person,
+      details: bobIdentityDetails(channel.person),
+      ...confirmedTimelineMeta(`${channel.id}-accepted`, 12),
+    });
+    messages[channel.id].push({
+      type: "event",
+      title: "Secure channel established",
+      subtitle: "ECDH key exchange completed. Shielded messaging enabled.",
+      time: Date.now() + 1,
+      offchain: true,
+      actor: "System",
+      ...confirmedTimelineMeta(`${channel.id}-ecdh`, 13),
+    });
+    messages[channel.id].push({
+      type: "event",
+      title: "Invite Status",
+      subtitle: "Accepted. This invite can no longer be used.",
+      time: Date.now() + 2,
+      offchain: true,
+      actor: "System",
+      details: inviteAcceptedDetails(),
+      ...confirmedTimelineMeta(`${channel.id}-invite-accepted`, 14),
+    });
+    if (channel.invited) awardReward("inviteUserJoined");
+    saveLocalChannels();
+    renderConversationList();
+    renderChannel();
+    renderWorkflowProgress();
+    clearAppLoading("channel");
+    finishChannelModal({
+      title: "Invitation Accepted",
+      subtitle: `${channel.person} joined. Secure channel established.`,
+    });
+  } catch (error) {
+    clearAppLoading("channel");
+    failChannelModal({
+      title: "Invitation Failed",
+      subtitle: "Unable to accept this deal request.",
+      detail: error?.message || "Retry accepting the invitation.",
+    });
+  }
 }
 
-function declinePendingCounterparty(channel = currentChannel()) {
+async function declinePendingCounterparty(channel = currentChannel()) {
   if (!channel || !channelRequiresJoin(channel)) return;
-  channel.pendingJoin = false;
-  channel.status = "Declined";
-  channel.last = `${channel.person} declined the deal`;
-  channel.time = "now";
-  messages[channel.id] ||= [];
-  messages[channel.id].push({
-    type: "event",
-    title: `${channel.person} declined the deal`,
-    subtitle: "Deal request closed.",
-    time: Date.now(),
-    offchain: true,
-    actor: channel.person,
-    ...confirmedTimelineMeta(`${channel.id}-declined`, 12),
-  });
-  saveLocalChannels();
-  renderConversationList();
-  renderChannel();
-  showToast("Deal request declined.");
+  beginCounterpartyDecisionModal({ accepting: false, person: channel.person });
+  setAppLoading("channel", "Declining Request");
+  try {
+    await transactionDelay(520);
+    channel.pendingJoin = false;
+    channel.status = "Declined";
+    channel.last = `${channel.person} declined the deal`;
+    channel.time = "now";
+    messages[channel.id] ||= [];
+    messages[channel.id].push({
+      type: "event",
+      title: `${channel.person} declined the deal`,
+      subtitle: "Deal request closed.",
+      time: Date.now(),
+      offchain: true,
+      actor: channel.person,
+      ...confirmedTimelineMeta(`${channel.id}-declined`, 12),
+    });
+    saveLocalChannels();
+    renderConversationList();
+    renderChannel();
+    clearAppLoading("channel");
+    finishChannelModal({
+      title: "Request Declined",
+      subtitle: "Deal request closed.",
+    });
+  } catch (error) {
+    clearAppLoading("channel");
+    failChannelModal({
+      title: "Decline Failed",
+      subtitle: "Unable to close this request.",
+      detail: error?.message || "Retry declining the request.",
+    });
+  }
 }
 
 function getWallet() {
@@ -2411,7 +2448,6 @@ function showToast(message, options = {}) {
 }
 
 function hideToastIfLoading() {
-  if (toast.dataset.sticky !== "true") return;
   clearTimeout(toastTimer);
   toast.classList.remove("visible");
   toast.dataset.sticky = "false";
@@ -2580,6 +2616,22 @@ function failChannelModal({ title = "Channel Setup Failed", subtitle = "Unable t
     title,
     subtitle,
     detail,
+  });
+}
+
+function beginCounterpartyDecisionModal({ accepting = true, person = "Bob" } = {}) {
+  clearTimeout(transactionModalTimer);
+  const title = accepting ? "Accepting Invitation" : "Declining Request";
+  setTransactionModal({
+    visible: true,
+    stage: "channel",
+    actionLabel: title,
+    title,
+    subtitle: accepting ? `${person} is joining the private deal.` : `Closing the request from ${person}.`,
+    detail: accepting ? "Verifying shielded identity..." : "Updating deal status...",
+    successTitle: accepting ? "Invitation Accepted" : "Request Declined",
+    successSubtitle: accepting ? "Secure channel established." : "Deal request closed.",
+    txHash: "",
   });
 }
 
