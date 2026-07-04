@@ -414,6 +414,18 @@ const state = {
   walletInitTraceId: "",
   loadingAction: "",
   loadingMessage: "",
+  transactionModal: {
+    visible: false,
+    stage: "idle",
+    actionLabel: "Signing Transaction",
+    title: "Confirm in Wallet",
+    subtitle: "Please approve this transaction in your Starknet wallet.",
+    detail: "Waiting for wallet signature...",
+    progress: 0,
+    successTitle: "Transaction Successful",
+    successSubtitle: "Timeline updated.",
+    txHash: "",
+  },
   walletAssetBalances: createDefaultWalletAssetBalances(),
   walletAssetSyncKey: "",
   walletAssetSyncStatus: "idle",
@@ -442,6 +454,7 @@ const state = {
 
 let toastTimer;
 let walletInitTimer;
+let transactionModalTimer;
 let directTransport;
 let transactionSubmitInFlight = false;
 let encryptionConfigWarningShown = false;
@@ -460,6 +473,7 @@ const composerForm = document.querySelector("#composer-form");
 const messageInput = document.querySelector("#message-input");
 const attachmentInput = document.querySelector("#attachment-input");
 const toast = document.querySelector("#toast");
+const transactionLoadingModal = document.querySelector("#transaction-loading-modal");
 const offerReviewModal = document.querySelector("#offer-review-modal");
 const paymentReviewModal = document.querySelector("#payment-review-modal");
 const escrowReviewModal = document.querySelector("#escrow-review-modal");
@@ -2308,6 +2322,7 @@ async function connectWallet(options = {}) {
     account,
     ...(readProvider ? { provider: readProvider } : {}),
     storePayloadChunks: onchainPayloads,
+    onTransactionSubmitted: handleTransactionSubmitted,
   });
   veilClient = createClient(directTransport);
 
@@ -2360,10 +2375,245 @@ function hideToastIfLoading() {
   toast.dataset.sticky = "false";
 }
 
+function transactionDelay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function inferTransactionOverlayCopy(localItem = {}, success = "") {
+  const label = `${localItem.title || ""} ${localItem.subtitle || ""} ${localItem.body || ""}`.toLowerCase();
+  const amount = localItem.amount || currentDealOfferAmount();
+
+  if (localItem.type === "message") {
+    return {
+      actionLabel: "Sending Message",
+      successTitle: "Shielded Message Sent",
+      successSubtitle: "ECDH encrypted message stored.",
+    };
+  }
+
+  if (label.includes("alice deposited")) {
+    return {
+      actionLabel: `Locking ${amount}`,
+      successTitle: "Shielded Deposit Successful",
+      successSubtitle: `${amount} locked in escrow.`,
+    };
+  }
+
+  if (label.includes("bob locked") || label.includes("asset secured")) {
+    return {
+      actionLabel: "Locking Asset",
+      successTitle: "Shielded Asset Locked",
+      successSubtitle: "Rights Package NFT locked in escrow.",
+    };
+  }
+
+  if (label.includes("approved release")) {
+    return {
+      actionLabel: "Approving Release",
+      successTitle: "Release Approved",
+      successSubtitle: "Approval recorded in the shielded channel.",
+    };
+  }
+
+  if (label.includes("assets released")) {
+    return {
+      actionLabel: "Releasing Assets",
+      successTitle: "Assets Released",
+      successSubtitle: "450 STRK to Bob. NFT to Alice.",
+    };
+  }
+
+  if (label.includes("accepted")) {
+    return {
+      actionLabel: "Accepting Proposal",
+      successTitle: "Proposal Accepted",
+      successSubtitle: "Escrow contract created.",
+    };
+  }
+
+  if (label.includes("counter")) {
+    return {
+      actionLabel: "Creating Counter Offer",
+      successTitle: "Counter Offer Sent",
+      successSubtitle: `${amount} recorded in the private channel.`,
+    };
+  }
+
+  if (label.includes("offer")) {
+    return {
+      actionLabel: "Creating Offer",
+      successTitle: "Offer Created",
+      successSubtitle: `${amount} recorded in the private channel.`,
+    };
+  }
+
+  if (label.includes("payment")) {
+    return {
+      actionLabel: "Sending Payment",
+      successTitle: "Shielded Payment Sent",
+      successSubtitle: "Payment memo stored in the private channel.",
+    };
+  }
+
+  return {
+    actionLabel: "Signing Transaction",
+    successTitle: success ? success.replace(/\.$/, "") : "Transaction Successful",
+    successSubtitle: "Timeline updated.",
+  };
+}
+
+function setTransactionModal(updates = {}) {
+  Object.assign(state.transactionModal, updates);
+  renderTransactionModal();
+}
+
+function beginTransactionModal(localItem, success, options = {}) {
+  clearTimeout(transactionModalTimer);
+  const copy = {
+    ...inferTransactionOverlayCopy(localItem, success),
+    ...options,
+  };
+  setTransactionModal({
+    visible: true,
+    stage: "preparing",
+    actionLabel: copy.actionLabel,
+    title: "Preparing Transaction",
+    subtitle: "Preparing secure Starknet transaction details.",
+    detail: "Checking channel state...",
+    progress: 16,
+    successTitle: copy.successTitle,
+    successSubtitle: copy.successSubtitle,
+    txHash: "",
+  });
+}
+
+function updateTransactionModalStage(stage, updates = {}) {
+  const stageDefaults = {
+    preparing: {
+      title: "Preparing Transaction",
+      subtitle: "Preparing secure Starknet transaction details.",
+      detail: "Checking channel state...",
+      progress: 18,
+    },
+    network: {
+      title: "Checking Network",
+      subtitle: "Verifying Starknet connection before signing.",
+      detail: "Checking network and contract status...",
+      progress: 24,
+    },
+    signing: {
+      title: "Confirm in Wallet",
+      subtitle: "Please approve this transaction in your Starknet wallet.",
+      detail: "Waiting for wallet signature...",
+      progress: 36,
+    },
+    broadcasting: {
+      title: "Transaction Submitted",
+      subtitle: "Broadcasting to Starknet...",
+      detail: "Broadcasting transaction...",
+      progress: 76,
+    },
+    success: {
+      title: state.transactionModal.successTitle,
+      subtitle: state.transactionModal.successSubtitle,
+      detail: "Transaction successful.",
+      progress: 100,
+    },
+    error: {
+      title: "Transaction Failed",
+      subtitle: "The transaction was not completed.",
+      detail: "Review the wallet or network error, then retry.",
+      progress: 100,
+    },
+  };
+
+  setTransactionModal({
+    stage,
+    ...(stageDefaults[stage] || {}),
+    ...updates,
+  });
+}
+
+function finishTransactionModal(result, updates = {}) {
+  updateTransactionModalStage("success", {
+    title: updates.successTitle || state.transactionModal.successTitle,
+    subtitle: updates.successSubtitle || state.transactionModal.successSubtitle,
+    detail: "Timeline updated.",
+    txHash: result?.transactionHash || "",
+    progress: 100,
+  });
+  clearTimeout(transactionModalTimer);
+  transactionModalTimer = setTimeout(() => {
+    setTransactionModal({ visible: false, stage: "idle", txHash: "" });
+  }, 1800);
+}
+
+function failTransactionModal(errorDetails = {}) {
+  clearTimeout(transactionModalTimer);
+  updateTransactionModalStage("error", {
+    title: errorDetails.label === "Cancelled" ? "Transaction Cancelled" : "Transaction Failed",
+    subtitle: errorDetails.toast || "The transaction was not completed.",
+    detail: errorDetails.why || "Review the wallet or network error, then retry.",
+    progress: 100,
+  });
+}
+
+function handleTransactionSubmitted(transactionHash) {
+  if (!state.transactionModal.visible || state.transactionModal.stage === "success" || state.transactionModal.stage === "error") return;
+  updateTransactionModalStage("broadcasting", {
+    txHash: transactionHash || "",
+  });
+}
+
+function renderTransactionModal() {
+  if (!transactionLoadingModal) return;
+  const modal = state.transactionModal;
+  transactionLoadingModal.classList.toggle("hidden", !modal.visible);
+  document.body.classList.toggle("transaction-modal-open", Boolean(modal.visible));
+  if (!modal.visible) return;
+
+  const icon = transactionLoadingModal.querySelector("#transaction-loading-icon");
+  const action = transactionLoadingModal.querySelector("#transaction-loading-action");
+  const title = transactionLoadingModal.querySelector("#transaction-loading-title");
+  const subtitle = transactionLoadingModal.querySelector("#transaction-loading-subtitle");
+  const detail = transactionLoadingModal.querySelector("#transaction-loading-detail");
+  const progress = transactionLoadingModal.querySelector("#transaction-loading-progress span");
+  const link = transactionLoadingModal.querySelector("#transaction-loading-link");
+  const cancel = transactionLoadingModal.querySelector("#transaction-loading-cancel");
+  const close = transactionLoadingModal.querySelector("#transaction-loading-close");
+  const isSuccess = modal.stage === "success";
+  const isError = modal.stage === "error";
+
+  if (action) action.textContent = modal.actionLabel || "Signing Transaction";
+  if (title) title.textContent = modal.title || "Confirm in Wallet";
+  if (subtitle) subtitle.textContent = modal.subtitle || "Please approve this transaction in your Starknet wallet.";
+  if (detail) detail.textContent = modal.detail || "Waiting for wallet signature...";
+  if (progress) progress.style.width = `${Math.max(0, Math.min(100, modal.progress || 0))}%`;
+  if (icon) {
+    icon.className = `transaction-loading-icon ${isSuccess ? "success" : isError ? "error" : "loading"}`;
+    setLucideIcon(icon, isSuccess ? "check" : isError ? "triangle-alert" : "loader-circle", "size-7");
+  }
+  if (link) {
+    const href = transactionExplorerUrl(modal.txHash);
+    link.hidden = !isSuccess || !href;
+    if (href) link.href = href;
+  }
+  if (cancel) {
+    cancel.hidden = modal.stage !== "signing";
+    cancel.textContent = "Cancel in Wallet";
+  }
+  if (close) close.hidden = !isError;
+  if (window.lucide) window.lucide.createIcons();
+}
+
 function setAppLoading(action, message) {
   state.loadingAction = action;
   state.loadingMessage = message || "Processing...";
   renderLoadingState();
+  if (action === "transaction") {
+    hideToastIfLoading();
+    return;
+  }
   showToast(state.loadingMessage, { sticky: true });
 }
 
@@ -4022,12 +4272,13 @@ function transactionTransportMode(requestedMode) {
   return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : requestedMode;
 }
 
-async function safeSubmit(action, localItem, success) {
+async function safeSubmit(action, localItem, success, overlayOptions = {}) {
   if (transactionSubmitInFlight) {
     showToast("Transaction is still processing.");
     return false;
   }
   transactionSubmitInFlight = true;
+  beginTransactionModal(localItem, success, overlayOptions);
   setAppLoading("transaction", "Preparing transaction...");
   const pendingItem = {
     ...localItem,
@@ -4045,9 +4296,15 @@ async function safeSubmit(action, localItem, success) {
           errorMessage: "Wallet connection was not completed.",
         });
         clearAppLoading("transaction", { keepToast: true });
+        failTransactionModal({
+          label: "Cancelled",
+          toast: "Wallet connection cancelled.",
+          why: "Wallet connection was not completed.",
+        });
         return false;
       }
     }
+    updateTransactionModalStage("network");
     setAppLoading("transaction", "Checking network...");
     if (timelineMode === "direct-helper" && !(await verifyHelperDeployment())) {
       updateLocalItem(pendingItem, {
@@ -4056,7 +4313,11 @@ async function safeSubmit(action, localItem, success) {
         errorMessage: "Helper contract verification failed on the configured network.",
       });
       clearAppLoading("transaction");
-      showToast("Network check failed.");
+      failTransactionModal({
+        label: "Failed",
+        toast: "Network check failed.",
+        why: "Helper contract verification failed on the configured network.",
+      });
       return false;
     }
     veilLog("info", "transaction.submit.start", {
@@ -4066,9 +4327,16 @@ async function safeSubmit(action, localItem, success) {
       eventType: localItem?.type,
     });
     updateLocalItem(pendingItem, { status: "signing" });
-    setAppLoading("transaction", "Confirm in wallet...");
+    updateTransactionModalStage("signing");
+    setAppLoading("transaction", "Confirm in Wallet");
     const result = await action();
+    if (state.transactionModal.stage !== "broadcasting") {
+      updateTransactionModalStage("broadcasting", {
+        txHash: result?.transactionHash || "",
+      });
+    }
     setAppLoading("transaction", "Submitting onchain...");
+    await transactionDelay(700);
     veilLog("info", "transaction.submit.success", {
       where: "safeSubmit",
       timelineMode,
@@ -4083,7 +4351,7 @@ async function safeSubmit(action, localItem, success) {
       time: result?.timestamp || pendingItem.time,
     });
     clearAppLoading("transaction");
-    showToast(success);
+    finishTransactionModal(result, overlayOptions);
     return true;
   } catch (error) {
     const errorDetails = classifyTransactionError(error);
@@ -4109,7 +4377,7 @@ async function safeSubmit(action, localItem, success) {
       errorMessage: errorDetails.why,
     });
     clearAppLoading("transaction");
-    showToast(errorDetails.toast);
+    failTransactionModal(errorDetails);
     return false;
   } finally {
     transactionSubmitInFlight = false;
@@ -4203,6 +4471,11 @@ async function sendChat(message) {
       mode: CHAT_DISPLAY_MODE,
     },
     "Message sent.",
+    {
+      actionLabel: "Sending Message",
+      successTitle: "Shielded Message Sent",
+      successSubtitle: "ECDH encrypted message stored.",
+    },
   );
   if (submitted) awardReward("sendMessage");
 }
@@ -4279,6 +4552,11 @@ async function createOffer() {
       time: Date.now(),
     },
     "Offer created.",
+    {
+      actionLabel: "Creating Offer",
+      successTitle: "Offer Created",
+      successSubtitle: `${amountLabel} offer recorded in the private channel.`,
+    },
   );
   if (!submitted) return;
   awardReward("createOffer");
@@ -4317,6 +4595,11 @@ async function counterOffer() {
       time: Date.now(),
     },
     "Counter sent.",
+    {
+      actionLabel: "Creating Counter Offer",
+      successTitle: "Counter Offer Sent",
+      successSubtitle: `${amountLabel} counter offer recorded in the private channel.`,
+    },
   );
   if (!submitted) return;
   awardReward("counterOffer");
@@ -4348,6 +4631,11 @@ async function acceptOffer() {
       time: Date.now(),
     },
     "Counter offer accepted.",
+    {
+      actionLabel: "Accepting Proposal",
+      successTitle: "Proposal Accepted",
+      successSubtitle: "Escrow contract created.",
+    },
   );
   if (!submitted) return;
   awardReward("acceptProposal");
@@ -4393,6 +4681,11 @@ async function sendPayment() {
       mode: state.paymentMode,
     },
     "Payment sent.",
+    {
+      actionLabel: "Sending Payment",
+      successTitle: "Shielded Payment Sent",
+      successSubtitle: `${amount} ${asset} payment recorded in the private channel.`,
+    },
   );
   if (!submitted) return;
   awardReward("directPayment");
@@ -4433,6 +4726,11 @@ async function submitEscrowDeposit(key) {
       mode: CHAT_DISPLAY_MODE,
     },
     isBuyer ? "Buyer deposit recorded." : "Seller asset locked.",
+    {
+      actionLabel: isBuyer ? `Locking ${amount}` : "Locking Asset",
+      successTitle: isBuyer ? "Shielded Deposit Successful" : "Shielded Asset Locked",
+      successSubtitle: isBuyer ? `${amount} locked in escrow.` : "Rights Package NFT locked in escrow.",
+    },
   );
   if (!submitted) return;
   state.escrowDeposits[key] = true;
@@ -4481,6 +4779,11 @@ async function approveEscrowRelease(key) {
       mode: CHAT_DISPLAY_MODE,
     },
     "Approval recorded.",
+    {
+      actionLabel: "Approving Release",
+      successTitle: "Release Approved",
+      successSubtitle: `${title}.`,
+    },
   );
   if (!submitted) return;
   state.escrowConfirmations[key] = true;
@@ -4516,6 +4819,11 @@ async function releaseEscrow() {
       time: Date.now(),
     },
     "Assets released.",
+    {
+      actionLabel: "Releasing Assets",
+      successTitle: "Assets Released",
+      successSubtitle: "450 STRK to Bob. NFT to Alice.",
+    },
   );
   if (!submitted) return;
   awardReward("escrowCompleted");
@@ -4651,6 +4959,19 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-transaction-loading-close]")) {
+      clearTimeout(transactionModalTimer);
+      setTransactionModal({ visible: false, stage: "idle", txHash: "" });
+      return;
+    }
+
+    if (event.target.closest("[data-transaction-loading-cancel]")) {
+      updateTransactionModalStage("signing", {
+        detail: "Cancel the request from your Starknet wallet to stop this transaction.",
+      });
+      return;
+    }
+
     const homeMenuToggle = event.target.closest("[data-home-menu-toggle]");
     if (homeMenuToggle) {
       const panel = document.querySelector("[data-home-menu-panel]");

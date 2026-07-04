@@ -123,6 +123,7 @@ export class DirectHelperTransport implements VeilTransport {
   readonly #provider: StarknetProviderLike | undefined;
   readonly #storePayloadChunks: boolean;
   readonly #sessionAccountResolver: DirectHelperTransportConfig["sessionAccountResolver"];
+  readonly #onTransactionSubmitted: DirectHelperTransportConfig["onTransactionSubmitted"];
   readonly #now: () => number;
   readonly #channelIdEncoder: (channelId: string) => string;
   readonly #waitForConfirmation: boolean;
@@ -136,6 +137,7 @@ export class DirectHelperTransport implements VeilTransport {
     this.#provider = config.provider;
     this.#storePayloadChunks = config.storePayloadChunks ?? true;
     this.#sessionAccountResolver = config.sessionAccountResolver;
+    this.#onTransactionSubmitted = config.onTransactionSubmitted;
     this.#now = config.now ?? (() => Date.now());
     this.#channelIdEncoder = config.channelIdEncoder ?? channelIdToFelt;
     this.#waitForConfirmation = config.waitForConfirmation ?? true;
@@ -201,6 +203,7 @@ export class DirectHelperTransport implements VeilTransport {
       optimistic: true,
     };
     item.transactionHash = transactionHash;
+    this.#onTransactionSubmitted?.(transactionHash, item);
     if (this.#waitForConfirmation) {
       const receipt = await this.#waitForReceipt(transactionHash);
       const blockNumber = extractBlockNumber(receipt);

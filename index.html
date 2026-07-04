@@ -1120,6 +1120,28 @@
 
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </div>
+    <div id="transaction-loading-modal" class="transaction-loading-modal hidden" role="dialog" aria-modal="true" aria-labelledby="transaction-loading-title" aria-describedby="transaction-loading-subtitle">
+      <div class="transaction-loading-backdrop"></div>
+      <section class="transaction-loading-card">
+        <div id="transaction-loading-icon" class="transaction-loading-icon loading">
+          <i data-lucide="loader-circle" class="size-7"></i>
+        </div>
+        <p id="transaction-loading-action" class="transaction-loading-action">Signing Transaction</p>
+        <h2 id="transaction-loading-title">Confirm in Wallet</h2>
+        <p id="transaction-loading-subtitle">Please approve this transaction in your Starknet wallet.</p>
+        <div class="transaction-loading-detail">
+          <span id="transaction-loading-detail">Waiting for wallet signature...</span>
+        </div>
+        <div id="transaction-loading-progress" class="transaction-loading-progress" aria-hidden="true">
+          <span style="width: 32%"></span>
+        </div>
+        <a id="transaction-loading-link" class="transaction-loading-link" href="https://sepolia.voyager.online" target="_blank" rel="noreferrer" hidden>
+          View Transaction ->
+        </a>
+        <button id="transaction-loading-cancel" class="secondary-action w-full" type="button" data-transaction-loading-cancel>Cancel</button>
+        <button id="transaction-loading-close" class="primary-action w-full" type="button" data-transaction-loading-close hidden>Close</button>
+      </section>
+    </div>
     <div id="offer-review-modal" class="review-modal hidden" role="dialog" aria-modal="true" aria-labelledby="offer-review-title">
       <div class="review-modal-backdrop" data-offer-review-close></div>
       <section class="review-modal-sheet">

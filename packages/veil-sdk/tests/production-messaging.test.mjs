@@ -974,6 +974,7 @@ describe("VEIL onchain transports", () => {
   });
 
   it("submits unshield helper messages and returns confirmed chain metadata", async () => {
+    let submittedCallback;
     const transport = new DirectHelperTransport({
       helperAddress: "0x123",
       account: {
@@ -997,6 +998,9 @@ describe("VEIL onchain transports", () => {
           return { status: "ACCEPTED_ON_L2", block_number: 1234 };
         },
       },
+      onTransactionSubmitted(transactionHash, item) {
+        submittedCallback = { transactionHash, item };
+      },
     });
 
     const item = await transport.invokeExternal({
@@ -1016,6 +1020,9 @@ describe("VEIL onchain transports", () => {
     });
 
     assert.equal(item.transactionHash, "0xabc");
+    assert.equal(submittedCallback.transactionHash, "0xabc");
+    assert.equal(submittedCallback.item.status, "pending");
+    assert.equal(submittedCallback.item.optimistic, true);
     assert.equal(item.status, "confirmed");
     assert.equal(item.optimistic, false);
     assert.equal(item.blockNumber, 1234);

@@ -205,6 +205,7 @@ export interface DirectHelperTransportConfig {
   sessionAccountResolver?: (session: VeilSession | undefined) => StarknetAccountLike | undefined;
   now?: () => number;
   channelIdEncoder?: (channelId: string) => string;
+  onTransactionSubmitted?: (transactionHash: string, item: TimelineItem) => void;
   waitForConfirmation?: boolean;
   confirmationTimeoutMs?: number;
   confirmationPollMs?: number;
