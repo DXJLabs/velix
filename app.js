@@ -417,11 +417,10 @@ const state = {
   transactionModal: {
     visible: false,
     stage: "idle",
-    actionLabel: "Signing Transaction",
-    title: "Confirm in Wallet",
-    subtitle: "Please approve this transaction in your Starknet wallet.",
-    detail: "Waiting for wallet signature...",
-    progress: 0,
+    actionLabel: "Connecting Wallet",
+    title: "Connecting Wallet",
+    subtitle: "Please approve the request in your wallet.",
+    detail: "Waiting for signature...",
     successTitle: "Transaction Successful",
     successSubtitle: "Timeline updated.",
     txHash: "",
@@ -1274,13 +1273,13 @@ function getPrivyBridge() {
 function walletInitLabel(status = state.walletInitState) {
   switch (status) {
     case "connecting":
-      return "Connecting wallet...";
+      return "Connecting Wallet";
     case "creating_account":
-      return "Connecting wallet...";
+      return "Creating Starknet Account";
     case "deploying":
-      return "Connecting wallet...";
+      return "Creating Starknet Account";
     case "connecting_paymaster":
-      return "Connecting Paymaster...";
+      return "Preparing Gas Sponsor";
     case "ready":
       return "Connected";
     case "failed":
@@ -1328,7 +1327,7 @@ function beginWalletInitialization(traceId) {
   clearTimeout(walletInitTimer);
   beginWalletModal();
   setWalletInitializationState("connecting", { traceId });
-  setAppLoading("wallet", "Connecting wallet...");
+  setAppLoading("wallet", "Connecting Wallet");
   walletInitTimer = setTimeout(() => {
     if (state.walletInitTraceId !== traceId || !isWalletInitializationPending()) return;
     veilLog("warn", "wallet.init.timeout", {
@@ -1357,7 +1356,7 @@ function updateWalletInitialization(step, traceId, details = {}) {
   setWalletInitializationState(step, { traceId, ...details });
   if (isWalletInitializationPending(step)) {
     updateWalletModalStage(step, details);
-    setAppLoading("wallet", details.message || walletInitLabel(step));
+    setAppLoading("wallet", walletInitLabel(step));
   }
 }
 
@@ -1880,7 +1879,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
   }
 
   updateWalletInitialization("creating_account", traceId, {
-    message: "Connecting wallet...",
+    message: "Creating Starknet Account",
   });
   const wallet = await fetchPrivyStarknetWallet(bridge, traceId);
   const publicKey = ensureHex(wallet.publicKey || wallet.public_key);
@@ -1914,7 +1913,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
   let paymasterAccessToken = "";
   if (avnuPaymasterEnabled) {
     updateWalletInitialization("connecting_paymaster", traceId, {
-      message: "Connecting Paymaster...",
+      message: "Preparing Gas Sponsor",
     });
     tracePrivyStarkZap(traceId, "paymaster.get_access_token.start", {
       where: "createPrivyStarknetAccount",
@@ -1942,7 +1941,7 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
 
   try {
     updateWalletInitialization("deploying", traceId, {
-      message: "Connecting wallet...",
+      message: "Creating Starknet Account",
     });
     starkzapOnboardResult = await sdk.onboard({
       strategy: OnboardStrategy.Privy,
@@ -1992,15 +1991,15 @@ async function createPrivyStarknetAccount(bridge, traceId = createTraceId("stark
         const progress = String(event?.step || event?.status || event?.type || "").toLowerCase();
         if (progress.includes("paymaster")) {
           updateWalletInitialization("connecting_paymaster", traceId, {
-            message: "Connecting Paymaster...",
+            message: "Preparing Gas Sponsor",
           });
         } else if (progress.includes("deploy")) {
           updateWalletInitialization("deploying", traceId, {
-            message: "Connecting wallet...",
+            message: "Creating Starknet Account",
           });
         } else if (progress.includes("wallet") || progress.includes("account") || progress.includes("resolve")) {
           updateWalletInitialization("creating_account", traceId, {
-            message: "Connecting wallet...",
+            message: "Creating Starknet Account",
           });
         }
         tracePrivyStarkZap(traceId, "sdk_onboard.progress", {
@@ -2150,7 +2149,7 @@ async function connectWallet(options = {}) {
           });
         }
         updateWalletInitialization("creating_account", traceId, {
-          message: "Connecting wallet...",
+          message: "Creating Starknet Account",
         });
         await fetchPrivyStarknetWallet(bridge, traceId);
       } catch (error) {
@@ -2212,7 +2211,7 @@ async function connectWallet(options = {}) {
         });
       }
       updateWalletInitialization("creating_account", traceId, {
-        message: "Connecting wallet...",
+        message: "Creating Starknet Account",
       });
       privyAccountContext = await createPrivyStarknetAccount(bridge, traceId);
     } catch (error) {
@@ -2394,7 +2393,7 @@ function inferTransactionOverlayCopy(localItem = {}, success = "") {
 
   if (localItem.type === "message") {
     return {
-      actionLabel: "Sending Message",
+      actionLabel: "Sending Shielded Message",
       successTitle: "Shielded Message Sent",
       successSubtitle: "ECDH encrypted message stored.",
     };
@@ -2402,7 +2401,7 @@ function inferTransactionOverlayCopy(localItem = {}, success = "") {
 
   if (label.includes("alice deposited")) {
     return {
-      actionLabel: `Locking ${amount}`,
+      actionLabel: "Locking Funds",
       successTitle: "Shielded Deposit Successful",
       successSubtitle: `${amount} locked in escrow.`,
     };
@@ -2465,7 +2464,7 @@ function inferTransactionOverlayCopy(localItem = {}, success = "") {
   }
 
   return {
-    actionLabel: "Signing Transaction",
+    actionLabel: "Sending Transaction",
     successTitle: success ? success.replace(/\.$/, "") : "Transaction Successful",
     successSubtitle: "Timeline updated.",
   };
@@ -2486,10 +2485,9 @@ function beginTransactionModal(localItem, success, options = {}) {
     visible: true,
     stage: "preparing",
     actionLabel: copy.actionLabel,
-    title: "Preparing Transaction",
-    subtitle: "Preparing secure Starknet transaction details.",
-    detail: "Checking channel state...",
-    progress: 16,
+    title: copy.actionLabel,
+    subtitle: "Please approve the request in your wallet.",
+    detail: "Waiting for signature...",
     successTitle: copy.successTitle,
     successSubtitle: copy.successSubtitle,
     txHash: "",
@@ -2503,11 +2501,10 @@ function beginWalletModal() {
     stage: "wallet",
     actionLabel: "Connecting Wallet",
     title: "Connecting Wallet",
-    subtitle: "Preparing secure Starknet access.",
-    detail: "Opening wallet session...",
-    progress: 22,
+    subtitle: "Please approve the request in your wallet.",
+    detail: "Waiting for signature...",
     successTitle: "Wallet Connected",
-    successSubtitle: "Secure Starknet access is ready.",
+    successSubtitle: "Opening secure channel...",
     txHash: "",
   });
 }
@@ -2516,23 +2513,23 @@ function updateWalletModalStage(step, details = {}) {
   const stageCopy = {
     connecting: {
       title: "Connecting Wallet",
-      detail: "Opening wallet session...",
-      progress: 24,
+      subtitle: "Please approve the request in your wallet.",
+      detail: "Waiting for signature...",
     },
     creating_account: {
-      title: "Preparing Wallet",
-      detail: "Creating or loading your Starknet account...",
-      progress: 42,
+      title: "Creating Starknet Account",
+      subtitle: "This only happens once.",
+      detail: "Waiting for confirmation...",
     },
     deploying: {
-      title: "Deploying Account",
-      detail: "Preparing Starknet account deployment...",
-      progress: 58,
+      title: "Creating Starknet Account",
+      subtitle: "This only happens once.",
+      detail: "Waiting for confirmation...",
     },
     connecting_paymaster: {
-      title: "Connecting Paymaster",
-      detail: "Preparing sponsored account access...",
-      progress: 70,
+      title: "Preparing Gas Sponsor",
+      subtitle: "Setting up network fees.",
+      detail: "Waiting for confirmation...",
     },
   };
   const copy = stageCopy[step] || stageCopy.connecting;
@@ -2540,19 +2537,16 @@ function updateWalletModalStage(step, details = {}) {
     visible: true,
     stage: "wallet",
     actionLabel: "Connecting Wallet",
-    subtitle: "Preparing secure Starknet access.",
     ...copy,
-    ...(details.message ? { detail: details.message } : {}),
   });
 }
 
 function finishWalletModal() {
   updateTransactionModalStage("success", {
     title: "Wallet Connected",
-    subtitle: "Secure Starknet access is ready.",
-    detail: "Opening your deal workspace.",
+    subtitle: "Opening secure channel...",
+    detail: "",
     txHash: "",
-    progress: 100,
   });
   clearTimeout(transactionModalTimer);
   transactionModalTimer = setTimeout(() => {
@@ -2566,47 +2560,41 @@ function failWalletModal({ title = "Wallet Connection Failed", subtitle = "Unabl
     title,
     subtitle,
     detail,
-    progress: 100,
   });
 }
 
 function updateTransactionModalStage(stage, updates = {}) {
+  const actionTitle = state.transactionModal.actionLabel || state.transactionModal.title || "Sending Transaction";
   const stageDefaults = {
     preparing: {
-      title: "Preparing Transaction",
-      subtitle: "Preparing secure Starknet transaction details.",
-      detail: "Checking channel state...",
-      progress: 18,
+      title: actionTitle,
+      subtitle: "Please approve the request in your wallet.",
+      detail: "Waiting for signature...",
     },
     network: {
-      title: "Checking Network",
-      subtitle: "Verifying Starknet connection before signing.",
-      detail: "Checking network and contract status...",
-      progress: 24,
+      title: actionTitle,
+      subtitle: "Preparing secure request.",
+      detail: "Checking Starknet connection...",
     },
     signing: {
-      title: "Confirm in Wallet",
-      subtitle: "Please approve this transaction in your Starknet wallet.",
-      detail: "Waiting for wallet signature...",
-      progress: 36,
+      title: actionTitle,
+      subtitle: "Please approve the request in your wallet.",
+      detail: "Waiting for signature...",
     },
     broadcasting: {
-      title: "Transaction Submitted",
-      subtitle: "Broadcasting to Starknet...",
-      detail: "Broadcasting transaction...",
-      progress: 76,
+      title: actionTitle,
+      subtitle: "Broadcasting transaction...",
+      detail: "Waiting for confirmation...",
     },
     success: {
       title: state.transactionModal.successTitle,
       subtitle: state.transactionModal.successSubtitle,
-      detail: "Transaction successful.",
-      progress: 100,
+      detail: "",
     },
     error: {
       title: "Transaction Failed",
       subtitle: "The transaction was not completed.",
       detail: "Review the wallet or network error, then retry.",
-      progress: 100,
     },
   };
 
@@ -2621,9 +2609,8 @@ function finishTransactionModal(result, updates = {}) {
   updateTransactionModalStage("success", {
     title: updates.successTitle || state.transactionModal.successTitle,
     subtitle: updates.successSubtitle || state.transactionModal.successSubtitle,
-    detail: "Timeline updated.",
+    detail: "",
     txHash: result?.transactionHash || "",
-    progress: 100,
   });
   clearTimeout(transactionModalTimer);
   transactionModalTimer = setTimeout(() => {
@@ -2637,7 +2624,6 @@ function failTransactionModal(errorDetails = {}) {
     title: errorDetails.label === "Cancelled" ? "Transaction Cancelled" : "Transaction Failed",
     subtitle: errorDetails.toast || "The transaction was not completed.",
     detail: errorDetails.why || "Review the wallet or network error, then retry.",
-    progress: 100,
   });
 }
 
@@ -2656,25 +2642,26 @@ function renderTransactionModal() {
   if (!modal.visible) return;
 
   const icon = transactionLoadingModal.querySelector("#transaction-loading-icon");
-  const action = transactionLoadingModal.querySelector("#transaction-loading-action");
   const title = transactionLoadingModal.querySelector("#transaction-loading-title");
   const subtitle = transactionLoadingModal.querySelector("#transaction-loading-subtitle");
   const detail = transactionLoadingModal.querySelector("#transaction-loading-detail");
-  const progress = transactionLoadingModal.querySelector("#transaction-loading-progress span");
+  const detailWrap = transactionLoadingModal.querySelector(".transaction-loading-detail");
   const link = transactionLoadingModal.querySelector("#transaction-loading-link");
   const cancel = transactionLoadingModal.querySelector("#transaction-loading-cancel");
   const close = transactionLoadingModal.querySelector("#transaction-loading-close");
   const isSuccess = modal.stage === "success";
   const isError = modal.stage === "error";
 
-  if (action) action.textContent = modal.actionLabel || "Signing Transaction";
-  if (title) title.textContent = modal.title || "Confirm in Wallet";
-  if (subtitle) subtitle.textContent = modal.subtitle || "Please approve this transaction in your Starknet wallet.";
-  if (detail) detail.textContent = modal.detail || "Waiting for wallet signature...";
-  if (progress) progress.style.width = `${Math.max(0, Math.min(100, modal.progress || 0))}%`;
+  if (title) title.textContent = modal.title || modal.actionLabel || "Sending Transaction";
+  if (subtitle) {
+    subtitle.textContent = modal.subtitle || "";
+    subtitle.hidden = !modal.subtitle;
+  }
+  if (detail) detail.textContent = modal.detail || "";
+  if (detailWrap) detailWrap.hidden = !modal.detail;
   if (icon) {
     icon.className = `transaction-loading-icon ${isSuccess ? "success" : isError ? "error" : "loading"}`;
-    setLucideIcon(icon, isSuccess ? "check" : isError ? "triangle-alert" : "loader-circle", "size-7");
+    setLucideIcon(icon, isSuccess ? "check" : isError ? "triangle-alert" : "loader-circle", "size-8");
   }
   if (link) {
     const href = transactionExplorerUrl(modal.txHash);
@@ -4014,13 +4001,16 @@ function renderWallet() {
   const connected = state.walletConnected;
   const pending = isWalletInitializationPending();
   const failed = state.walletInitState === "failed";
+  const pendingSubtitle = state.walletInitState === "creating_account" || state.walletInitState === "deploying"
+    ? "This only happens once."
+    : "Please approve the request in your wallet.";
   const title = pending
     ? walletInitLabel()
     : failed
       ? "Unable to connect wallet."
       : connected ? "Connected" : "Not connected";
   const subtitle = pending
-    ? "Preparing secure Starknet access."
+    ? pendingSubtitle
     : failed
       ? "Retry wallet connection."
       : state.privyAccount && !state.privyAccountDeployed
@@ -4411,7 +4401,7 @@ async function safeSubmit(action, localItem, success, overlayOptions = {}) {
     });
     updateLocalItem(pendingItem, { status: "signing" });
     updateTransactionModalStage("signing");
-    setAppLoading("transaction", "Confirm in Wallet");
+    setAppLoading("transaction", "Waiting for signature...");
     const result = await action();
     if (state.transactionModal.stage !== "broadcasting") {
       updateTransactionModalStage("broadcasting", {
@@ -4555,7 +4545,7 @@ async function sendChat(message) {
     },
     "Message sent.",
     {
-      actionLabel: "Sending Message",
+      actionLabel: "Sending Shielded Message",
       successTitle: "Shielded Message Sent",
       successSubtitle: "ECDH encrypted message stored.",
     },
@@ -4810,7 +4800,7 @@ async function submitEscrowDeposit(key) {
     },
     isBuyer ? "Buyer deposit recorded." : "Seller asset locked.",
     {
-      actionLabel: isBuyer ? `Locking ${amount}` : "Locking Asset",
+      actionLabel: isBuyer ? "Locking Funds" : "Locking Asset",
       successTitle: isBuyer ? "Shielded Deposit Successful" : "Shielded Asset Locked",
       successSubtitle: isBuyer ? `${amount} locked in escrow.` : "Rights Package NFT locked in escrow.",
     },
