@@ -9,11 +9,11 @@ import { OnboardStrategy } from "starkzap-onboard";
 import { createDealInviteLink as buildDealInviteLink, starkIdentityName } from "./src-app/domain/invites.js";
 import { statusPillClass } from "./src-app/domain/status.js";
 import { createChatController } from "./src-app/features/chat/chat-controller.js";
-import { currentOfferProofItemFromMessages, dealActivityLabel as describeDealActivity, hasOfferActivity, normalizeOfferAmount as normalizeDealOfferAmount } from "./src-app/features/deal/deal-feature.js";
 import { createDealRoomController } from "./src-app/features/deals/deal-room-controller.js";
 import { escrowApprovalCompleteFromState, escrowConfirmationsCompleteFromState, escrowDepositCompleteFromState, escrowDepositProofItemFromMessages, escrowFundingCompleteFromState, escrowFundingProofItemFromMessages, escrowReleaseProofItemFromMessages, hasRealTransactionHash as isRealTransactionHash } from "./src-app/features/escrow/escrow-feature.js";
 import { createInviteController } from "./src-app/features/invite/invite-controller.js";
 import { counterpartyAvatar, resolveCounterparty } from "./src-app/features/invite/invite-feature.js";
+import { createOfferController } from "./src-app/features/offer/offer-controller.js";
 import { paymentAmountLabel as buildPaymentAmountLabel, paymentMemoValue as buildPaymentMemoValue, paymentPrivacyLabel as buildPaymentPrivacyLabel } from "./src-app/features/payment/payment-feature.js";
 import { createSettlementProofMeta, directPaymentProofItemFromMessages, directPaymentProofMarkup as buildDirectPaymentProofMarkup, escrowSettlementProofMarkup as buildEscrowSettlementProofMarkup } from "./src-app/features/settlement/settlement-feature.js";
 import { createLoadingController } from "./src-app/features/transactions/loading-state-feature.js";
@@ -508,6 +508,33 @@ const chatController = createChatController({
   showToast,
   getVeilClient: () => veilClient,
   scrollFeedToBottom: () => requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })),
+});
+
+const offerController = createOfferController({
+  state,
+  document,
+  offerReviewModal,
+  chatDisplayMode: CHAT_DISPLAY_MODE,
+  defaultOfferAmount: DEAL_OFFER_AMOUNT,
+  currentDealId,
+  currentChannel,
+  channelMessages,
+  estimateVeilFee,
+  rewardPoints: VEIL_REWARD_POINTS,
+  setElementText,
+  statusPillClass,
+  renderChainMeta,
+  escapeHtml,
+  iconRefresh,
+  safeSubmit,
+  getVeilClient: () => veilClient,
+  transactionTransportMode,
+  awardReward,
+  addLocalItem,
+  confirmedTimelineMeta,
+  renderWorkflowProgress,
+  showScreen,
+  fallbackOfferTime: () => now - 2 * minute,
 });
 
 function createClient(transport) {
@@ -2413,10 +2440,7 @@ function renderInlineEvent(item) {
 }
 
 function currentOfferProofItem() {
-  return currentOfferProofItemFromMessages(channelMessages(), {
-    fallbackTime: now - 2 * minute,
-    mode: CHAT_DISPLAY_MODE,
-  });
+  return offerController.currentOfferProofItem();
 }
 
 function setElementText(selector, value) {
@@ -2433,67 +2457,51 @@ function awardReward(ruleKey) {
 }
 
 function offerPrivacyMode() {
-  return "shield";
+  return offerController.offerPrivacyMode();
 }
 
 function offerPrivacyLabel() {
-  return "Shielded";
+  return offerController.offerPrivacyLabel();
 }
 
 function normalizeOfferAmount(value) {
-  return normalizeDealOfferAmount(value);
+  return offerController.normalizeOfferAmount(value);
 }
 
 function createOfferAmountValue() {
-  return normalizeOfferAmount(document.querySelector("#create-offer-amount")?.value || "500");
+  return offerController.createOfferAmountValue();
 }
 
 function createOfferAssetValue() {
-  return document.querySelector("#create-offer-asset")?.value.trim() || "Rights Transfer";
+  return offerController.createOfferAssetValue();
 }
 
 function createOfferTermsValue() {
-  return document.querySelector("#create-offer-terms")?.value.trim()
-    || "Buyer deposits funds, seller deposits the asset. Both remain locked until release.";
+  return offerController.createOfferTermsValue();
 }
 
 function currentDealOfferAmount() {
-  return state.latestOfferAmount || DEAL_OFFER_AMOUNT;
+  return offerController.currentDealOfferAmount();
 }
 
 function channelHasOfferActivity() {
-  return hasOfferActivity(channelMessages());
+  return offerController.channelHasOfferActivity();
 }
 
 function dealActivityLabel(item) {
-  return describeDealActivity(item);
+  return offerController.dealActivityLabel(item);
 }
 
 function renderDealTransactionSummary() {
-  const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-    shielded: offerPrivacyMode() === "shield",
-  });
-  setElementText("#deal-price", currentDealOfferAmount());
-  setElementText("#offer-review-amount", currentDealOfferAmount());
-  setElementText("#offer-review-privacy", offerPrivacyLabel());
-  setElementText("#offer-review-fee", fee.feeLabel);
-  setElementText("#offer-review-reward", `+${VEIL_REWARD_POINTS.acceptProposal} VEIL Points`);
-  setElementText("#offer-review-total", fee.totalLabel);
+  offerController.renderDealTransactionSummary();
 }
 
 function showOfferReview() {
-  renderDealTransactionSummary();
-  if (!offerReviewModal) return;
-  offerReviewModal.classList.remove("hidden");
-  document.body.classList.add("modal-open");
-  iconRefresh();
-  offerReviewModal.querySelector("[data-offer-review-sign]")?.focus();
+  offerController.showOfferReview();
 }
 
 function hideOfferReview() {
-  if (!offerReviewModal) return;
-  offerReviewModal.classList.add("hidden");
-  document.body.classList.remove("modal-open");
+  offerController.hideOfferReview();
 }
 
 function paymentAmountLabel() {
@@ -2652,97 +2660,7 @@ function escrowConfirmationsComplete() {
 }
 
 function renderDeal() {
-  const accepted = state.offerAccepted || state.escrowReleased || state.paymentSent;
-  const timelineHasOffer = channelHasOfferActivity();
-  const negotiationStep = accepted ? "accepted" : timelineHasOffer ? state.negotiationStep || "decision" : "draft";
-  const currentStatus = accepted ? "Escrow Active" : "Negotiation Active";
-  const currentAmount = currentDealOfferAmount();
-  const initialAmount = state.initialOfferAmount || currentAmount;
-  const waitingForCounterparty = negotiationStep === "waiting";
-  const editingOffer = negotiationStep === "draft" || negotiationStep === "counter";
-  const hasActiveOffer = negotiationStep !== "draft";
-  const currentOfferPanel = document.querySelector("#current-offer-panel");
-  const createOfferPanel = document.querySelector("#create-offer-panel");
-  const createOfferEyebrow = document.querySelector("#create-offer-eyebrow");
-  const createOfferTitle = document.querySelector("#create-offer-title");
-  const createOfferCopy = document.querySelector("#create-offer-copy");
-  const createOfferStatus = document.querySelector("#create-offer-status");
-  const createOfferAction = document.querySelector("#create-offer-action");
-  const createOfferCancel = document.querySelector("#create-offer-cancel");
-  const dealStatusEl = document.querySelector("#deal-status");
-  const negotiationActions = document.querySelector("#deal-negotiation-actions");
-  const counterAction = document.querySelector("#deal-counter-action");
-  const dealTurnLabel = document.querySelector("#deal-turn-label");
-  const offerHistoryPanel = document.querySelector("#offer-history-panel");
-  const nextStepPanel = document.querySelector("#deal-next-step-panel");
-  const nextStepCopy = document.querySelector("#deal-next-step-copy");
-  const offerHistoryList = document.querySelector("#offer-history-list");
-  const activityPanel = document.querySelector("#deal-activity-panel");
-  const activityTitle = document.querySelector("#deal-activity-title");
-  const offerProof = document.querySelector("#deal-offer-proof");
-  const activityItem = currentOfferProofItem();
-  renderDealTransactionSummary();
-  setElementText("#deal-id", currentDealId());
-  if (currentOfferPanel) currentOfferPanel.hidden = !hasActiveOffer;
-  if (offerHistoryPanel) offerHistoryPanel.hidden = !hasActiveOffer;
-  if (nextStepPanel) nextStepPanel.hidden = !hasActiveOffer || editingOffer;
-  if (activityPanel) activityPanel.hidden = !hasActiveOffer;
-  if (createOfferPanel) createOfferPanel.hidden = !editingOffer || accepted;
-  if (createOfferEyebrow) createOfferEyebrow.textContent = negotiationStep === "counter" ? "Revise Offer" : "Create Offer";
-  if (createOfferTitle) createOfferTitle.textContent = negotiationStep === "counter" ? "Revise terms" : "Start negotiation";
-  if (createOfferCopy) {
-    createOfferCopy.textContent = negotiationStep === "counter"
-      ? `Submit a revised amount before ${currentAmount} is accepted.`
-      : "Define the amount and asset before escrow funding starts.";
-  }
-  if (createOfferStatus) {
-    createOfferStatus.textContent = negotiationStep === "counter" ? "Counter" : "Step 1";
-    createOfferStatus.className = "status-pill negotiating";
-  }
-  if (createOfferAction) {
-    createOfferAction.disabled = false;
-    createOfferAction.classList.remove("disabled");
-    const label = createOfferAction.querySelector("span");
-    if (label) label.textContent = negotiationStep === "counter" ? "Submit Counter" : "Create Offer";
-  }
-  if (createOfferCancel) createOfferCancel.hidden = negotiationStep !== "counter";
-  if (dealStatusEl) {
-    dealStatusEl.textContent = currentStatus;
-    dealStatusEl.className = statusPillClass(currentStatus);
-  }
-  if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted || waitingForCounterparty);
-  if (counterAction) {
-    counterAction.disabled = false;
-    counterAction.classList.remove("disabled");
-    counterAction.textContent = "Counter Again";
-  }
-  if (dealTurnLabel) dealTurnLabel.textContent = accepted ? "Escrow Funding" : waitingForCounterparty ? "Waiting for Bob" : "Your Decision";
-  if (nextStepCopy) nextStepCopy.textContent = accepted
-    ? "Negotiation completed. Escrow funding is ready."
-    : waitingForCounterparty
-      ? "Offer created. Waiting for Bob to accept or counter."
-      : `Bob offered ${currentAmount}. Accept to continue to escrow, or counter again before it expires.`;
-  if (offerHistoryList) {
-    offerHistoryList.innerHTML = accepted
-      ? `
-        <li class="complete"><span>Alice created an offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
-        <li class="complete"><span>Bob created a counter offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
-        <li class="complete active"><span>Alice accepted Bob's counter offer</span><strong>Ready</strong></li>
-      `
-      : waitingForCounterparty
-        ? `
-          <li class="complete active"><span>Alice created an offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
-          <li><span>Waiting for Bob</span><strong>Pending</strong></li>
-        `
-        : `
-          <li class="complete"><span>Alice created an offer</span><strong>${escapeHtml(initialAmount)}</strong></li>
-          <li class="complete active"><span>Bob created a counter offer</span><strong>${escapeHtml(currentAmount)}</strong></li>
-          <li><span>Your Decision</span><strong>Pending</strong></li>
-        `;
-  }
-  if (activityTitle) activityTitle.textContent = dealActivityLabel(activityItem);
-  if (offerProof) offerProof.innerHTML = renderChainMeta(activityItem);
-  iconRefresh();
+  offerController.renderDeal();
 }
 
 function renderEscrow() {
@@ -3497,160 +3415,27 @@ function applyAiDraft() {
 }
 
 function writeOfferForm({ amount, asset, terms } = {}) {
-  const amountInput = document.querySelector("#create-offer-amount");
-  const assetInput = document.querySelector("#create-offer-asset");
-  const termsInput = document.querySelector("#create-offer-terms");
-  if (amountInput) amountInput.value = normalizeOfferAmount(amount || currentDealOfferAmount());
-  if (assetInput && asset) assetInput.value = asset;
-  if (termsInput && terms) termsInput.value = terms;
+  offerController.writeOfferForm({ amount, asset, terms });
 }
 
 function openCounterOfferForm() {
-  state.negotiationStep = "counter";
-  writeOfferForm({
-    amount: currentDealOfferAmount(),
-    asset: "Rights Package / NFT",
-    terms: "Buyer deposits funds, seller deposits the asset. Both remain locked until release.",
-  });
-  renderDeal();
-  document.querySelector("#create-offer-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  offerController.openCounterOfferForm();
 }
 
 function cancelOfferForm() {
-  state.negotiationStep = channelHasOfferActivity() ? "decision" : "draft";
-  renderDeal();
+  offerController.cancelOfferForm();
 }
 
 async function createOffer() {
-  const amount = createOfferAmountValue();
-  const amountLabel = `${amount} STRK`;
-  const asset = createOfferAssetValue();
-  const terms = createOfferTermsValue();
-  const submitted = await safeSubmit(
-    () => veilClient.createOffer({
-      channelId: state.channelId,
-      amount,
-      currency: "STRK",
-      terms,
-      mode: transactionTransportMode(offerPrivacyMode()),
-      sender: "you",
-    }),
-    {
-      type: "offer",
-      title: "Alice created an offer",
-      actor: "Alice",
-      amount: amountLabel,
-      subtitle: asset,
-      time: Date.now(),
-    },
-    "Offer created.",
-    {
-      actionLabel: "Creating Offer",
-      successTitle: "Offer Created",
-      successSubtitle: `${amountLabel} offer recorded in the private channel.`,
-    },
-  );
-  if (!submitted) return;
-  awardReward("createOffer");
-  state.offerAccepted = false;
-  state.escrowDeposits = { buyer: false, seller: false };
-  state.escrowConfirmations = { buyer: false, seller: false };
-  state.escrowReleased = false;
-  state.negotiationStep = "waiting";
-  state.initialOfferAmount = amountLabel;
-  state.latestOfferAmount = amountLabel;
-  currentChannel().status = "Negotiation Active";
-  renderDeal();
-  renderWorkflowProgress();
+  return offerController.createOffer();
 }
 
 async function counterOffer() {
-  const amount = createOfferAmountValue();
-  const amountLabel = `${amount} STRK`;
-  const asset = createOfferAssetValue();
-  const terms = createOfferTermsValue();
-  const submitted = await safeSubmit(
-    () => veilClient.counterOffer({
-      channelId: state.channelId,
-      amount,
-      currency: "STRK",
-      terms,
-      mode: transactionTransportMode(offerPrivacyMode()),
-      sender: "seller",
-    }),
-    {
-      type: "offer",
-      title: "Bob created a counter offer",
-      actor: "Bob",
-      amount: amountLabel,
-      subtitle: asset,
-      time: Date.now(),
-    },
-    "Counter sent.",
-    {
-      actionLabel: "Creating Counter Offer",
-      successTitle: "Counter Offer Sent",
-      successSubtitle: `${amountLabel} counter offer recorded in the private channel.`,
-    },
-  );
-  if (!submitted) return;
-  awardReward("counterOffer");
-  state.offerAccepted = false;
-  state.escrowDeposits = { buyer: false, seller: false };
-  state.escrowConfirmations = { buyer: false, seller: false };
-  state.escrowReleased = false;
-  state.negotiationStep = "decision";
-  state.latestOfferAmount = amountLabel;
-  currentChannel().status = "Negotiation Active";
-  currentChannel().last = `Bob created a counter offer`;
-  renderDeal();
-  renderWorkflowProgress();
+  return offerController.counterOffer();
 }
 
 async function acceptOffer() {
-  const submitted = await safeSubmit(
-    () => veilClient.acceptOffer({
-      channelId: state.channelId,
-      offerId: currentDealOfferAmount(),
-      reason: "Accepted.",
-      mode: transactionTransportMode(offerPrivacyMode()),
-      sender: "you",
-    }),
-    {
-      type: "inline",
-      title: "Alice accepted Bob's counter offer",
-      subtitle: "Negotiation completed. Escrow contract created.",
-      actor: "Alice",
-      time: Date.now(),
-    },
-    "Counter offer accepted.",
-    {
-      actionLabel: "Accepting Proposal",
-      successTitle: "Proposal Accepted",
-      successSubtitle: "Escrow contract created.",
-    },
-  );
-  if (!submitted) return;
-  awardReward("acceptProposal");
-  state.offerAccepted = true;
-  state.negotiationStep = "accepted";
-  state.escrowDeposits = { buyer: false, seller: false };
-  state.escrowConfirmations = { buyer: false, seller: false };
-  state.escrowReleased = false;
-  state.escrowDisputeOpened = false;
-  currentChannel().status = "Escrow Active";
-  currentChannel().last = "Waiting for escrow deposits";
-  addLocalItem({
-    type: "inline",
-    title: "Waiting for escrow deposits",
-    subtitle: "Waiting for: Alice deposits 450 STRK; Bob locks NFT.",
-    actor: "System",
-    time: Date.now(),
-    ...confirmedTimelineMeta(`${state.channelId}-waiting-deposits`, 20),
-  });
-  renderDeal();
-  renderWorkflowProgress();
-  showScreen("escrow");
+  return offerController.acceptOffer();
 }
 
 async function sendPayment() {
