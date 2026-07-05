@@ -6,10 +6,12 @@ import { StarkZap } from "starkzap-sdk";
 import { accountPresets } from "starkzap-account-presets";
 import { ChainId } from "starkzap-config";
 import { OnboardStrategy } from "starkzap-onboard";
-import { estimateVeilFee } from "./src-app/domain/fees.js";
 import { createDealInviteLink as buildDealInviteLink, starkIdentityName } from "./src-app/domain/invites.js";
-import { VEIL_REWARD_LABELS, VEIL_REWARD_POINTS, nextRewardTier } from "./src-app/domain/rewards.js";
 import { statusPillClass } from "./src-app/domain/status.js";
+import { estimateVeilFee } from "./src-app/services/fee-service.js";
+import { VEIL_REWARD_POINTS, createRewardEntry, nextRewardTier } from "./src-app/services/rewards-service.js";
+import { listStorageKeys, readJsonStorage, removeStorageKeys, writeJsonStorage } from "./src-app/services/storage-service.js";
+import { inferTransactionOverlayCopy } from "./src-app/services/transaction-modal-service.js";
 import { formatPoints, formatTime } from "./src-app/utils/format.js";
 import { demoTxHash, deterministicHex, displayTransactionHash, shortHash } from "./src-app/utils/hash.js";
 import { transactionExplorerUrl as buildTransactionExplorerUrl } from "./src-app/utils/transactions.js";
@@ -693,7 +695,7 @@ function channelMessages() {
 
 function loadLocalChannels() {
   try {
-    const payload = JSON.parse(window.localStorage.getItem(LOCAL_CHANNELS_KEY) || "[]");
+    const payload = readJsonStorage(LOCAL_CHANNELS_KEY, []);
     if (!Array.isArray(payload)) return;
     payload.forEach((entry) => {
       if (!entry?.channel?.id || channels.some((channel) => channel.id === entry.channel.id)) return;
@@ -716,7 +718,7 @@ function saveLocalChannels() {
         channel,
         messages: messages[channel.id] || [],
       }));
-    window.localStorage.setItem(LOCAL_CHANNELS_KEY, JSON.stringify(localChannels));
+    writeJsonStorage(LOCAL_CHANNELS_KEY, localChannels);
   } catch (error) {
     veilError("channel.local.save.failed", error, {
       where: "saveLocalChannels",
@@ -2369,89 +2371,6 @@ function transactionDelay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function inferTransactionOverlayCopy(localItem = {}, success = "") {
-  const label = `${localItem.title || ""} ${localItem.subtitle || ""} ${localItem.body || ""}`.toLowerCase();
-  const amount = localItem.amount || currentDealOfferAmount();
-
-  if (localItem.type === "message") {
-    return {
-      actionLabel: "Sending Shielded Message",
-      successTitle: "Shielded Message Sent",
-      successSubtitle: "ECDH encrypted message stored.",
-    };
-  }
-
-  if (label.includes("alice deposited")) {
-    return {
-      actionLabel: "Locking Funds",
-      successTitle: "Shielded Deposit Successful",
-      successSubtitle: `${amount} locked in escrow.`,
-    };
-  }
-
-  if (label.includes("bob locked") || label.includes("asset secured")) {
-    return {
-      actionLabel: "Locking Asset",
-      successTitle: "Shielded Asset Locked",
-      successSubtitle: "Rights Package NFT locked in escrow.",
-    };
-  }
-
-  if (label.includes("approved release")) {
-    return {
-      actionLabel: "Approving Release",
-      successTitle: "Release Approved",
-      successSubtitle: "Approval recorded in the shielded channel.",
-    };
-  }
-
-  if (label.includes("assets released")) {
-    return {
-      actionLabel: "Releasing Assets",
-      successTitle: "Assets Released",
-      successSubtitle: "450 STRK to Bob. NFT to Alice.",
-    };
-  }
-
-  if (label.includes("accepted")) {
-    return {
-      actionLabel: "Accepting Proposal",
-      successTitle: "Proposal Accepted",
-      successSubtitle: "Escrow contract created.",
-    };
-  }
-
-  if (label.includes("counter")) {
-    return {
-      actionLabel: "Creating Counter Offer",
-      successTitle: "Counter Offer Sent",
-      successSubtitle: `${amount} recorded in the private channel.`,
-    };
-  }
-
-  if (label.includes("offer")) {
-    return {
-      actionLabel: "Creating Offer",
-      successTitle: "Offer Created",
-      successSubtitle: `${amount} recorded in the private channel.`,
-    };
-  }
-
-  if (label.includes("payment")) {
-    return {
-      actionLabel: "Sending Payment",
-      successTitle: "Shielded Payment Sent",
-      successSubtitle: "Payment memo stored in the private channel.",
-    };
-  }
-
-  return {
-    actionLabel: "Sending Transaction",
-    successTitle: success ? success.replace(/\.$/, "") : "Transaction Successful",
-    successSubtitle: "Timeline updated.",
-  };
-}
-
 function setTransactionModal(updates = {}) {
   Object.assign(state.transactionModal, updates);
   renderTransactionModal();
@@ -2460,7 +2379,7 @@ function setTransactionModal(updates = {}) {
 function beginTransactionModal(localItem, success, options = {}) {
   clearTimeout(transactionModalTimer);
   const copy = {
-    ...inferTransactionOverlayCopy(localItem, success),
+    ...inferTransactionOverlayCopy(localItem, success, currentDealOfferAmount()),
     ...options,
   };
   setTransactionModal({
@@ -3308,14 +3227,10 @@ function setElementText(selector, value) {
 }
 
 function awardReward(ruleKey) {
-  const points = VEIL_REWARD_POINTS[ruleKey] || 0;
-  if (!points) return;
-  state.rewardPoints += points;
-  state.rewardHistory.unshift({
-    points,
-    label: VEIL_REWARD_LABELS[ruleKey] || "VEIL Reward",
-    time: Date.now(),
-  });
+  const reward = createRewardEntry(ruleKey);
+  if (!reward) return;
+  state.rewardPoints += reward.points;
+  state.rewardHistory.unshift(reward);
   if (state.screen === "wallet") renderWalletRewards();
 }
 
@@ -4233,12 +4148,8 @@ async function logoutWallet(message = "Logged out.") {
 }
 
 function clearLocalVeilCache() {
-  const keys = [];
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index);
-    if (key?.startsWith("veil:")) keys.push(key);
-  }
-  keys.forEach((key) => window.localStorage.removeItem(key));
+  const keys = listStorageKeys("veil:");
+  removeStorageKeys(keys);
   showToast(keys.length ? "Local VEIL cache cleared." : "No local VEIL cache.");
 }
 
