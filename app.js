@@ -8,6 +8,12 @@ import { ChainId } from "starkzap-config";
 import { OnboardStrategy } from "starkzap-onboard";
 import { createDealInviteLink as buildDealInviteLink, starkIdentityName } from "./src-app/domain/invites.js";
 import { statusPillClass } from "./src-app/domain/status.js";
+import { chatTransportMode as resolveChatTransportMode, transactionTransportMode as resolveTransactionTransportMode } from "./src-app/features/chat/chat-feature.js";
+import { currentOfferProofItemFromMessages, dealActivityLabel as describeDealActivity, hasOfferActivity, normalizeOfferAmount as normalizeDealOfferAmount } from "./src-app/features/deal/deal-feature.js";
+import { escrowApprovalCompleteFromState, escrowConfirmationsCompleteFromState, escrowDepositCompleteFromState, escrowDepositProofItemFromMessages, escrowFundingCompleteFromState, escrowFundingProofItemFromMessages, escrowReleaseProofItemFromMessages, hasRealTransactionHash as isRealTransactionHash } from "./src-app/features/escrow/escrow-feature.js";
+import { counterpartyAvatar, resolveCounterparty } from "./src-app/features/invite/invite-feature.js";
+import { paymentAmountLabel as buildPaymentAmountLabel, paymentMemoValue as buildPaymentMemoValue, paymentPrivacyLabel as buildPaymentPrivacyLabel } from "./src-app/features/payment/payment-feature.js";
+import { createSettlementProofMeta, directPaymentProofItemFromMessages, directPaymentProofMarkup as buildDirectPaymentProofMarkup, escrowSettlementProofMarkup as buildEscrowSettlementProofMarkup } from "./src-app/features/settlement/settlement-feature.js";
 import { estimateVeilFee } from "./src-app/services/fee-service.js";
 import { VEIL_REWARD_POINTS, createRewardEntry, nextRewardTier } from "./src-app/services/rewards-service.js";
 import { listStorageKeys, readJsonStorage, removeStorageKeys, writeJsonStorage } from "./src-app/services/storage-service.js";
@@ -122,12 +128,7 @@ function reliableRpcUrl(url, fallback) {
 }
 
 function settlementProofMeta(channel = currentChannel?.()) {
-  const source = currentDealId(channel);
-  const hash = deterministicHex(`settlement:${source}`, 64);
-  return {
-    proofId: `VP-${String(source).replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase() || "DEAL"}-${hash.slice(2, 8).toUpperCase()}`,
-    settlementHash: hash,
-  };
+  return createSettlementProofMeta(currentDealId(channel), deterministicHex);
 }
 
 function confirmedTimelineMeta(seed, offset = 0) {
@@ -743,59 +744,8 @@ function inviteTargetValue() {
   return document.querySelector("#invite-target")?.value.trim() || "Counterparty";
 }
 
-function counterpartyDisplayName(value) {
-  const text = String(value || "").trim();
-  if (!text) return "Counterparty";
-  if (text.includes("@")) return text.split("@")[0] || text;
-  if (text.endsWith(".stark")) return text;
-  if (text.startsWith("0x")) return shortHash(text);
-  return text;
-}
-
-function counterpartyAvatar(name) {
-  const value = String(name || "C").trim();
-  const normalized = value.startsWith("0x") ? "W" : value.replace("@", "");
-  return normalized ? normalized[0].toUpperCase() : "C";
-}
-
 function counterpartyLookup(value = newDealCounterpartyValue()) {
-  const raw = String(value || "").trim();
-  const normalized = raw.toLowerCase();
-  const displayName = counterpartyDisplayName(raw);
-  const isStarkName = normalized.endsWith(".stark");
-  const isWallet = normalized.startsWith("0x");
-  const veilAvailable = knownVeilCounterparties.has(normalized);
-  if (veilAvailable) {
-    return {
-      status: "available",
-      displayName,
-      detail: "Resolved to 0x0b...71e9",
-      badge: "VEIL Available",
-      badgeClass: "status-pill escrow-active",
-      action: "Create Deal",
-      hint: `Creates a private deal request and sends ${displayName} an in-app notification.`,
-    };
-  }
-  if (isStarkName || isWallet) {
-    return {
-      status: "not_on_veil",
-      displayName,
-      detail: isStarkName ? "Resolved on Starknet, not a VEIL user yet" : "Wallet found, not a VEIL user yet",
-      badge: "Not on VEIL",
-      badgeClass: "status-pill waiting-deposit",
-      action: "Create Invite",
-      hint: "Generates an invite link for Telegram, Discord, X, Email, or WhatsApp.",
-    };
-  }
-  return {
-    status: "unknown",
-    displayName,
-    detail: "Enter a .stark name or wallet address",
-    badge: "Search",
-    badgeClass: "status-pill public",
-    action: "Create Invite",
-    hint: "Use an invite link when the counterparty is not available inside VEIL.",
-  };
+  return resolveCounterparty(value, knownVeilCounterparties, shortHash);
 }
 
 function nextDealId() {
@@ -3204,21 +3154,10 @@ function renderInlineEvent(item) {
 }
 
 function currentOfferProofItem() {
-  const offerItem = [...channelMessages()]
-    .reverse()
-    .find((item) => {
-      if (item.type === "offer") return true;
-      const label = `${item.title || ""} ${item.subtitle || ""}`.toLowerCase();
-      return label.includes("counter offer") && !label.includes("accepted");
-    });
-  return {
-    ...(offerItem || {}),
-    type: "inline",
-    title: offerItem?.title || "Current offer",
-    actor: offerItem?.actor || "System",
-    time: offerItem?.time || now - 2 * minute,
+  return currentOfferProofItemFromMessages(channelMessages(), {
+    fallbackTime: now - 2 * minute,
     mode: CHAT_DISPLAY_MODE,
-  };
+  });
 }
 
 function setElementText(selector, value) {
@@ -3243,8 +3182,7 @@ function offerPrivacyLabel() {
 }
 
 function normalizeOfferAmount(value) {
-  const match = String(value || "").match(/\d+(?:[.,]\d+)?/);
-  return match ? match[0].replace(",", ".") : "450";
+  return normalizeDealOfferAmount(value);
 }
 
 function createOfferAmountValue() {
@@ -3265,19 +3203,11 @@ function currentDealOfferAmount() {
 }
 
 function channelHasOfferActivity() {
-  return channelMessages().some((item) => {
-    if (item.type === "offer") return true;
-    const label = `${item.title || ""} ${item.subtitle || ""}`.toLowerCase();
-    return label.includes("offer") || label.includes("counter");
-  });
+  return hasOfferActivity(channelMessages());
 }
 
 function dealActivityLabel(item) {
-  const label = `${item?.title || ""} ${item?.subtitle || ""}`.toLowerCase();
-  if (label.includes("counter")) return item?.title || "Bob created a counter offer";
-  if (label.includes("accepted")) return "Alice accepted Bob's counter offer";
-  if (label.includes("offer")) return item?.title || "Alice created an offer";
-  return "Deal Activity";
+  return describeDealActivity(item);
 }
 
 function renderDealTransactionSummary() {
@@ -3308,17 +3238,18 @@ function hideOfferReview() {
 }
 
 function paymentAmountLabel() {
-  const amount = document.querySelector("#payment-amount")?.value.trim() || "450";
-  const asset = document.querySelector("#payment-asset")?.value.trim() || "STRK";
-  return `${amount} ${asset}`;
+  return buildPaymentAmountLabel(
+    document.querySelector("#payment-amount")?.value,
+    document.querySelector("#payment-asset")?.value,
+  );
 }
 
 function paymentPrivacyLabel() {
-  return state.paymentMode === "shield" ? "Shield" : "Unshield";
+  return buildPaymentPrivacyLabel(state.paymentMode);
 }
 
 function paymentMemoValue() {
-  return document.querySelector("#payment-memo")?.value.trim() || "Final settlement for rights transfer.";
+  return buildPaymentMemoValue(document.querySelector("#payment-memo")?.value);
 }
 
 function renderPaymentTransactionSummary() {
@@ -3436,97 +3367,61 @@ function renderWorkflowProgress() {
   });
 }
 
-function latestChannelItem(predicate) {
-  return [...channelMessages()].reverse().find(predicate);
-}
-
 function escrowDepositProofItem(key) {
-  const buyer = key === "buyer";
-  const item = latestChannelItem((entry) => {
-    const label = `${entry.title || ""} ${entry.subtitle || ""} ${entry.details || ""}`.toLowerCase();
-    return buyer
-      ? label.includes("alice deposited") || label.includes("buyer deposited")
-      : label.includes("bob locked") || label.includes("seller locked") || label.includes("asset secured");
+  return escrowDepositProofItemFromMessages(channelMessages(), key, {
+    mode: CHAT_DISPLAY_MODE,
   });
-  return item
-    ? {
-      ...item,
-      type: "inline",
-      actor: item.actor || (buyer ? "Alice" : "Bob"),
-      mode: CHAT_DISPLAY_MODE,
-    }
-    : null;
 }
 
 function escrowFundingProofItem() {
-  const item = latestChannelItem((entry) => {
-    const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
-    return label.includes("deposit")
-      || label.includes("locked asset")
-      || label.includes("bob locked")
-      || label.includes("seller locked")
-      || label.includes("escrow funded")
-      || label.includes("escrow contract created")
-      || label.includes("accepted bob");
-  });
-  return {
-    ...(item || {}),
-    type: "inline",
-    title: item?.title || "Escrow funding",
-    actor: item?.actor || "System",
-    time: item?.time || now - 3 * minute,
+  return escrowFundingProofItemFromMessages(channelMessages(), {
+    fallbackTime: now - 3 * minute,
     mode: CHAT_DISPLAY_MODE,
-  };
+  });
 }
 
 function escrowReleaseProofItem() {
-  const item = latestChannelItem((entry) => {
-    const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
-    return label.includes("assets released") || label.includes("settlement complete") || label.includes("escrow released") || label.includes("settlement can complete");
-  });
-  return {
-    ...(item || {}),
-    type: "inline",
-    title: item?.title || "Assets released",
-    actor: item?.actor || "System",
-    time: item?.time || (state.escrowReleased ? Date.now() : undefined),
+  return escrowReleaseProofItemFromMessages(channelMessages(), {
+    fallbackTime: state.escrowReleased ? Date.now() : undefined,
     mode: CHAT_DISPLAY_MODE,
-  };
+  });
 }
 
 function hasRealTransactionHash(item) {
-  return Boolean(item?.txHash && !String(item.txHash).startsWith("mock-"));
+  return isRealTransactionHash(item);
 }
 
 function renderEscrowProofMeta(item) {
   return hasRealTransactionHash(item) ? renderChainMeta(item) : "";
 }
 
-function escrowEventMatches(patterns) {
-  return Boolean(latestChannelItem((entry) => {
-    const label = `${entry.title || ""} ${entry.subtitle || ""} ${entry.details || ""}`.toLowerCase();
-    return patterns.some((pattern) => label.includes(pattern));
-  }));
-}
-
 function escrowDepositComplete(key) {
-  if (state.escrowReleased || state.paymentSent) return true;
-  if (state.escrowDeposits?.[key]) return true;
-  return key === "buyer"
-    ? escrowEventMatches(["alice deposited", "buyer deposited", "buyer deposit completed", "funds deposited", "deposited funds"])
-    : escrowEventMatches(["bob locked", "seller locked", "seller deposited", "asset locked", "nft locked", "locked asset"]);
+  return escrowDepositCompleteFromState({
+    key,
+    released: state.escrowReleased,
+    paymentSent: state.paymentSent,
+    deposits: state.escrowDeposits,
+    messages: channelMessages(),
+  });
 }
 
 function escrowFundingComplete() {
-  return Boolean(escrowDepositComplete("buyer") && escrowDepositComplete("seller"));
+  return escrowFundingCompleteFromState({
+    released: state.escrowReleased,
+    paymentSent: state.paymentSent,
+    deposits: state.escrowDeposits,
+    messages: channelMessages(),
+  });
 }
 
 function escrowApprovalComplete(key) {
-  if (state.escrowReleased || state.paymentSent) return true;
-  if (state.escrowConfirmations?.[key]) return true;
-  return key === "buyer"
-    ? escrowEventMatches(["alice approved release", "buyer approved release", "buyer approved"])
-    : escrowEventMatches(["bob approved release", "seller approved release", "seller approved"]);
+  return escrowApprovalCompleteFromState({
+    key,
+    released: state.escrowReleased,
+    paymentSent: state.paymentSent,
+    confirmations: state.escrowConfirmations,
+    messages: channelMessages(),
+  });
 }
 
 function setLucideIcon(container, iconName, sizeClass = "size-5") {
@@ -3535,7 +3430,12 @@ function setLucideIcon(container, iconName, sizeClass = "size-5") {
 }
 
 function escrowConfirmationsComplete() {
-  return Boolean(escrowApprovalComplete("buyer") && escrowApprovalComplete("seller"));
+  return escrowConfirmationsCompleteFromState({
+    released: state.escrowReleased,
+    paymentSent: state.paymentSent,
+    confirmations: state.escrowConfirmations,
+    messages: channelMessages(),
+  });
 }
 
 function renderDeal() {
@@ -4161,74 +4061,24 @@ function renderSettlement() {
 }
 
 function directPaymentProofItem() {
-  const item = latestChannelItem((entry) => {
-    const label = `${entry.title || ""} ${entry.subtitle || ""}`.toLowerCase();
-    return label.includes("payment completed") || label.includes("payment proof");
+  return directPaymentProofItemFromMessages(channelMessages(), {
+    paymentSent: state.paymentSent,
+    paymentMode: state.paymentMode,
+    fallbackTime: Date.now(),
   });
-  return {
-    ...(item || {}),
-    type: "inline",
-    title: item?.title || "Direct payment",
-    actor: item?.actor || "Alice",
-    time: item?.time || (state.paymentSent ? Date.now() : undefined),
-    mode: state.paymentMode,
-  };
-}
-
-function proofStepMarkup(label, value) {
-  return `<li><span><i data-lucide="check" class="size-4"></i></span><p>${escapeHtml(label)}</p><strong>${escapeHtml(value)}</strong></li>`;
 }
 
 function escrowSettlementProofMarkup() {
-  return `
-    <div class="proof-group">
-      <h2>Negotiation</h2>
-      <ol>
-        ${proofStepMarkup("Alice created an offer", "500 STRK")}
-        ${proofStepMarkup("Bob created a counter offer", "450 STRK")}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Funding</h2>
-      <ol>
-        ${proofStepMarkup("Alice deposited", "450 STRK")}
-        ${proofStepMarkup("Bob locked NFT", "Rights Package NFT")}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Release</h2>
-      <ol>
-        ${proofStepMarkup("Assets released", "Complete")}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Settlement</h2>
-      <ol>
-        ${proofStepMarkup("NFT delivered to Alice", "Complete")}
-        ${proofStepMarkup("450 STRK delivered to Bob", "Complete")}
-      </ol>
-    </div>
-  `;
+  return buildEscrowSettlementProofMarkup(escapeHtml);
 }
 
 function directPaymentProofMarkup() {
-  return `
-    <div class="proof-group">
-      <h2>Direct Payment</h2>
-      <ol>
-        ${proofStepMarkup("Recipient", PAYMENT_RECIPIENT)}
-        ${proofStepMarkup("Amount", paymentAmountLabel())}
-        ${proofStepMarkup("Privacy", paymentPrivacyLabel())}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Settlement</h2>
-      <ol>
-        ${proofStepMarkup("Payment confirmed", "Complete")}
-        ${proofStepMarkup("Proof attached", "Ready")}
-      </ol>
-    </div>
-  `;
+  return buildDirectPaymentProofMarkup({
+    recipient: PAYMENT_RECIPIENT,
+    amountLabel: paymentAmountLabel(),
+    privacyLabel: paymentPrivacyLabel(),
+    escapeHtml,
+  });
 }
 
 function renderProof() {
@@ -4254,11 +4104,11 @@ function renderProof() {
 }
 
 function chatTransportMode() {
-  return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : CHAT_DISPLAY_MODE;
+  return resolveChatTransportMode(timelineMode, DIRECT_HELPER_MESSAGE_MODE, CHAT_DISPLAY_MODE);
 }
 
 function transactionTransportMode(requestedMode) {
-  return timelineMode === "direct-helper" ? DIRECT_HELPER_MESSAGE_MODE : requestedMode;
+  return resolveTransactionTransportMode(timelineMode, requestedMode, DIRECT_HELPER_MESSAGE_MODE);
 }
 
 async function safeSubmit(action, localItem, success, overlayOptions = {}) {
