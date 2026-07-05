@@ -8,7 +8,7 @@ import { ChainId } from "starkzap-config";
 import { OnboardStrategy } from "starkzap-onboard";
 import { createDealInviteLink as buildDealInviteLink, starkIdentityName } from "./src-app/domain/invites.js";
 import { statusPillClass } from "./src-app/domain/status.js";
-import { chatTransportMode as resolveChatTransportMode, transactionTransportMode as resolveTransactionTransportMode } from "./src-app/features/chat/chat-feature.js";
+import { createChatController } from "./src-app/features/chat/chat-controller.js";
 import { currentOfferProofItemFromMessages, dealActivityLabel as describeDealActivity, hasOfferActivity, normalizeOfferAmount as normalizeDealOfferAmount } from "./src-app/features/deal/deal-feature.js";
 import { createDealRoomController } from "./src-app/features/deals/deal-room-controller.js";
 import { escrowApprovalCompleteFromState, escrowConfirmationsCompleteFromState, escrowDepositCompleteFromState, escrowDepositProofItemFromMessages, escrowFundingCompleteFromState, escrowFundingProofItemFromMessages, escrowReleaseProofItemFromMessages, hasRealTransactionHash as isRealTransactionHash } from "./src-app/features/escrow/escrow-feature.js";
@@ -491,6 +491,23 @@ const dealRoomController = createDealRoomController({
   renderChainMeta,
   showScreen,
   iconRefresh,
+});
+
+const chatController = createChatController({
+  state,
+  messageInput,
+  timelineMode,
+  chatDisplayMode: CHAT_DISPLAY_MODE,
+  directHelperMessageMode: DIRECT_HELPER_MESSAGE_MODE,
+  currentChannel,
+  channelMessages,
+  saveLocalChannels,
+  renderChannel,
+  safeSubmit,
+  awardReward,
+  showToast,
+  getVeilClient: () => veilClient,
+  scrollFeedToBottom: () => requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })),
 });
 
 function createClient(transport) {
@@ -3283,11 +3300,11 @@ function renderProof() {
 }
 
 function chatTransportMode() {
-  return resolveChatTransportMode(timelineMode, DIRECT_HELPER_MESSAGE_MODE, CHAT_DISPLAY_MODE);
+  return chatController.chatTransportMode();
 }
 
 function transactionTransportMode(requestedMode) {
-  return resolveTransactionTransportMode(timelineMode, requestedMode, DIRECT_HELPER_MESSAGE_MODE);
+  return chatController.transactionTransportMode(requestedMode);
 }
 
 async function safeSubmit(action, localItem, success, overlayOptions = {}) {
@@ -3456,70 +3473,27 @@ function classifyTransactionError(error) {
 }
 
 function addLocalItem(item) {
-  channelMessages().push(item);
-  const channel = currentChannel();
-  if (item.type === "message") {
-    channel.last = `${item.self ? "You" : item.sender}: ${item.body}`;
-  } else {
-    channel.last = item.title;
-  }
-  channel.time = "now";
-  saveLocalChannels();
-  renderChannel();
-  requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
+  chatController.addLocalItem(item);
 }
 
 function updateLocalItem(item, updates) {
-  Object.assign(item, updates);
-  saveLocalChannels();
-  renderChannel();
+  chatController.updateLocalItem(item, updates);
 }
 
 async function sendChat(message) {
-  const mode = chatTransportMode();
-  const submitted = await safeSubmit(
-    () => veilClient.sendMessage({ channelId: state.channelId, sender: "you", message, mode }),
-    {
-      type: "message",
-      sender: "You",
-      actor: "Alice",
-      body: message,
-      self: true,
-      time: Date.now(),
-      mode: CHAT_DISPLAY_MODE,
-    },
-    "Message sent.",
-    {
-      actionLabel: "Sending Shielded Message",
-      successTitle: "Shielded Message Sent",
-      successSubtitle: "ECDH encrypted message stored.",
-    },
-  );
-  if (submitted) awardReward("sendMessage");
+  return chatController.sendChat(message);
 }
 
 function formatFileSize(bytes) {
-  const value = Number(bytes) || 0;
-  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
-  return `${value} B`;
+  return chatController.formatFileSize(bytes);
 }
 
 async function sendAttachment(file) {
-  if (!file) return;
-  const fileType = file.type || "file";
-  await sendChat(`Attached file: ${file.name} (${fileType}; ${formatFileSize(file.size)})`);
+  return chatController.sendAttachment(file);
 }
 
 function applyAiDraft() {
-  if (!messageInput) return;
-  if (!messageInput.value.trim()) {
-    messageInput.value = "Thanks. I will review the offer and confirm the next step shortly.";
-  }
-  messageInput.style.height = "";
-  messageInput.style.height = `${Math.min(messageInput.scrollHeight, 120)}px`;
-  messageInput.focus();
-  showToast("AI draft ready.");
+  chatController.applyAiDraft();
 }
 
 function writeOfferForm({ amount, asset, terms } = {}) {
@@ -4351,8 +4325,7 @@ function bindEvents() {
   });
 
   messageInput?.addEventListener("input", () => {
-    messageInput.style.height = "";
-    messageInput.style.height = `${Math.min(messageInput.scrollHeight, 120)}px`;
+    chatController.resizeComposerInput(messageInput);
   });
 
   document.querySelector("#payment-form")?.addEventListener("submit", async (event) => {
