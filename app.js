@@ -3988,8 +3988,11 @@ function renderEscrow() {
       : fundingComplete
         ? "Waiting for both approvals"
         : "Waiting for buyer and seller deposits");
-  if (fundingProof) fundingProof.innerHTML = renderEscrowProofMeta(fundingItem);
-  if (fundingProofTimeline) fundingProofTimeline.innerHTML = renderEscrowProofMeta(fundingItem);
+  if (fundingProof) {
+    fundingProof.innerHTML = "";
+    fundingProof.hidden = true;
+  }
+  if (fundingProofTimeline) fundingProofTimeline.innerHTML = fundingComplete ? renderEscrowProofMeta(fundingItem) : "";
   if (fundingStep) {
     fundingStep.classList.toggle("complete", fundingComplete);
     fundingStep.classList.toggle("pending", !fundingComplete);
