@@ -15,9 +15,12 @@ import { createInviteController } from "./src-app/features/invite/invite-control
 import { counterpartyAvatar, resolveCounterparty } from "./src-app/features/invite/invite-feature.js";
 import { createOfferController } from "./src-app/features/offer/offer-controller.js";
 import { createPaymentController } from "./src-app/features/payment/payment-controller.js";
+import { createRewardsController } from "./src-app/features/rewards/rewards-controller.js";
+import { createSettlementController } from "./src-app/features/settlement/settlement-controller.js";
 import { createSettlementProofMeta, directPaymentProofItemFromMessages, directPaymentProofMarkup as buildDirectPaymentProofMarkup, escrowSettlementProofMarkup as buildEscrowSettlementProofMarkup } from "./src-app/features/settlement/settlement-feature.js";
 import { createLoadingController } from "./src-app/features/transactions/loading-state-feature.js";
 import { createTransactionModalController, transactionDelay } from "./src-app/features/transactions/transaction-modal-feature.js";
+import { createWalletController } from "./src-app/features/wallet/wallet-controller.js";
 import { estimateVeilFee } from "./src-app/services/fee-service.js";
 import { VEIL_REWARD_POINTS, createRewardEntry, nextRewardTier } from "./src-app/services/rewards-service.js";
 import { listStorageKeys, readJsonStorage, removeStorageKeys, writeJsonStorage } from "./src-app/services/storage-service.js";
@@ -427,6 +430,12 @@ const loadingController = createLoadingController({
   hideToastIfLoading,
 });
 
+const rewardsController = createRewardsController({
+  state,
+  createRewardEntry,
+  renderWalletRewards,
+});
+
 const inviteController = createInviteController({
   state,
   channels,
@@ -588,6 +597,63 @@ const escrowController = createEscrowController({
   renderChannel,
   requestAnimationFrame,
   fallbackFundingTime: () => now - 3 * minute,
+});
+
+const walletController = createWalletController({
+  state,
+  document,
+  walletAssetConfig,
+  expectedChainId,
+  privyAppId,
+  timelineMode,
+  nextRewardTier,
+  rewardRowsMarkup,
+  formatPoints,
+  setElementText,
+  shortAddress,
+  isWalletInitializationPending,
+  walletInitLabel,
+  expectedNetworkName,
+  verifyHelperDeployment,
+  refreshWalletAssets,
+  refreshConnectLabels,
+  renderHomeStatus,
+  showToast,
+  getPrivyBridge,
+  connectWallet,
+  clearWalletInitTimer: () => clearTimeout(walletInitTimer),
+  resetClientConnection: () => {
+    directTransport = undefined;
+    starkzapOnboardResult = undefined;
+    veilClient = createClient();
+  },
+  setWalletInitializationState,
+  createDefaultWalletAssetBalances,
+  listStorageKeys,
+  removeStorageKeys,
+  copyToClipboard: (value) => navigator.clipboard.writeText(value),
+});
+
+const settlementController = createSettlementController({
+  state,
+  document,
+  paymentRecipient: PAYMENT_RECIPIENT,
+  explorerUrl: STARKNET_SEPOLIA_EXPLORER_URL,
+  settlementProofMeta,
+  currentDealId,
+  currentChannel,
+  channelMessages,
+  paymentAmountLabel,
+  paymentPrivacyLabel,
+  escrowReleaseProofItem,
+  hasRealTransactionHash,
+  directPaymentProofItemFromMessages,
+  buildDirectPaymentProofMarkup,
+  buildEscrowSettlementProofMarkup,
+  transactionExplorerUrl: buildTransactionExplorerUrl,
+  escapeHtml,
+  setElementText,
+  iconRefresh,
 });
 
 function createClient(transport) {
@@ -2502,11 +2568,7 @@ function setElementText(selector, value) {
 }
 
 function awardReward(ruleKey) {
-  const reward = createRewardEntry(ruleKey);
-  if (!reward) return;
-  state.rewardPoints += reward.points;
-  state.rewardHistory.unshift(reward);
-  if (state.screen === "wallet") renderWalletRewards();
+  rewardsController.awardReward(ruleKey);
 }
 
 function offerPrivacyMode() {
@@ -2727,160 +2789,27 @@ function closeHomeMenu() {
 }
 
 function renderWallet() {
-  const connected = state.walletConnected;
-  const pending = isWalletInitializationPending();
-  const failed = state.walletInitState === "failed";
-  const pendingSubtitle = state.walletInitState === "creating_account" || state.walletInitState === "deploying"
-    ? "This only happens once."
-    : "Please approve the request in your wallet.";
-  const title = pending
-    ? walletInitLabel()
-    : failed
-      ? "Unable to connect wallet."
-      : connected ? "Connected" : "Not connected";
-  const subtitle = pending
-    ? pendingSubtitle
-    : failed
-      ? "Retry wallet connection."
-      : state.privyAccount && !state.privyAccountDeployed
-        ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
-        : connected
-          ? "This wallet can access encrypted deal channels."
-          : "Connect with Privy to unlock VEIL on this device.";
-  const statusText = pending ? "Connecting" : failed ? "Failed" : connected ? "Connected" : "Disconnected";
-  const helperText = pending
-    ? state.walletInitMessage
-    : failed
-      ? "Retry"
-      : timelineMode === "direct-helper"
-        ? state.privyAccount && !state.privyAccountDeployed
-          ? "Account funding needed"
-          : state.helperVerified ? "Verified" : "Check required"
-        : "Demo session";
-  const walletTitle = document.querySelector("#wallet-state-title");
-  const walletSubtitle = document.querySelector("#wallet-state-subtitle");
-  const walletStatus = document.querySelector("#wallet-status-pill");
-  const walletAccount = document.querySelector("#wallet-account");
-  const walletNetwork = document.querySelector("#wallet-network");
-  const walletProvider = document.querySelector("#wallet-provider");
-  const walletHelper = document.querySelector("#wallet-helper");
-  const walletConnectionSummary = document.querySelector("#wallet-connection-summary");
-  const walletConnectionStatus = document.querySelector("#wallet-connection-status");
-  const walletConnectRow = document.querySelector("[data-wallet-connect-row]");
-  const walletSettingsRow = document.querySelector("[data-wallet-settings-row]");
-  const walletAddress = state.walletAddress || state.privyWallet?.address;
-  const connectionSummary = pending
-    ? state.walletInitMessage
-    : failed
-      ? "Wallet connection failed"
-      : connected
-        ? `${state.walletSource} on ${expectedNetworkName()}`
-        : "Privy wallet not connected";
-  const connectionStatus = pending ? "Connecting" : failed ? "Failed" : connected ? "Active" : "Disconnected";
-
-  if (walletTitle) walletTitle.textContent = title;
-  if (walletSubtitle) walletSubtitle.textContent = subtitle;
-  if (walletStatus) {
-    walletStatus.textContent = statusText;
-    walletStatus.className = `status-pill ${connected || pending ? "private" : "public"}`;
-  }
-  if (walletAccount) {
-    walletAccount.textContent = shortAddress(walletAddress);
-    walletAccount.title = walletAddress || "";
-  }
-  if (walletNetwork) walletNetwork.textContent = expectedNetworkName();
-  if (walletProvider) walletProvider.textContent = state.walletSource;
-  if (walletHelper) walletHelper.textContent = helperText;
-  if (walletConnectionSummary) walletConnectionSummary.textContent = connectionSummary;
-  if (walletConnectionStatus) {
-    walletConnectionStatus.textContent = connectionStatus;
-    walletConnectionStatus.className = `status-pill ${connected || pending ? "private" : "public"}`;
-  }
-  if (walletConnectRow) walletConnectRow.hidden = connected;
-  if (walletSettingsRow) walletSettingsRow.hidden = !connected;
-  renderWalletAssets();
-  renderWalletRewards();
-  void refreshWalletAssets();
-  document.querySelectorAll("[data-default-privacy]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
-  });
-  document.querySelectorAll("[data-auto-shield]").forEach((input) => {
-    input.checked = state.autoShield;
-  });
-  renderSettings();
-
-  refreshConnectLabels();
-  renderHomeStatus();
+  walletController.renderWallet();
 }
 
 function renderWalletAssets() {
-  const connected = state.walletConnected && Boolean(walletAddressValue());
-  walletAssetConfig.forEach((asset) => {
-    const balance = document.querySelector(`#wallet-asset-${asset.id}-balance`);
-    const detail = document.querySelector(`#wallet-asset-${asset.id}-detail`);
-    const assetState = state.walletAssetBalances[asset.id] || { display: asset.defaultDisplay, status: "idle" };
-    if (balance) {
-      balance.textContent = connected ? assetState.display || asset.defaultDisplay : "--";
-    }
-    if (detail) {
-      detail.textContent = connected
-        ? assetState.status === "loading"
-          ? asset.symbol
-          : assetState.status === "error"
-            ? "Sync failed"
-            : asset.detail
-        : "Connect wallet";
-    }
-  });
+  walletController.renderWalletAssets();
 }
 
 function renderWalletRewards() {
-  const tier = nextRewardTier(state.rewardPoints);
-  const remaining = Math.max(tier.threshold - state.rewardPoints, 0);
-  setElementText("#wallet-reward-points", `${formatPoints(state.rewardPoints)} pts`);
-  setElementText("#wallet-reward-tier", tier.name);
-  setElementText("#wallet-reward-remaining", remaining > 0 ? `+${formatPoints(remaining)} pts remaining` : "Top tier reached");
-
-  const recent = document.querySelector("#wallet-recent-rewards");
-  const history = document.querySelector("#wallet-rewards-history");
-
-  if (recent) recent.innerHTML = rewardRowsMarkup(state.rewardHistory.slice(0, 3), formatPoints);
-  if (history) history.innerHTML = rewardRowsMarkup(state.rewardHistory.slice(0, 8), formatPoints);
+  walletController.renderWalletRewards();
 }
 
 function renderSettings() {
-  const walletAddress = walletAddressValue();
-  const settingsWalletAddress = document.querySelector("#settings-wallet-address");
-  const settingsWalletStatus = document.querySelector("#settings-wallet-status");
-  if (settingsWalletAddress) {
-    settingsWalletAddress.textContent = shortAddress(walletAddress);
-    settingsWalletAddress.title = walletAddress || "";
-  }
-  if (settingsWalletStatus) {
-    settingsWalletStatus.textContent = state.walletConnected ? "Connected" : "Disconnected";
-    settingsWalletStatus.className = `status-pill ${state.walletConnected ? "private" : "public"}`;
-  }
-  document.querySelectorAll("[data-default-privacy]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.defaultPrivacy === state.defaultPrivacyMode);
-  });
+  walletController.renderSettings();
 }
 
 function walletAddressValue() {
-  return state.walletAddress || state.privyWallet?.address || "";
+  return walletController.walletAddressValue();
 }
 
 async function copyWalletAddress() {
-  const address = walletAddressValue();
-  if (!address) {
-    showToast("No wallet address.");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(address);
-    showToast("Address copied.");
-  } catch {
-    showToast("Copy unavailable.");
-  }
+  return walletController.copyWalletAddress();
 }
 
 async function copyInviteLink() {
@@ -2892,107 +2821,43 @@ async function shareInvite(channelName) {
 }
 
 function resetWalletConnection() {
-  clearTimeout(walletInitTimer);
-  directTransport = undefined;
-  starkzapOnboardResult = undefined;
-  veilClient = createClient();
-  state.walletConnected = false;
-  state.walletAddress = "";
-  state.walletNetwork = expectedChainId;
-  state.walletSource = privyAppId ? "Privy" : "Demo";
-  state.helperVerified = false;
-  state.privyWallet = null;
-  state.privyAccount = null;
-  state.privyProvider = null;
-  state.privyAccountDeployed = false;
-  state.walletAssetBalances = createDefaultWalletAssetBalances();
-  state.walletAssetSyncKey = "";
-  state.walletAssetSyncStatus = "idle";
-  setWalletInitializationState("idle", { message: "Connect Wallet" });
+  walletController.resetWalletConnection();
 }
 
 function requireConnectedWallet() {
-  if (state.walletConnected || walletAddressValue()) return true;
-  showToast("Connect wallet first.");
-  return false;
+  return walletController.requireConnectedWallet();
 }
 
 async function refreshWalletConnection() {
-  if (!state.walletConnected) {
-    await connectWallet({ goToInbox: false });
-    return;
-  }
-  if (timelineMode === "direct-helper") await verifyHelperDeployment();
-  await refreshWalletAssets({ force: true });
-  renderWallet();
-  showToast("Connection refreshed.");
+  return walletController.refreshWalletConnection();
 }
 
 async function logoutWallet(message = "Logged out.") {
-  const bridge = getPrivyBridge();
-  try {
-    if (bridge?.logout) await bridge.logout();
-  } finally {
-    state.privyAuthenticated = false;
-    resetWalletConnection();
-    showToast(message);
-  }
+  return walletController.logoutWallet(message);
 }
 
 function clearLocalVeilCache() {
-  const keys = listStorageKeys("veil:");
-  removeStorageKeys(keys);
-  showToast(keys.length ? "Local VEIL cache cleared." : "No local VEIL cache.");
+  walletController.clearLocalVeilCache();
 }
 
 function renderSettlement() {
-  const proof = settlementProofMeta();
-  setElementText("#settlement-complete-deal-id", currentDealId());
-  setElementText("#settlement-complete-proof-id", proof.proofId);
-  setElementText("#settlement-complete-hash", proof.settlementHash);
+  settlementController.renderSettlement();
 }
 
 function directPaymentProofItem() {
-  return directPaymentProofItemFromMessages(channelMessages(), {
-    paymentSent: state.paymentSent,
-    paymentMode: state.paymentMode,
-    fallbackTime: Date.now(),
-  });
+  return settlementController.directPaymentProofItem();
 }
 
 function escrowSettlementProofMarkup() {
-  return buildEscrowSettlementProofMarkup(escapeHtml);
+  return settlementController.escrowSettlementProofMarkup();
 }
 
 function directPaymentProofMarkup() {
-  return buildDirectPaymentProofMarkup({
-    recipient: PAYMENT_RECIPIENT,
-    amountLabel: paymentAmountLabel(),
-    privacyLabel: paymentPrivacyLabel(),
-    escapeHtml,
-  });
+  return settlementController.directPaymentProofMarkup();
 }
 
 function renderProof() {
-  const directPaymentProof = state.paymentSent && !state.escrowReleased;
-  const item = directPaymentProof ? directPaymentProofItem() : escrowReleaseProofItem();
-  const txHash = hasRealTransactionHash(item) ? String(item.txHash) : "";
-  const proofFlow = document.querySelector("#settlement-proof-flow");
-  const proofLink = document.querySelector("#settlement-proof-link");
-
-  setElementText("#settlement-proof-title", directPaymentProof ? "Trusted Transfer" : currentChannel().title || "Rights Transfer");
-  setElementText("#settlement-proof-parties", `${currentDealId()} · Alice <-> Bob`);
-  const proof = settlementProofMeta();
-  setElementText("#settlement-proof-id", proof.proofId);
-  setElementText("#settlement-proof-settlement-hash", proof.settlementHash);
-  if (proofFlow) proofFlow.innerHTML = directPaymentProof ? directPaymentProofMarkup() : escrowSettlementProofMarkup();
-  setElementText("#settlement-proof-hash", txHash || "Available after wallet confirmation");
-  if (proofLink) {
-    proofLink.href = txHash ? buildTransactionExplorerUrl(txHash, STARKNET_SEPOLIA_EXPLORER_URL) : STARKNET_SEPOLIA_EXPLORER_URL;
-    const label = proofLink.querySelector("span");
-    if (label) label.textContent = txHash ? "View Transaction" : "View on Voyager";
-  }
-  iconRefresh();
+  settlementController.renderProof();
 }
 
 function chatTransportMode() {
