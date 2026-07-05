@@ -1,0 +1,195 @@
+﻿.deal-amount span,
+.deal-amount small {
+  display: block;
+  color: rgb(100 116 139);
+  font-weight: 850;
+}
+
+.deal-amount strong {
+  display: block;
+  margin-top: .15rem;
+  color: rgb(15 23 42);
+  font-size: 2.3rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.split-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+}
+
+.split-list > div {
+  border-radius: .65rem;
+  background: rgb(248 250 252);
+  padding: .8rem;
+}
+
+.split-list strong {
+  display: block;
+  margin-top: .18rem;
+  text-align: left;
+}
+
+.section-title {
+  margin-bottom: .85rem;
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 950;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .85rem;
+}
+
+.section-title-row .section-title {
+  margin-bottom: 0;
+}
+
+.event-list,
+.proof-timeline {
+  display: grid;
+  gap: .8rem;
+}
+
+.event-list li,
+.proof-timeline li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.event-list span,
+.proof-timeline span {
+  color: rgb(100 116 139);
+  font-weight: 800;
+}
+
+.settlement-receipt-card {
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  border: 1px solid rgb(187 247 208);
+  border-radius: .9rem;
+  background: rgb(236 253 245);
+  padding: 1rem;
+}
+
+.settlement-receipt-card .success-icon.compact {
+  width: 3rem;
+  height: 3rem;
+  min-width: 3rem;
+}
+
+.settlement-receipt-card h2 {
+  color: rgb(15 23 42);
+  font-size: 1.25rem;
+  font-weight: 950;
+}
+
+.settlement-receipt-card small {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  color: rgb(71 85 105);
+  font-weight: 850;
+}
+
+.settlement-proof-flow {
+  display: grid;
+  gap: 1rem;
+}
+
+.proof-group {
+  display: grid;
+  gap: .55rem;
+  border-bottom: 1px solid rgb(226 232 240);
+  padding-bottom: .9rem;
+}
+
+.proof-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.proof-group h2 {
+  color: rgb(15 23 42);
+  font-size: .92rem;
+  font-weight: 950;
+}
+
+.proof-group ol {
+  display: grid;
+  gap: .5rem;
+}
+
+.proof-group li {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .6rem;
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .65rem;
+}
+
+.proof-group li span {
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+  color: rgb(4 120 87);
+}
+
+.proof-group p {
+  min-width: 0;
+  color: rgb(71 85 105);
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.proof-group strong {
+  min-width: 0;
+  color: rgb(15 23 42);
+  font-size: .86rem;
+  font-weight: 950;
+  text-align: right;
+}
+
+.settlement-transaction-card {
+  display: grid;
+  gap: .85rem;
+}
+
+.settlement-tx-row {
+  display: grid;
+  gap: .3rem;
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .8rem;
+}
+
+.settlement-tx-row span {
+  color: rgb(100 116 139);
+  font-size: .74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.settlement-tx-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(15 23 42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: .82rem;
+  font-weight: 900;
+}
+

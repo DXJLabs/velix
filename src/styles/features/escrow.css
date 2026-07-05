@@ -1,0 +1,282 @@
+﻿.escrow-deposit-grid {
+  display: grid;
+  gap: .75rem;
+}
+
+.escrow-deposit-card {
+  display: grid;
+  gap: .55rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .85rem;
+}
+
+.escrow-deposit-card.complete {
+  border-color: rgb(187 247 208);
+  background: rgb(236 253 245);
+}
+
+.escrow-deposit-card.waiting {
+  border-color: rgb(224 242 254);
+  background: rgb(248 250 252);
+}
+
+.escrow-deposit-card.locked {
+  opacity: .74;
+}
+
+.deposit-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.deposit-card-top span {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+  color: rgb(4 120 87);
+}
+
+.escrow-deposit-card:not(.complete) .deposit-card-top span {
+  background: rgb(224 242 254);
+  color: rgb(3 105 161);
+}
+
+.deposit-card-top small,
+.escrow-deposit-card > small {
+  color: rgb(4 120 87);
+  font-size: .78rem;
+  font-weight: 850;
+}
+
+.escrow-deposit-card:not(.complete) .deposit-card-top small {
+  color: rgb(3 105 161);
+}
+
+.escrow-deposit-card p {
+  color: rgb(15 23 42);
+  font-size: .86rem;
+  font-weight: 900;
+}
+
+.escrow-deposit-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: 1.2rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deposit-card-details {
+  display: grid;
+  gap: .45rem;
+}
+
+.deposit-card-details span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  border-top: 1px solid rgb(226 232 240);
+  padding-top: .45rem;
+}
+
+.deposit-card-details em {
+  color: rgb(71 85 105);
+  font-size: .72rem;
+  font-style: normal;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.deposit-card-details b {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .82rem;
+  font-weight: 950;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deposit-chain-meta {
+  margin-top: .25rem;
+}
+
+.deposit-chain-meta:empty {
+  display: none;
+}
+
+.deposit-chain-meta .chain-meta {
+  margin-top: 0;
+}
+
+.escrow-checks {
+  display: grid;
+  gap: .6rem;
+}
+
+.escrow-check-item {
+  display: flex;
+  width: 100%;
+  min-height: 3rem;
+  align-items: center;
+  gap: .65rem;
+  border: 0;
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .75rem;
+  color: rgb(51 65 85);
+  font: inherit;
+  font-weight: 900;
+  text-align: left;
+}
+
+.escrow-check-item:not(:disabled) {
+  cursor: pointer;
+}
+
+.escrow-check-item:disabled {
+  cursor: not-allowed;
+  opacity: .72;
+}
+
+.escrow-checks small {
+  margin-left: auto;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.escrow-check-item.complete {
+  background: rgb(236 253 245);
+  color: rgb(4 120 87);
+}
+
+.escrow-check-item.complete small {
+  color: rgb(4 120 87);
+}
+
+.escrow-stage-proof {
+  margin-top: .75rem;
+}
+
+.escrow-proof-timeline {
+  display: grid;
+  gap: 0;
+}
+
+.escrow-proof-timeline li {
+  display: grid;
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .75rem;
+  padding: .8rem 0;
+}
+
+.escrow-proof-timeline li:first-child {
+  padding-top: 0;
+}
+
+.escrow-proof-timeline li:last-child {
+  padding-bottom: 0;
+}
+
+.escrow-proof-timeline li:not(:last-child)::after {
+  position: absolute;
+  top: 2.2rem;
+  bottom: -.55rem;
+  left: .78rem;
+  width: 1px;
+  background: rgb(226 232 240);
+  content: "";
+}
+
+.escrow-proof-timeline .proof-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 1.6rem;
+  height: 1.6rem;
+  place-items: center;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 999px;
+  background: white;
+  color: rgb(100 116 139);
+}
+
+.escrow-proof-timeline li.complete .proof-dot {
+  border-color: rgb(167 243 208);
+  background: rgb(220 252 231);
+  color: rgb(22 101 52);
+}
+
+.escrow-proof-timeline strong,
+.escrow-proof-timeline small {
+  display: block;
+}
+
+.escrow-proof-timeline strong {
+  color: rgb(15 23 42);
+  font-size: .92rem;
+  font-weight: 950;
+}
+
+.escrow-proof-timeline small {
+  margin-top: .15rem;
+  color: rgb(100 116 139);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.escrow-proof-timeline .chain-meta {
+  margin-top: .5rem;
+}
+
+.plain-note {
+  margin-top: 1rem;
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .85rem;
+  color: rgb(71 85 105);
+  font-size: .92rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.field {
+  display: grid;
+  gap: .45rem;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: white;
+  padding: .85rem;
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  outline: none;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: rgb(100 116 139);
+}
+

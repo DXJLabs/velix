@@ -1,0 +1,410 @@
+﻿.wallet-page {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1rem calc(5.8rem + env(safe-area-inset-bottom));
+}
+
+.wallet-card {
+  display: grid;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 1rem;
+  background: white;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.wallet-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .85rem;
+}
+
+.wallet-icon {
+  display: grid;
+  width: 2.8rem;
+  height: 2.8rem;
+  place-items: center;
+  border-radius: .85rem;
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.wallet-card h2,
+.wallet-section h2,
+.settings-list h2 {
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.wallet-card > strong {
+  display: block;
+  margin-top: .55rem;
+  color: rgb(15 23 42);
+  font-size: 1.25rem;
+  font-weight: 950;
+}
+
+.wallet-card > small {
+  margin-top: .25rem;
+  color: rgb(100 116 139);
+  font-size: .92rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.wallet-section {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+}
+
+.wallet-section h2,
+.settings-list h2 {
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+  background: rgb(248 250 252);
+}
+
+.wallet-action-row,
+.wallet-setting-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 3.65rem;
+  align-items: center;
+  gap: .75rem;
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+  text-align: left;
+}
+
+.wallet-action-row[hidden] {
+  display: none;
+}
+
+.wallet-action-row:last-child,
+.wallet-setting-row:last-child {
+  border-bottom: 0;
+}
+
+.wallet-action-row > span:first-child {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: .65rem;
+  background: rgb(241 245 249);
+  color: rgb(15 23 42);
+}
+
+.wallet-action-row strong,
+.wallet-setting-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .95rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-setting-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.wallet-setting-row small {
+  display: block;
+  margin-top: .18rem;
+  color: rgb(100 116 139);
+  font-size: .8rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.wallet-action-row.danger {
+  color: rgb(153 27 27);
+}
+
+.wallet-action-row.danger > span:first-child {
+  background: rgb(254 226 226);
+  color: rgb(153 27 27);
+}
+
+.wallet-action-row.danger strong {
+  color: rgb(153 27 27);
+}
+
+.wallet-asset-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 4.3rem;
+  align-items: center;
+  gap: .75rem;
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .9rem 1rem;
+}
+
+.wallet-asset-row:last-child {
+  border-bottom: 0;
+}
+
+.wallet-asset-icon {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: .75rem;
+  background: rgb(236 253 245);
+  color: rgb(4 120 87);
+  font-size: .95rem;
+  font-weight: 950;
+}
+
+.wallet-asset-icon.dark {
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.wallet-asset-icon.navy {
+  background: rgb(238 242 255);
+  color: rgb(67 56 202);
+}
+
+.wallet-asset-copy,
+.wallet-asset-value {
+  display: grid;
+  min-width: 0;
+  gap: .15rem;
+}
+
+.wallet-asset-copy strong,
+.wallet-asset-value strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-asset-copy small,
+.wallet-asset-value small {
+  color: rgb(100 116 139);
+  font-size: .78rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.wallet-asset-value {
+  text-align: right;
+}
+
+.wallet-rewards-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  padding: 1rem;
+}
+
+.wallet-rewards-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: .25rem;
+}
+
+.wallet-rewards-summary span,
+.wallet-reward-subsection h3 {
+  color: rgb(100 116 139);
+  font-size: .74rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.wallet-rewards-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: 1.18rem;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-rewards-summary small,
+.wallet-reward-note {
+  color: rgb(100 116 139);
+  font-size: .8rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.wallet-reward-note {
+  border-top: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+}
+
+.wallet-reward-subsection {
+  display: grid;
+  gap: .2rem;
+  border-top: 1px solid rgb(241 245 249);
+  padding: .85rem 1rem;
+}
+
+.reward-list {
+  display: grid;
+  gap: 0;
+}
+
+.reward-list li {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  min-height: 2.65rem;
+  align-items: center;
+  gap: .75rem;
+  border-bottom: 1px solid rgb(241 245 249);
+}
+
+.reward-list li:last-child {
+  border-bottom: 0;
+}
+
+.reward-list strong {
+  color: rgb(4 120 87);
+  font-size: .95rem;
+  font-weight: 950;
+}
+
+.reward-list span {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-size: .9rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .45rem;
+  color: rgb(15 23 42);
+}
+
+.copy-value strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plain-list span,
+.split-list span,
+.field span,
+.field-label {
+  color: rgb(100 116 139);
+  font-size: .74rem;
+  font-weight: 950;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.plain-list strong,
+.split-list strong {
+  color: rgb(15 23 42);
+  font-weight: 950;
+  text-align: right;
+}
+
+.setting-row small {
+  display: block;
+  margin-top: .15rem;
+  color: rgb(100 116 139);
+  font-size: .84rem;
+  font-weight: 650;
+}
+
+.settings-page {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1rem calc(5.8rem + env(safe-area-inset-bottom));
+}
+
+.settings-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 1rem;
+  background: white;
+}
+
+.settings-list .setting-row {
+  padding: .95rem 1rem;
+}
+
+.setting-copy {
+  min-width: 0;
+}
+
+.setting-copy strong {
+  display: block;
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.setting-copy small {
+  display: block;
+  margin-top: .18rem;
+  color: rgb(100 116 139);
+  font-size: .86rem;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.switch-input {
+  width: 2.9rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  appearance: none;
+  border-radius: 999px;
+  background: rgb(203 213 225);
+  box-shadow: inset 0 0 0 2px transparent;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.switch-input::before {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: .2rem;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .2);
+  content: "";
+  transition: transform 160ms ease;
+}
+
+.switch-input:checked {
+  background: rgb(16 185 129);
+}
+
+.switch-input:checked::before {
+  transform: translateX(1.25rem);
+}
+

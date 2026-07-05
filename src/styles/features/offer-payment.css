@@ -1,0 +1,439 @@
+﻿.detail-content {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1rem calc(1.4rem + env(safe-area-inset-bottom));
+}
+
+.channel-context-card,
+.deal-proposal-card,
+.payment-summary-card {
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.channel-context-card {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.channel-context-card h2,
+.deal-proposal-card h2,
+.payment-summary-card h2 {
+  margin-top: .15rem;
+  color: rgb(15 23 42);
+  font-size: 1.18rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.channel-context-card small {
+  display: block;
+  margin-top: .2rem;
+  color: rgb(100 116 139);
+  font-size: .86rem;
+  font-weight: 750;
+}
+
+.proposal-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.proposal-amount-block {
+  margin-top: .75rem;
+}
+
+.proposal-amount-block small {
+  display: block;
+  margin-top: .35rem;
+  color: rgb(100 116 139);
+  font-size: .9rem;
+  font-weight: 850;
+}
+
+.proposal-amount {
+  color: rgb(15 23 42);
+  font-size: 2.65rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.deal-info-grid {
+  display: grid;
+  gap: 0;
+  margin-top: .9rem;
+  border-top: 1px solid rgb(241 245 249);
+}
+
+.deal-info-grid div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgb(241 245 249);
+  padding: .48rem 0;
+}
+
+.deal-info-grid span,
+.deal-info-grid strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-info-grid span {
+  color: rgb(100 116 139);
+  font-size: .68rem;
+  font-weight: 950;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.deal-info-grid strong {
+  color: rgb(15 23 42);
+  font-size: .88rem;
+  font-weight: 950;
+  text-align: right;
+}
+
+.create-offer-panel {
+  display: grid;
+  gap: .85rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .9rem;
+  background: white;
+  padding: 1rem;
+}
+
+.create-offer-panel[hidden] {
+  display: none;
+}
+
+.create-offer-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .85rem;
+}
+
+.create-offer-heading h2 {
+  color: rgb(15 23 42);
+  font-size: 1.35rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.create-offer-heading small {
+  display: block;
+  margin-top: .18rem;
+  color: rgb(100 116 139);
+  font-size: .82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.create-offer-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+}
+
+.offer-amount-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: white;
+  padding-right: .75rem;
+}
+
+.offer-amount-input:focus-within {
+  border-color: rgb(100 116 139);
+}
+
+.field .offer-amount-input input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: .85rem .85rem;
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 950;
+  outline: none;
+}
+
+.offer-amount-input strong {
+  color: rgb(71 85 105);
+  font-size: .82rem;
+  font-weight: 950;
+}
+
+.create-offer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .75rem;
+}
+
+.create-offer-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  border-radius: 999px;
+  background: rgb(220 252 231);
+  color: rgb(4 120 87);
+  padding: .35rem .65rem;
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.create-offer-meta small {
+  min-width: 0;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+.offer-form-actions {
+  display: grid;
+  grid-template-columns: minmax(0, .75fr) minmax(0, 1fr);
+  gap: .65rem;
+}
+
+.offer-form-actions [hidden] {
+  display: none;
+}
+
+.offer-form-actions:has([hidden]) {
+  grid-template-columns: 1fr;
+}
+
+.payment-route {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  margin-top: .65rem;
+}
+
+.price-timeline {
+  display: grid;
+  gap: .85rem;
+  position: relative;
+}
+
+.price-timeline li {
+  display: grid;
+  position: relative;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  gap: .2rem .75rem;
+  align-items: center;
+  padding-left: 0;
+}
+
+.price-timeline li::before {
+  display: inline-grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 999px;
+  background: white;
+  color: rgb(100 116 139);
+  content: "â—‹";
+  font-size: .76rem;
+  font-weight: 950;
+}
+
+.price-timeline li:not(:last-child)::after {
+  position: absolute;
+  top: 1.85rem;
+  left: .73rem;
+  height: .65rem;
+  color: rgb(148 163 184);
+  content: "â†“";
+  font-size: .8rem;
+  font-weight: 950;
+}
+
+.price-timeline li.complete::before {
+  border-color: rgb(167 243 208);
+  background: rgb(220 252 231);
+  color: rgb(22 101 52);
+  content: "âœ“";
+}
+
+.price-timeline li.active::before {
+  border-color: rgb(191 219 254);
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.price-timeline span,
+.price-timeline small {
+  display: block;
+  color: rgb(100 116 139);
+  font-weight: 800;
+}
+
+.price-timeline strong {
+  color: rgb(15 23 42);
+  font-weight: 950;
+  text-align: right;
+}
+
+.price-timeline small {
+  grid-column: 2 / -1;
+  font-size: .78rem;
+}
+
+.plain-note.compact {
+  margin-top: 0;
+}
+
+.next-step-panel {
+  padding: .9rem;
+}
+
+.next-step-panel .section-title {
+  margin-bottom: .45rem;
+}
+
+.next-step-panel .plain-note.compact {
+  background: transparent;
+  padding: 0;
+  color: rgb(51 65 85);
+  font-weight: 750;
+}
+
+.proposal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin-top: .85rem;
+}
+
+.transaction-summary-list,
+.review-summary-list {
+  display: grid;
+  gap: 0;
+  margin-top: .75rem;
+}
+
+.transaction-summary-list > div,
+.review-summary-list > div {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+  border-bottom: 1px solid rgb(241 245 249);
+}
+
+.transaction-summary-list > div:last-child,
+.review-summary-list > div:last-child {
+  border-bottom: 0;
+}
+
+.transaction-summary-list span,
+.review-summary-list span {
+  min-width: 0;
+  color: rgb(100 116 139);
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.transaction-summary-list strong,
+.review-summary-list strong {
+  max-width: 58%;
+  min-width: 0;
+  color: rgb(15 23 42);
+  font-size: .9rem;
+  font-weight: 950;
+  line-height: 1.2;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.transaction-summary-list .summary-total,
+.review-summary-list .summary-total {
+  min-height: 3.55rem;
+}
+
+.transaction-summary-list .summary-total strong,
+.review-summary-list .summary-total strong {
+  font-size: 1rem;
+}
+
+.offer-proof-panel {
+  display: grid;
+  gap: .55rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: .75rem .9rem;
+}
+
+.offer-proof-panel .chain-meta {
+  margin-top: 0;
+}
+
+.offer-proof-panel summary {
+  display: flex;
+  min-height: 2rem;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  color: rgb(15 23 42);
+  font-size: .92rem;
+  font-weight: 950;
+}
+
+.offer-proof-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.offer-proof-panel summary i,
+.offer-proof-panel summary svg {
+  color: rgb(100 116 139);
+  transition: transform 140ms ease;
+}
+
+.offer-proof-panel[open] summary i,
+.offer-proof-panel[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.offer-proof-panel[open] .chain-meta {
+  margin-top: .55rem;
+}
+
+.settlement-route-panel .plain-note {
+  margin-top: 0;
+}
+
+.payment-summary-card h2 {
+  font-size: 1.35rem;
+}
+
+.payment-route {
+  margin-top: .5rem;
+  color: rgb(51 65 85);
+}
+

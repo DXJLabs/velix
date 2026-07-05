@@ -1,1 +1,1 @@
-import "./src-app/app-runtime.js";
+import "./src/app-runtime.js";

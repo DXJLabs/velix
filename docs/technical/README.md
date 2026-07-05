@@ -32,7 +32,7 @@ VEIL is product-first. The documents here are important, but they are not the re
 
 ## Contracts
 
-- [Smart Contract Reference](../../src/README.md)
+- [Smart Contract Reference](../../contracts/README.md)
 - [VEIL Escrow V1 Smart Contract](veil-escrow-v1.md)
 
 ## Privacy Pool Integration
@@ -44,7 +44,7 @@ VEIL is product-first. The documents here are important, but they are not the re
 
 ## Helper Contract
 
-- [Smart Contract Reference](../../src/README.md)
+- [Smart Contract Reference](../../contracts/README.md)
 - [Production Onchain Messaging](production-onchain-messaging.md)
 
 ## Indexer

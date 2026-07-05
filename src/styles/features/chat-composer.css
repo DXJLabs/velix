@@ -1,0 +1,82 @@
+﻿.composer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 45;
+  max-width: 46rem;
+  margin-inline: auto;
+  border-top: 1px solid rgb(226 232 240);
+  background: rgba(255, 255, 255, .97);
+  padding: .55rem .75rem calc(.7rem + env(safe-area-inset-bottom));
+  backdrop-filter: blur(18px);
+}
+
+.composer-actions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .45rem;
+  margin-bottom: .5rem;
+}
+
+.composer-actions button,
+.composer-input button {
+  display: inline-grid;
+  min-height: 2.6rem;
+  place-items: center;
+  border-radius: .65rem;
+  background: rgb(241 245 249);
+  color: rgb(30 41 59);
+}
+
+.composer-actions button {
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: .35rem;
+  padding-inline: .35rem;
+  font-size: .76rem;
+  font-weight: 950;
+}
+
+.composer-actions button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hidden-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.composer-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.75rem;
+  gap: .5rem;
+  align-items: end;
+}
+
+.composer-input textarea {
+  max-height: 7.5rem;
+  min-height: 2.75rem;
+  resize: none;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .75rem;
+  background: rgb(248 250 252);
+  padding: .72rem .85rem;
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  line-height: 1.35;
+  outline: none;
+}
+
+.composer-input button {
+  background: rgb(15 23 42);
+  color: white;
+}
+

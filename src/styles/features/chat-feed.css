@@ -1,0 +1,245 @@
+﻿.message-feed {
+  min-height: calc(100dvh - 4.25rem);
+  padding: .85rem 1rem calc(10.8rem + env(safe-area-inset-bottom));
+}
+
+.composer[hidden] {
+  display: none;
+}
+
+.invite-wait-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .75rem;
+  align-items: start;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: .9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.invite-wait-icon {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border-radius: .7rem;
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.invite-wait-card strong {
+  display: block;
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+}
+
+.invite-wait-card p {
+  margin-top: .18rem;
+  color: rgb(71 85 105);
+  font-size: .84rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.invite-wait-card small {
+  display: block;
+  margin-top: .45rem;
+  overflow-wrap: anywhere;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.invite-wait-actions,
+.invite-share-grid {
+  grid-column: 1 / -1;
+}
+
+.invite-share-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .4rem;
+}
+
+.invite-share-grid button {
+  min-height: 2.45rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .65rem;
+  background: rgb(248 250 252);
+  color: rgb(15 23 42);
+  font-size: .74rem;
+  font-weight: 900;
+}
+
+.invite-wait-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .5rem;
+}
+
+.invite-wait-actions button {
+  grid-column: 1 / -1;
+  min-height: 2.65rem;
+}
+
+.invite-wait-actions button {
+  grid-column: auto;
+}
+
+.channel-security-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .75rem;
+  align-items: center;
+  margin: .85rem 1rem 0;
+  border: 1px solid rgb(203 213 225);
+  border-radius: .85rem;
+  background: white;
+  padding: .85rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.security-lock {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  place-items: center;
+  border-radius: .7rem;
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.channel-security-banner strong,
+.channel-security-banner small,
+.channel-security-banner p {
+  display: block;
+}
+
+.channel-security-banner strong {
+  color: rgb(15 23 42);
+  font-size: .98rem;
+  font-weight: 950;
+}
+
+.channel-security-banner small {
+  margin-top: .06rem;
+  color: rgb(51 65 85);
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.channel-security-banner p {
+  margin-top: .18rem;
+  overflow: hidden;
+  color: rgb(100 116 139);
+  font-size: .76rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-security-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .32rem;
+  margin-top: .5rem;
+}
+
+.channel-security-badges span {
+  border-radius: 999px;
+  background: rgb(236 253 245);
+  padding: .2rem .45rem;
+  color: rgb(4 120 87);
+  font-size: .68rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.timeline-day {
+  display: flex;
+  justify-content: center;
+  margin: .65rem 0 1rem;
+}
+
+.timeline-day span {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 999px;
+  background: white;
+  padding: .28rem .7rem;
+  color: rgb(71 85 105);
+  font-size: .72rem;
+  font-weight: 950;
+}
+
+.message {
+  display: flex;
+  margin-bottom: 1rem;
+  animation: var(--animate-message-in);
+}
+
+.message.self {
+  justify-content: flex-end;
+}
+
+.message-stack {
+  display: grid;
+  width: min(86%, 29rem);
+  gap: .24rem;
+}
+
+.message-stack.right {
+  justify-items: end;
+}
+
+.bubble {
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 1rem;
+  padding: .72rem .85rem;
+  font-size: .96rem;
+  line-height: 1.45;
+}
+
+.message.self .bubble {
+  border-bottom-right-radius: .25rem;
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.message:not(.self) .bubble {
+  border-bottom-left-radius: .25rem;
+  background: rgb(241 245 249);
+  color: rgb(15 23 42);
+}
+
+.message.failed .bubble,
+.timeline-event.failed .timeline-card {
+  opacity: .7;
+}
+
+.message-meta {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: .4rem;
+  padding-inline: .2rem;
+  color: rgb(100 116 139);
+  font-size: .72rem;
+  font-weight: 850;
+}
+
+.message-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-meta time {
+  flex: 0 0 auto;
+  color: rgb(148 163 184);
+}
+

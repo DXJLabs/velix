@@ -1,0 +1,69 @@
+﻿@media (max-width: 24rem) {
+  .channel-security-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .channel-security-banner .status-pill {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .timeline-event.offer-timeline {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .timeline-event.offer-timeline button {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .composer-actions button {
+    grid-template-columns: 1fr;
+    gap: .15rem;
+    font-size: .68rem;
+  }
+
+  .proposal-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .create-offer-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .create-offer-heading,
+  .create-offer-meta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .create-offer-meta small {
+    text-align: left;
+  }
+
+  .offer-form-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-link-card div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invite-share-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .invite-wait-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .counterparty-result {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .counterparty-result .status-pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+

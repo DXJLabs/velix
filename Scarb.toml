@@ -12,8 +12,21 @@ openzeppelin_security = "0.20.0"
 snforge_std = "0.56.0"
 assert_macros = "2.15.0"
 
+[lib]
+source-path = "contracts/lib.cairo"
+
 [[target.starknet-contract]]
 sierra = true
+
+[[test]]
+name = "veil_escrow"
+source-path = "contracts/tests/test_veil_escrow.cairo"
+test-type = "integration"
+
+[[test]]
+name = "veil_channel_helper"
+source-path = "contracts/tests/test_veil_channel_helper.cairo"
+test-type = "integration"
 
 [scripts]
 test = "snforge test"

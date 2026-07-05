@@ -1,0 +1,63 @@
+﻿.settlement-complete-card {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .85rem;
+  background: white;
+  padding: 1.2rem 1rem;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.settlement-complete-card h2 {
+  color: rgb(15 23 42);
+  font-size: 1.45rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.settlement-complete-card p {
+  color: rgb(71 85 105);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.settlement-proof-summary {
+  display: grid;
+  gap: .55rem;
+  text-align: left;
+}
+
+.settlement-proof-summary div {
+  display: grid;
+  gap: .2rem;
+  border-radius: .7rem;
+  background: rgb(248 250 252);
+  padding: .72rem;
+}
+
+.settlement-proof-summary span {
+  color: rgb(100 116 139);
+  font-size: .72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.settlement-proof-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgb(15 23 42);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: .82rem;
+  font-weight: 900;
+}
+
+.settlement-action-grid {
+  display: grid;
+  gap: .55rem;
+}
+
+.settlement-action-grid .secondary-action {
+  width: 100%;
+}
+
