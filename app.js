@@ -14,6 +14,8 @@ import { escrowApprovalCompleteFromState, escrowConfirmationsCompleteFromState, 
 import { counterpartyAvatar, resolveCounterparty } from "./src-app/features/invite/invite-feature.js";
 import { paymentAmountLabel as buildPaymentAmountLabel, paymentMemoValue as buildPaymentMemoValue, paymentPrivacyLabel as buildPaymentPrivacyLabel } from "./src-app/features/payment/payment-feature.js";
 import { createSettlementProofMeta, directPaymentProofItemFromMessages, directPaymentProofMarkup as buildDirectPaymentProofMarkup, escrowSettlementProofMarkup as buildEscrowSettlementProofMarkup } from "./src-app/features/settlement/settlement-feature.js";
+import { createLoadingController } from "./src-app/features/transactions/loading-state-feature.js";
+import { createTransactionModalController, transactionDelay } from "./src-app/features/transactions/transaction-modal-feature.js";
 import { estimateVeilFee } from "./src-app/services/fee-service.js";
 import { VEIL_REWARD_POINTS, createRewardEntry, nextRewardTier } from "./src-app/services/rewards-service.js";
 import { listStorageKeys, readJsonStorage, removeStorageKeys, writeJsonStorage } from "./src-app/services/storage-service.js";
@@ -384,7 +386,6 @@ const state = {
 
 let toastTimer;
 let walletInitTimer;
-let transactionModalTimer;
 let directTransport;
 let transactionSubmitInFlight = false;
 let encryptionConfigWarningShown = false;
@@ -408,6 +409,25 @@ const offerReviewModal = document.querySelector("#offer-review-modal");
 const paymentReviewModal = document.querySelector("#payment-review-modal");
 const escrowReviewModal = document.querySelector("#escrow-review-modal");
 const privyAuthRoot = document.querySelector("#privy-auth-root");
+
+const transactionModalController = createTransactionModalController({
+  state,
+  modalElement: transactionLoadingModal,
+  document,
+  explorerUrl: STARKNET_SEPOLIA_EXPLORER_URL,
+  transactionExplorerUrl: buildTransactionExplorerUrl,
+  inferOverlayCopy: inferTransactionOverlayCopy,
+  currentAmount: () => currentDealOfferAmount(),
+  setLucideIcon,
+});
+
+const loadingController = createLoadingController({
+  state,
+  document,
+  isWalletInitializationPending,
+  showToast,
+  hideToastIfLoading,
+});
 
 function createClient(transport) {
   const encryption = channelKey
@@ -2323,335 +2343,84 @@ function hideToastIfLoading() {
   toast.dataset.sticky = "false";
 }
 
-function transactionDelay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function setTransactionModal(updates = {}) {
-  Object.assign(state.transactionModal, updates);
-  renderTransactionModal();
+  transactionModalController.setTransactionModal(updates);
 }
 
 function beginTransactionModal(localItem, success, options = {}) {
-  clearTimeout(transactionModalTimer);
-  const copy = {
-    ...inferTransactionOverlayCopy(localItem, success, currentDealOfferAmount()),
-    ...options,
-  };
-  setTransactionModal({
-    visible: true,
-    stage: "preparing",
-    actionLabel: copy.actionLabel,
-    title: copy.actionLabel,
-    subtitle: "Please approve the request in your wallet.",
-    detail: "Waiting for signature...",
-    successTitle: copy.successTitle,
-    successSubtitle: copy.successSubtitle,
-    txHash: "",
-  });
+  transactionModalController.beginTransactionModal(localItem, success, options);
 }
 
 function beginWalletModal() {
-  clearTimeout(transactionModalTimer);
-  setTransactionModal({
-    visible: true,
-    stage: "wallet",
-    actionLabel: "Connecting Wallet",
-    title: "Connecting Wallet",
-    subtitle: "Please approve the request in your wallet.",
-    detail: "Waiting for signature...",
-    successTitle: "Wallet Connected",
-    successSubtitle: "Opening secure channel...",
-    txHash: "",
-  });
+  transactionModalController.beginWalletModal();
 }
 
 function beginChannelModal({ inviteOnly = false, person = "Bob", dealId = "" } = {}) {
-  clearTimeout(transactionModalTimer);
-  const title = inviteOnly ? "Creating Invite Link" : "Creating Deal Channel";
-  setTransactionModal({
-    visible: true,
-    stage: "channel",
-    actionLabel: title,
-    title,
-    subtitle: inviteOnly ? "Generating private invitation." : "Preparing private deal channel.",
-    detail: inviteOnly ? "Creating invite..." : "Creating channel...",
-    successTitle: inviteOnly ? "Invite Link Ready" : "Deal Channel Created",
-    successSubtitle: inviteOnly
-      ? `${dealId || "Deal"} is waiting for ${person}.`
-      : `Waiting for ${person} to accept.`,
-    txHash: "",
-  });
+  transactionModalController.beginChannelModal({ inviteOnly, person, dealId });
 }
 
 function finishChannelModal({ title, subtitle, detail = "" } = {}) {
-  updateTransactionModalStage("success", {
-    title: title || state.transactionModal.successTitle,
-    subtitle: subtitle || state.transactionModal.successSubtitle,
-    detail,
-    txHash: "",
-  });
-  clearTimeout(transactionModalTimer);
-  transactionModalTimer = setTimeout(() => {
-    setTransactionModal({ visible: false, stage: "idle", txHash: "" });
-  }, 1200);
+  transactionModalController.finishChannelModal({ title, subtitle, detail });
 }
 
 function failChannelModal({ title = "Channel Setup Failed", subtitle = "Unable to finish this channel setup.", detail = "Retry the action." } = {}) {
-  clearTimeout(transactionModalTimer);
-  updateTransactionModalStage("error", {
-    title,
-    subtitle,
-    detail,
-  });
+  transactionModalController.failChannelModal({ title, subtitle, detail });
 }
 
 function beginCounterpartyDecisionModal({ accepting = true, person = "Bob" } = {}) {
-  clearTimeout(transactionModalTimer);
-  const title = accepting ? "Accepting Invitation" : "Declining Request";
-  setTransactionModal({
-    visible: true,
-    stage: "channel",
-    actionLabel: title,
-    title,
-    subtitle: accepting ? `${person} is joining the private deal.` : `Closing the request from ${person}.`,
-    detail: accepting ? "Verifying shielded identity..." : "Updating deal status...",
-    successTitle: accepting ? "Invitation Accepted" : "Request Declined",
-    successSubtitle: accepting ? "Secure channel established." : "Deal request closed.",
-    txHash: "",
-  });
+  transactionModalController.beginCounterpartyDecisionModal({ accepting, person });
 }
 
 function updateWalletModalStage(step, details = {}) {
-  const stageCopy = {
-    connecting: {
-      title: "Connecting Wallet",
-      subtitle: "Please approve the request in your wallet.",
-      detail: "Waiting for signature...",
-    },
-    creating_account: {
-      title: "Creating Starknet Account",
-      subtitle: "This only happens once.",
-      detail: "Waiting for confirmation...",
-    },
-    deploying: {
-      title: "Creating Starknet Account",
-      subtitle: "This only happens once.",
-      detail: "Waiting for confirmation...",
-    },
-    connecting_paymaster: {
-      title: "Preparing Gas Sponsor",
-      subtitle: "Setting up network fees.",
-      detail: "Waiting for confirmation...",
-    },
-  };
-  const copy = stageCopy[step] || stageCopy.connecting;
-  setTransactionModal({
-    visible: true,
-    stage: "wallet",
-    actionLabel: "Connecting Wallet",
-    ...copy,
-  });
+  transactionModalController.updateWalletModalStage(step, details);
 }
 
 function finishWalletModal() {
-  updateTransactionModalStage("success", {
-    title: "Wallet Connected",
-    subtitle: "Opening secure channel...",
-    detail: "",
-    txHash: "",
-  });
-  clearTimeout(transactionModalTimer);
-  transactionModalTimer = setTimeout(() => {
-    setTransactionModal({ visible: false, stage: "idle", txHash: "" });
-  }, 1300);
+  transactionModalController.finishWalletModal();
 }
 
 function failWalletModal({ title = "Wallet Connection Failed", subtitle = "Unable to connect wallet.", detail = "Retry wallet connection." } = {}) {
-  clearTimeout(transactionModalTimer);
-  updateTransactionModalStage("error", {
-    title,
-    subtitle,
-    detail,
-  });
+  transactionModalController.failWalletModal({ title, subtitle, detail });
 }
 
 function updateTransactionModalStage(stage, updates = {}) {
-  const actionTitle = state.transactionModal.actionLabel || state.transactionModal.title || "Sending Transaction";
-  const stageDefaults = {
-    preparing: {
-      title: actionTitle,
-      subtitle: "Please approve the request in your wallet.",
-      detail: "Waiting for signature...",
-    },
-    network: {
-      title: actionTitle,
-      subtitle: "Preparing secure request.",
-      detail: "Checking Starknet connection...",
-    },
-    signing: {
-      title: actionTitle,
-      subtitle: "Please approve the request in your wallet.",
-      detail: "Waiting for signature...",
-    },
-    broadcasting: {
-      title: actionTitle,
-      subtitle: "Broadcasting transaction...",
-      detail: "Waiting for confirmation...",
-    },
-    success: {
-      title: state.transactionModal.successTitle,
-      subtitle: state.transactionModal.successSubtitle,
-      detail: "",
-    },
-    error: {
-      title: "Transaction Failed",
-      subtitle: "The transaction was not completed.",
-      detail: "Review the wallet or network error, then retry.",
-    },
-  };
-
-  setTransactionModal({
-    stage,
-    ...(stageDefaults[stage] || {}),
-    ...updates,
-  });
+  transactionModalController.updateTransactionModalStage(stage, updates);
 }
 
 function finishTransactionModal(result, updates = {}) {
-  updateTransactionModalStage("success", {
-    title: updates.successTitle || state.transactionModal.successTitle,
-    subtitle: updates.successSubtitle || state.transactionModal.successSubtitle,
-    detail: "",
-    txHash: result?.transactionHash || "",
-  });
-  clearTimeout(transactionModalTimer);
-  transactionModalTimer = setTimeout(() => {
-    setTransactionModal({ visible: false, stage: "idle", txHash: "" });
-  }, 1800);
+  transactionModalController.finishTransactionModal(result, updates);
 }
 
 function failTransactionModal(errorDetails = {}) {
-  clearTimeout(transactionModalTimer);
-  updateTransactionModalStage("error", {
-    title: errorDetails.label === "Cancelled" ? "Transaction Cancelled" : "Transaction Failed",
-    subtitle: errorDetails.toast || "The transaction was not completed.",
-    detail: errorDetails.why || "Review the wallet or network error, then retry.",
-  });
+  transactionModalController.failTransactionModal(errorDetails);
 }
 
 function handleTransactionSubmitted(transactionHash) {
-  if (!state.transactionModal.visible || state.transactionModal.stage === "success" || state.transactionModal.stage === "error") return;
-  updateTransactionModalStage("broadcasting", {
-    txHash: transactionHash || "",
-  });
+  transactionModalController.handleTransactionSubmitted(transactionHash);
 }
 
 function renderTransactionModal() {
-  if (!transactionLoadingModal) return;
-  const modal = state.transactionModal;
-  transactionLoadingModal.classList.toggle("hidden", !modal.visible);
-  document.body.classList.toggle("transaction-modal-open", Boolean(modal.visible));
-  if (!modal.visible) return;
-
-  const icon = transactionLoadingModal.querySelector("#transaction-loading-icon");
-  const title = transactionLoadingModal.querySelector("#transaction-loading-title");
-  const subtitle = transactionLoadingModal.querySelector("#transaction-loading-subtitle");
-  const detail = transactionLoadingModal.querySelector("#transaction-loading-detail");
-  const detailWrap = transactionLoadingModal.querySelector(".transaction-loading-detail");
-  const link = transactionLoadingModal.querySelector("#transaction-loading-link");
-  const cancel = transactionLoadingModal.querySelector("#transaction-loading-cancel");
-  const close = transactionLoadingModal.querySelector("#transaction-loading-close");
-  const isSuccess = modal.stage === "success";
-  const isError = modal.stage === "error";
-
-  if (title) title.textContent = modal.title || modal.actionLabel || "Sending Transaction";
-  if (subtitle) {
-    subtitle.textContent = modal.subtitle || "";
-    subtitle.hidden = !modal.subtitle;
-  }
-  if (detail) detail.textContent = modal.detail || "";
-  if (detailWrap) detailWrap.hidden = !modal.detail;
-  if (icon) {
-    icon.className = `transaction-loading-icon ${isSuccess ? "success" : isError ? "error" : "loading"}`;
-    setLucideIcon(icon, isSuccess ? "check" : isError ? "triangle-alert" : "loader-circle", "size-8");
-  }
-  if (link) {
-    const href = buildTransactionExplorerUrl(modal.txHash, STARKNET_SEPOLIA_EXPLORER_URL);
-    link.hidden = !isSuccess || !href;
-    if (href) link.href = href;
-  }
-  if (cancel) {
-    cancel.hidden = modal.stage !== "signing";
-    cancel.textContent = "Cancel in Wallet";
-  }
-  if (close) close.hidden = !isError;
-  if (window.lucide) window.lucide.createIcons();
+  transactionModalController.renderTransactionModal();
 }
 
 function setAppLoading(action, message) {
-  state.loadingAction = action;
-  state.loadingMessage = message || "Processing...";
-  renderLoadingState();
-  if (action === "transaction" || action === "wallet" || action === "channel") {
-    hideToastIfLoading();
-    return;
-  }
-  showToast(state.loadingMessage, { sticky: true });
+  loadingController.setAppLoading(action, message);
 }
 
 function clearAppLoading(action, options = {}) {
-  if (action && state.loadingAction && state.loadingAction !== action) return;
-  state.loadingAction = "";
-  state.loadingMessage = "";
-  renderLoadingState();
-  if (!options.keepToast) hideToastIfLoading();
+  loadingController.clearAppLoading(action, options);
 }
 
 function setButtonBusy(button, busy) {
-  if (!button) return;
-  if (busy) {
-    if (!button.dataset.loadingPrevDisabled) {
-      button.dataset.loadingPrevDisabled = button.disabled ? "true" : "false";
-    }
-    button.disabled = true;
-    button.setAttribute("aria-busy", "true");
-    button.classList.add("is-loading");
-    return;
-  }
-  if (button.dataset.loadingPrevDisabled) {
-    button.disabled = button.dataset.loadingPrevDisabled === "true";
-    delete button.dataset.loadingPrevDisabled;
-  }
-  button.removeAttribute("aria-busy");
-  button.classList.remove("is-loading");
+  loadingController.setButtonBusy(button, busy);
 }
 
 function setBusyButtons(selector, busy) {
-  document.querySelectorAll(selector).forEach((button) => setButtonBusy(button, busy));
+  loadingController.setBusyButtons(selector, busy);
 }
 
 function renderLoadingState() {
-  const walletBusy = state.loadingAction === "wallet" || isWalletInitializationPending();
-  const transactionBusy = state.loadingAction === "transaction";
-  const channelBusy = state.loadingAction === "channel";
-  const busy = walletBusy || transactionBusy || channelBusy;
-
-  document.body.classList.toggle("app-loading", busy);
-  document.body.dataset.loadingMessage = state.loadingMessage || "";
-  setBusyButtons("[data-connect-wallet], [data-refresh-wallet]", walletBusy);
-  setBusyButtons("[data-new-deal-action]", channelBusy);
-  setBusyButtons([
-    "[data-offer-review-sign]",
-    "[data-payment-review-sign]",
-    "[data-escrow-review-sign]",
-    "[data-escrow-deposit]",
-    "[data-escrow-confirmation]",
-    "#create-offer-action",
-    "#deal-accept-action",
-    "[data-escrow-release]",
-    "#composer-form .composer-input button[type='submit']",
-  ].join(", "), transactionBusy);
+  loadingController.renderLoadingState();
 }
 
 function iconRefresh() {
@@ -4613,8 +4382,7 @@ function bindEvents() {
 
   document.addEventListener("click", (event) => {
     if (event.target.closest("[data-transaction-loading-close]")) {
-      clearTimeout(transactionModalTimer);
-      setTransactionModal({ visible: false, stage: "idle", txHash: "" });
+      transactionModalController.closeTransactionModal();
       return;
     }
 
