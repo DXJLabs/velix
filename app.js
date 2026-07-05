@@ -10,7 +10,7 @@ import { createDealInviteLink as buildDealInviteLink, starkIdentityName } from "
 import { statusPillClass } from "./src-app/domain/status.js";
 import { createChatController } from "./src-app/features/chat/chat-controller.js";
 import { createDealRoomController } from "./src-app/features/deals/deal-room-controller.js";
-import { escrowApprovalCompleteFromState, escrowConfirmationsCompleteFromState, escrowDepositCompleteFromState, escrowDepositProofItemFromMessages, escrowFundingCompleteFromState, escrowFundingProofItemFromMessages, escrowReleaseProofItemFromMessages, hasRealTransactionHash as isRealTransactionHash } from "./src-app/features/escrow/escrow-feature.js";
+import { createEscrowController } from "./src-app/features/escrow/escrow-controller.js";
 import { createInviteController } from "./src-app/features/invite/invite-controller.js";
 import { counterpartyAvatar, resolveCounterparty } from "./src-app/features/invite/invite-feature.js";
 import { createOfferController } from "./src-app/features/offer/offer-controller.js";
@@ -553,6 +553,41 @@ const paymentController = createPaymentController({
   currentChannel,
   renderWorkflowProgress,
   showScreen,
+});
+
+const escrowController = createEscrowController({
+  state,
+  document,
+  escrowReviewModal,
+  messageInput,
+  chatDisplayMode: CHAT_DISPLAY_MODE,
+  currentDealId,
+  currentDealOfferAmount,
+  currentChannel,
+  channelMessages,
+  estimateVeilFee,
+  rewardPoints: VEIL_REWARD_POINTS,
+  setElementText,
+  statusPillClass,
+  escapeHtml,
+  renderChainMeta,
+  setLucideIcon,
+  iconRefresh,
+  safeSubmit,
+  getVeilClient: () => veilClient,
+  awardReward,
+  addLocalItem,
+  confirmedTimelineMeta,
+  renderWorkflowProgress,
+  showScreen,
+  showToast,
+  settlementProofMeta,
+  resetDealStateForPendingChannel,
+  saveLocalChannels,
+  renderConversationList,
+  renderChannel,
+  requestAnimationFrame,
+  fallbackFundingTime: () => now - 3 * minute,
 });
 
 function createClient(transport) {
@@ -2547,31 +2582,15 @@ function hidePaymentReview() {
 }
 
 function renderEscrowTransactionSummary() {
-  const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-    shielded: true,
-  });
-  setElementText("#escrow-fee-amount", currentDealOfferAmount());
-  setElementText("#escrow-total-fee", fee.feeLabel);
-  setElementText("#escrow-fee-total", fee.totalLabel);
-  setElementText("#escrow-review-amount", currentDealOfferAmount());
-  setElementText("#escrow-review-fee", fee.feeLabel);
-  setElementText("#escrow-review-reward", `+${VEIL_REWARD_POINTS.escrowCompleted} VEIL Points`);
-  setElementText("#escrow-review-total", fee.totalLabel);
+  escrowController.renderEscrowTransactionSummary();
 }
 
 function showEscrowReview() {
-  renderEscrowTransactionSummary();
-  if (!escrowReviewModal) return;
-  escrowReviewModal.classList.remove("hidden");
-  document.body.classList.add("modal-open");
-  iconRefresh();
-  escrowReviewModal.querySelector("[data-escrow-review-sign]")?.focus();
+  escrowController.showEscrowReview();
 }
 
 function hideEscrowReview() {
-  if (!escrowReviewModal) return;
-  escrowReviewModal.classList.add("hidden");
-  document.body.classList.remove("modal-open");
+  escrowController.hideEscrowReview();
 }
 
 function workflowStageData() {
@@ -2583,60 +2602,35 @@ function renderWorkflowProgress() {
 }
 
 function escrowDepositProofItem(key) {
-  return escrowDepositProofItemFromMessages(channelMessages(), key, {
-    mode: CHAT_DISPLAY_MODE,
-  });
+  return escrowController.escrowDepositProofItem(key);
 }
 
 function escrowFundingProofItem() {
-  return escrowFundingProofItemFromMessages(channelMessages(), {
-    fallbackTime: now - 3 * minute,
-    mode: CHAT_DISPLAY_MODE,
-  });
+  return escrowController.escrowFundingProofItem();
 }
 
 function escrowReleaseProofItem() {
-  return escrowReleaseProofItemFromMessages(channelMessages(), {
-    fallbackTime: state.escrowReleased ? Date.now() : undefined,
-    mode: CHAT_DISPLAY_MODE,
-  });
+  return escrowController.escrowReleaseProofItem();
 }
 
 function hasRealTransactionHash(item) {
-  return isRealTransactionHash(item);
+  return escrowController.hasRealTransactionHash(item);
 }
 
 function renderEscrowProofMeta(item) {
-  return hasRealTransactionHash(item) ? renderChainMeta(item) : "";
+  return escrowController.renderEscrowProofMeta(item);
 }
 
 function escrowDepositComplete(key) {
-  return escrowDepositCompleteFromState({
-    key,
-    released: state.escrowReleased,
-    paymentSent: state.paymentSent,
-    deposits: state.escrowDeposits,
-    messages: channelMessages(),
-  });
+  return escrowController.escrowDepositComplete(key);
 }
 
 function escrowFundingComplete() {
-  return escrowFundingCompleteFromState({
-    released: state.escrowReleased,
-    paymentSent: state.paymentSent,
-    deposits: state.escrowDeposits,
-    messages: channelMessages(),
-  });
+  return escrowController.escrowFundingComplete();
 }
 
 function escrowApprovalComplete(key) {
-  return escrowApprovalCompleteFromState({
-    key,
-    released: state.escrowReleased,
-    paymentSent: state.paymentSent,
-    confirmations: state.escrowConfirmations,
-    messages: channelMessages(),
-  });
+  return escrowController.escrowApprovalComplete(key);
 }
 
 function setLucideIcon(container, iconName, sizeClass = "size-5") {
@@ -2645,12 +2639,7 @@ function setLucideIcon(container, iconName, sizeClass = "size-5") {
 }
 
 function escrowConfirmationsComplete() {
-  return escrowConfirmationsCompleteFromState({
-    released: state.escrowReleased,
-    paymentSent: state.paymentSent,
-    confirmations: state.escrowConfirmations,
-    messages: channelMessages(),
-  });
+  return escrowController.escrowConfirmationsComplete();
 }
 
 function renderDeal() {
@@ -2658,192 +2647,7 @@ function renderDeal() {
 }
 
 function renderEscrow() {
-  const releaseDone = state.escrowReleased || state.paymentSent;
-  const buyerDeposited = escrowDepositComplete("buyer");
-  const sellerDeposited = escrowDepositComplete("seller");
-  const fundingComplete = escrowFundingComplete();
-  const buyerApproved = escrowApprovalComplete("buyer");
-  const sellerApproved = escrowApprovalComplete("seller");
-  const releaseReady = releaseDone || (fundingComplete && escrowConfirmationsComplete());
-  const escrowDisplayStatus = releaseDone ? "Deal Completed" : state.offerAccepted || fundingComplete || buyerDeposited ? "Escrow Active" : "Waiting Deposit";
-  const fundingItem = escrowFundingProofItem();
-  const releaseItem = escrowReleaseProofItem();
-  const fundingProof = document.querySelector("#escrow-funding-proof");
-  const fundingStep = document.querySelector("#escrow-funding-proof-step");
-  const fundingProofTimeline = document.querySelector("#escrow-funding-proof-timeline");
-  const releaseProof = document.querySelector("#escrow-release-proof");
-  const releaseAction = document.querySelector("#escrow-release-action");
-  const releaseStep = document.querySelector("#escrow-release-proof-step");
-  const settlementAction = document.querySelector("#escrow-settlement-action");
-  const disputeAction = document.querySelector("#escrow-dispute-action");
-  const escrowChannelStatus = document.querySelector("#escrow-channel-status");
-  const buyerDepositProof = escrowDepositProofItem("buyer");
-  const sellerDepositProof = escrowDepositProofItem("seller");
-  const title = releaseDone
-    ? "Settlement ready"
-    : fundingComplete
-      ? "Confirmation"
-      : buyerDeposited
-        ? "Alice deposited 450 STRK"
-        : "Waiting deposits";
-  const fundingCopy = releaseDone || fundingComplete
-    ? "Funding complete. Buyer and seller deposits are locked in escrow."
-    : buyerDeposited
-      ? "Buyer deposit is locked. Waiting for Bob to lock the seller asset."
-      : "Step 1 of 2. Waiting for Alice and Bob deposits.";
-
-  renderEscrowTransactionSummary();
-  const escrowFee = estimateVeilFee("escrow", currentDealOfferAmount(), { shielded: true });
-
-  setElementText("#escrow-page-eyebrow", fundingComplete ? "Escrow Confirmation" : "Escrow Funding");
-  setElementText("#escrow-page-title", title);
-  setElementText("#escrow-channel-meta", `${currentDealId()} · Alice / Bob`);
-  setElementText("#escrow-funding-step", fundingComplete ? "Funding Complete" : buyerDeposited ? "Step 2 of 2" : "Step 1 of 2");
-  setElementText("#escrow-funding-copy", fundingCopy);
-  setElementText("#escrow-buyer-protocol-fee", escrowFee.protocolFeeLabel);
-  setElementText("#escrow-buyer-privacy-fee", escrowFee.privacyFeeLabel);
-  setElementText("#escrow-buyer-network-fee", escrowFee.networkFeeLabel);
-  setElementText("#escrow-buyer-reward", `+${VEIL_REWARD_POINTS.escrowCreated} VEIL Points`);
-  setElementText("#escrow-seller-reward", `+${VEIL_REWARD_POINTS.escrowCreated} VEIL Points`);
-  const fundingStepBadge = document.querySelector("#escrow-funding-step");
-  if (fundingStepBadge) fundingStepBadge.className = fundingComplete ? "status-pill escrow-active" : "status-pill waiting-deposit";
-
-  if (escrowChannelStatus) {
-    escrowChannelStatus.textContent = escrowDisplayStatus;
-    escrowChannelStatus.className = statusPillClass(escrowDisplayStatus);
-  }
-
-  const renderDepositCard = (key, complete, options) => {
-    const card = document.querySelector(`#escrow-${key}-deposit-card`);
-    const status = document.querySelector(`#escrow-${key}-deposit-status`);
-    const detail = document.querySelector(`#escrow-${key}-deposit-detail`);
-    const action = document.querySelector(`#escrow-${key}-deposit-action`);
-    if (!card) return;
-    card.classList.toggle("complete", complete);
-    card.classList.toggle("waiting", !complete);
-    card.classList.toggle("locked", Boolean(options.locked));
-    setLucideIcon(card.querySelector(".deposit-card-top"), complete ? "check" : options.locked ? "lock" : "circle");
-    if (status) status.textContent = complete ? options.completeStatus : options.waitingStatus;
-    if (detail) detail.textContent = complete ? options.completeDetail : options.waitingDetail;
-    if (action) {
-      action.disabled = complete || releaseDone || Boolean(options.locked);
-      action.classList.toggle("disabled", action.disabled);
-      action.classList.toggle("primary-action", !options.secondaryWhenReady);
-      action.classList.toggle("secondary-action", Boolean(options.secondaryWhenReady));
-      action.innerHTML = complete
-        ? `<i data-lucide="check" class="size-5"></i><span>${escapeHtml(options.doneAction)}</span>`
-        : `<i data-lucide="${options.actionIcon}" class="size-5"></i><span>${escapeHtml(options.actionLabel)}</span>`;
-    }
-  };
-
-  renderDepositCard("buyer", buyerDeposited, {
-    completeStatus: "Deposited",
-    waitingStatus: "Deposit Required",
-    completeDetail: `${currentDealOfferAmount()} locked in escrow`,
-    waitingDetail: "Waiting for Alice",
-    actionLabel: "Deposit to Escrow",
-    doneAction: "Deposited",
-    actionIcon: "wallet",
-  });
-  renderDepositCard("seller", sellerDeposited, {
-    completeStatus: "Locked",
-    waitingStatus: buyerDeposited ? "Asset Required" : "Waiting for Bob",
-    completeDetail: "Rights Package NFT locked in escrow",
-    waitingDetail: buyerDeposited ? "Waiting for Bob" : "Waiting for buyer deposit",
-    actionLabel: "Lock Asset",
-    doneAction: "Locked",
-    actionIcon: "lock-keyhole",
-    locked: !buyerDeposited,
-    secondaryWhenReady: true,
-  });
-  const buyerDepositProofEl = document.querySelector("#escrow-buyer-deposit-proof");
-  const sellerDepositProofEl = document.querySelector("#escrow-seller-deposit-proof");
-  if (buyerDepositProofEl) buyerDepositProofEl.innerHTML = buyerDeposited && buyerDepositProof ? renderChainMeta(buyerDepositProof) : "";
-  if (sellerDepositProofEl) sellerDepositProofEl.innerHTML = sellerDeposited && sellerDepositProof ? renderChainMeta(sellerDepositProof) : "";
-
-  [
-    ["#escrow-buyer-confirmed", "buyer", buyerApproved],
-    ["#escrow-seller-confirmed", "seller", sellerApproved],
-  ].forEach(([selector, key, approved]) => {
-    const item = document.querySelector(selector);
-    if (!item) return;
-    const complete = releaseDone || Boolean(approved);
-    const locked = !fundingComplete || releaseDone || complete;
-    item.disabled = locked;
-    item.classList.toggle("complete", complete);
-    item.classList.toggle("disabled", locked && !complete);
-    setLucideIcon(item, complete ? "check" : fundingComplete ? "circle" : "lock");
-    const status = item.querySelector("small");
-    if (status) status.textContent = complete ? "Approved" : fundingComplete ? "Ready" : "Locked";
-  });
-
-  setElementText("#escrow-confirmation-step", fundingComplete ? "Ready" : "Locked");
-  const confirmationStep = document.querySelector("#escrow-confirmation-step");
-  if (confirmationStep) confirmationStep.className = fundingComplete ? "status-pill escrow-active" : "status-pill public";
-  setElementText("#escrow-confirmation-copy", releaseDone
-    ? "Both approvals are complete. Assets have been released."
-    : fundingComplete
-      ? "Funding complete. Buyer and seller can approve release."
-      : "Complete both deposits before buyer and seller approvals.");
-
-  setElementText("#escrow-funding-status", fundingComplete ? "Funding complete" : buyerDeposited ? "Waiting seller deposit" : "Waiting deposits");
-  setElementText("#escrow-release-status", releaseDone ? "Released" : releaseReady ? "Ready" : fundingComplete ? "Waiting approvals" : "Funding required");
-  setElementText("#escrow-release-copy", releaseDone
-    ? "Assets released. Settlement proof is ready."
-    : releaseReady
-      ? "Ready for wallet signature."
-      : fundingComplete
-        ? "Waiting for both approvals"
-        : "Waiting for buyer and seller deposits");
-  if (fundingProof) {
-    fundingProof.innerHTML = "";
-    fundingProof.hidden = true;
-  }
-  if (fundingProofTimeline) fundingProofTimeline.innerHTML = fundingComplete ? renderEscrowProofMeta(fundingItem) : "";
-  if (fundingStep) {
-    fundingStep.classList.toggle("complete", fundingComplete);
-    fundingStep.classList.toggle("pending", !fundingComplete);
-    setLucideIcon(fundingStep, fundingComplete ? "check" : "circle", "size-4");
-  }
-  if (releaseProof) releaseProof.innerHTML = releaseDone ? renderEscrowProofMeta(releaseItem) : "";
-  if (releaseStep) {
-    releaseStep.classList.toggle("complete", releaseDone);
-    releaseStep.classList.toggle("pending", !releaseDone);
-    setLucideIcon(releaseStep, releaseDone ? "check" : "circle", "size-4");
-  }
-  if (releaseAction) {
-    releaseAction.disabled = !releaseReady || releaseDone;
-    releaseAction.classList.toggle("disabled", !releaseReady || releaseDone);
-    releaseAction.innerHTML = releaseDone
-      ? `<i data-lucide="check" class="size-5"></i><span>Released</span>`
-      : releaseReady
-        ? `<i data-lucide="unlock" class="size-5"></i><span>Release Assets</span>`
-        : fundingComplete
-          ? `<i data-lucide="lock" class="size-5"></i><span>Release Assets</span><small>Needs approvals</small>`
-          : `<i data-lucide="lock" class="size-5"></i><span>Release Assets</span><small>Funding required</small>`;
-  }
-  if (settlementAction) {
-    if (releaseDone) {
-      settlementAction.disabled = false;
-      settlementAction.classList.remove("disabled");
-      settlementAction.dataset.openRoute = "settlement";
-      settlementAction.innerHTML = `<i data-lucide="check" class="size-5"></i><span>View Settlement Proof</span>`;
-      setElementText("#escrow-settlement-copy", "Settlement proof is ready.");
-    } else {
-      settlementAction.disabled = true;
-      settlementAction.classList.add("disabled");
-      settlementAction.dataset.openRoute = "settlement";
-      settlementAction.innerHTML = `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
-      setElementText("#escrow-settlement-copy", "Release escrow to generate settlement proof.");
-    }
-  }
-
-  if (disputeAction) {
-    disputeAction.textContent = state.escrowDisputeOpened ? "Dispute Opened" : "Dispute";
-    disputeAction.disabled = state.escrowDisputeOpened;
-    disputeAction.classList.toggle("disabled", state.escrowDisputeOpened);
-  }
-  iconRefresh();
+  escrowController.renderEscrow();
 }
 
 function renderPayment() {
@@ -3417,219 +3221,27 @@ async function sendPayment() {
 }
 
 async function submitEscrowDeposit(key) {
-  const isBuyer = key === "buyer";
-  if (!isBuyer && !escrowDepositComplete("buyer")) {
-    showToast("Buyer deposit is required first.");
-    renderEscrow();
-    return;
-  }
-  if (!(key in state.escrowDeposits) || escrowDepositComplete(key)) {
-    renderEscrow();
-    return;
-  }
-  const amount = currentDealOfferAmount();
-  const title = isBuyer ? `Alice deposited ${amount}` : "Bob locked Rights Package NFT";
-  const subtitle = isBuyer ? `${amount} locked in escrow.` : "Asset secured in escrow.";
-  const submitted = await safeSubmit(
-    () => veilClient.recordEscrowStatus({
-      channelId: state.channelId,
-      status: "deposited",
-      details: subtitle,
-      sender: isBuyer ? "buyer" : "seller",
-    }),
-    {
-      type: "inline",
-      title,
-      subtitle,
-      actor: isBuyer ? "Alice" : "Bob",
-      time: Date.now(),
-      mode: CHAT_DISPLAY_MODE,
-    },
-    isBuyer ? "Buyer deposit recorded." : "Seller asset locked.",
-    {
-      actionLabel: isBuyer ? "Locking Funds" : "Locking Asset",
-      successTitle: isBuyer ? "Shielded Deposit Successful" : "Shielded Asset Locked",
-      successSubtitle: isBuyer ? `${amount} locked in escrow.` : "Rights Package NFT locked in escrow.",
-    },
-  );
-  if (!submitted) return;
-  state.escrowDeposits[key] = true;
-  if (isBuyer) awardReward("escrowCreated");
-  currentChannel().status = "Escrow Active";
-  currentChannel().last = title;
-  if (!isBuyer && escrowFundingComplete()) {
-    addLocalItem({
-      type: "inline",
-      title: "Escrow funded",
-      subtitle: "Waiting for approvals.",
-      actor: "System",
-      time: Date.now(),
-      ...confirmedTimelineMeta(`${state.channelId}-escrow-funded`, 30),
-    });
-  }
-  renderEscrow();
-  renderWorkflowProgress();
+  return escrowController.submitEscrowDeposit(key);
 }
 
 async function approveEscrowRelease(key) {
-  if (!escrowFundingComplete()) {
-    showToast("Complete escrow funding first.");
-    renderEscrow();
-    return;
-  }
-  if (!(key in state.escrowConfirmations) || escrowApprovalComplete(key)) {
-    renderEscrow();
-    return;
-  }
-  const isBuyer = key === "buyer";
-  const title = isBuyer ? "Alice approved release" : "Bob approved release";
-  const submitted = await safeSubmit(
-    () => veilClient.recordEscrowStatus({
-      channelId: state.channelId,
-      status: "deposited",
-      details: `${title}.`,
-      sender: isBuyer ? "buyer" : "seller",
-    }),
-    {
-      type: "inline",
-      title,
-      subtitle: "Release approval recorded",
-      actor: isBuyer ? "Alice" : "Bob",
-      time: Date.now(),
-      mode: CHAT_DISPLAY_MODE,
-    },
-    "Approval recorded.",
-    {
-      actionLabel: "Approving Release",
-      successTitle: "Release Approved",
-      successSubtitle: `${title}.`,
-    },
-  );
-  if (!submitted) return;
-  state.escrowConfirmations[key] = true;
-  currentChannel().status = "Escrow Active";
-  currentChannel().last = title;
-  renderEscrow();
-  renderWorkflowProgress();
+  return escrowController.approveEscrowRelease(key);
 }
 
 async function releaseEscrow() {
-  if (!escrowFundingComplete() && !state.escrowReleased) {
-    showToast("Complete escrow funding first.");
-    renderEscrow();
-    return;
-  }
-  if (!escrowConfirmationsComplete() && !state.escrowReleased) {
-    showToast("Complete confirmations before release.");
-    renderEscrow();
-    return;
-  }
-  const submitted = await safeSubmit(
-    () => veilClient.recordEscrowStatus({
-      channelId: state.channelId,
-      status: "settled",
-      details: "Assets released. 450 STRK to Bob. NFT to Alice.",
-      sender: "system",
-    }),
-    {
-      type: "inline",
-      title: "Assets released",
-      subtitle: "450 STRK to Bob. NFT to Alice.",
-      actor: "System",
-      time: Date.now(),
-    },
-    "Assets released.",
-    {
-      actionLabel: "Releasing Assets",
-      successTitle: "Assets Released",
-      successSubtitle: "450 STRK to Bob. NFT to Alice.",
-    },
-  );
-  if (!submitted) return;
-  awardReward("escrowCompleted");
-  state.escrowReleased = true;
-  currentChannel().status = "Deal Completed";
-  currentChannel().last = "Secure deal completed";
-  const proof = settlementProofMeta();
-  addLocalItem({
-    type: "inline",
-    title: "Settlement proof generated",
-    subtitle: "Proof attached to this private channel.",
-    proofId: proof.proofId,
-    settlementHash: proof.settlementHash,
-    actor: "System",
-    time: Date.now() + 1,
-    ...confirmedTimelineMeta(`${state.channelId}-settlement-proof`, 39),
-  });
-  addLocalItem({
-    type: "inline",
-    title: "Settlement complete",
-    subtitle: "Deal settled and proof is ready.",
-    actor: "System",
-    time: Date.now() + 2,
-    ...confirmedTimelineMeta(`${state.channelId}-settlement-complete`, 40),
-  });
-  addLocalItem({
-    type: "inline",
-    title: "Secure deal completed.",
-    subtitle: "Encrypted channel remains available.",
-    actor: "System",
-    channelActions: true,
-    time: Date.now() + 3,
-    ...confirmedTimelineMeta(`${state.channelId}-secure-channel-open`, 41),
-  });
-  renderEscrow();
-  renderWorkflowProgress();
-  showScreen("settlement");
+  return escrowController.releaseEscrow();
 }
 
 function continueCompletedChannel() {
-  showScreen("channel");
-  requestAnimationFrame(() => {
-    messageInput?.focus();
-  });
-  showToast("Encrypted channel remains available.");
+  escrowController.continueCompletedChannel();
 }
 
 function startNewEscrowInCurrentChannel() {
-  resetDealStateForPendingChannel();
-  const channel = currentChannel();
-  channel.status = "Negotiation Active";
-  channel.last = "New escrow draft ready";
-  channel.time = "now";
-  state.channelId = channel.id;
-  addLocalItem({
-    type: "inline",
-    title: "New escrow draft started",
-    subtitle: "Use the same encrypted channel for the next deal.",
-    actor: "System",
-    time: Date.now(),
-    ...confirmedTimelineMeta(`${state.channelId}-new-escrow`, 42),
-  });
-  saveLocalChannels();
-  renderConversationList();
-  showScreen("deal");
-  showToast("New escrow draft ready.");
+  escrowController.startNewEscrowInCurrentChannel();
 }
 
 function closeCurrentDeal() {
-  const channel = currentChannel();
-  channel.status = "Closed";
-  channel.last = "Deal closed";
-  channel.time = "now";
-  addLocalItem({
-    type: "inline",
-    title: "Deal closed",
-    subtitle: "Encrypted channel archived.",
-    actor: "System",
-    time: Date.now(),
-    ...confirmedTimelineMeta(`${state.channelId}-deal-closed`, 43),
-  });
-  saveLocalChannels();
-  renderConversationList();
-  renderChannel();
-  renderWorkflowProgress();
-  showToast("Deal closed.");
+  escrowController.closeCurrentDeal();
 }
 
 function bindEvents() {
