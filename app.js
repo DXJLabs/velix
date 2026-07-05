@@ -18,6 +18,12 @@ import { estimateVeilFee } from "./src-app/services/fee-service.js";
 import { VEIL_REWARD_POINTS, createRewardEntry, nextRewardTier } from "./src-app/services/rewards-service.js";
 import { listStorageKeys, readJsonStorage, removeStorageKeys, writeJsonStorage } from "./src-app/services/storage-service.js";
 import { inferTransactionOverlayCopy } from "./src-app/services/transaction-modal-service.js";
+import { conversationRowsMarkup } from "./src-app/ui/conversation-ui.js";
+import { escapeHtml } from "./src-app/ui/html.js";
+import { inviteWaitingCardMarkup } from "./src-app/ui/invite-ui.js";
+import { inlineEventMarkup, messageMarkup, offerCardMarkup } from "./src-app/ui/timeline-ui.js";
+import { rewardRowsMarkup } from "./src-app/ui/wallet-ui.js";
+import { workflowProgressMarkup } from "./src-app/ui/workflow-ui.js";
 import { formatPoints, formatTime } from "./src-app/utils/format.js";
 import { demoTxHash, deterministicHex, displayTransactionHash, shortHash } from "./src-app/utils/hash.js";
 import { transactionExplorerUrl as buildTransactionExplorerUrl } from "./src-app/utils/transactions.js";
@@ -2653,16 +2659,6 @@ function iconRefresh() {
   renderLoadingState();
 }
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  })[character]);
-}
-
 function transactionStatusInfo(item) {
   const status = String(item.status || "").toLowerCase();
   if (status === "failed") {
@@ -2857,26 +2853,7 @@ function renderConversationList() {
     return value.includes(query);
   });
 
-  conversationList.innerHTML = rows.map((channel) => `
-    <button class="conversation-row" type="button" data-open-channel="${escapeHtml(channel.id)}">
-      <span class="avatar">${escapeHtml(channel.avatar)}</span>
-      <span class="min-w-0">
-        <span class="flex min-w-0 items-center gap-2">
-          <strong class="truncate text-[.98rem]">${escapeHtml(channel.title)}</strong>
-          <span class="${statusPillClass(channel.status)}">${escapeHtml(channel.status)}</span>
-        </span>
-        <span class="mt-1 block truncate text-sm font-semibold text-slate-500">${escapeHtml(channel.last)}</span>
-        <span class="mt-1 flex items-center gap-2 text-xs font-bold text-slate-400">
-          <span class="status-dot"></span>
-          ${escapeHtml(channel.person)}
-        </span>
-      </span>
-      <span class="grid justify-items-end gap-2">
-        <time class="text-xs font-bold text-slate-400">${escapeHtml(channel.time)}</time>
-        ${channel.unread ? `<span class="unread">${channel.unread}</span>` : "<span class=\"size-2 rounded-full bg-slate-200\"></span>"}
-      </span>
-    </button>
-  `).join("");
+  conversationList.innerHTML = conversationRowsMarkup(rows, statusPillClass);
   iconRefresh();
 }
 
@@ -2935,69 +2912,9 @@ function renderChannel() {
 }
 
 function renderInviteWaitingCard(channel) {
-  if (!channel.invited) {
-    return `
-      <section class="invite-wait-card">
-        <span class="invite-wait-icon"><i data-lucide="bell" class="size-5"></i></span>
-        <div>
-          <strong>Waiting for ${escapeHtml(channel.person)}</strong>
-          <p>${escapeHtml(channel.dealId || "Deal request")} created. ${escapeHtml(channel.person)} received an in-app notification and must accept before negotiation opens.</p>
-          <small>New private deal request - Accept or Decline</small>
-        </div>
-        <div class="invite-wait-actions">
-          <button class="primary-action" type="button" data-counterparty-accept>
-            <i data-lucide="check" class="size-5"></i>
-            <span>Preview Bob Accept</span>
-          </button>
-          <button class="secondary-action" type="button" data-counterparty-decline>
-            <i data-lucide="x" class="size-5"></i>
-            <span>Decline</span>
-          </button>
-        </div>
-      </section>
-    `;
-  }
-  const link = channel.inviteLink || createDealInviteLink();
-  return `
-    <section class="invite-wait-card">
-      <span class="invite-wait-icon"><i data-lucide="send" class="size-5"></i></span>
-      <div>
-        <strong>Invite link ready</strong>
-        <p>${escapeHtml(channel.person)} is not on VEIL yet. Share the invite link; after they connect wallet and accept, the deal opens.</p>
-      </div>
-      <div class="invite-link-card">
-        <span>Invite Link</span>
-        <strong>${escapeHtml(link)}</strong>
-        <div>
-          <button class="secondary-action" type="button" data-copy-invite>
-            <i data-lucide="copy" class="size-4"></i>
-            <small>Copy</small>
-          </button>
-          <button class="secondary-action" type="button" data-share-invite="share">
-            <i data-lucide="send" class="size-4"></i>
-            <small>Share</small>
-          </button>
-          <button class="secondary-action" type="button" data-qr-invite>
-            <i data-lucide="qr-code" class="size-4"></i>
-            <small>QR Code</small>
-          </button>
-        </div>
-      </div>
-      <div class="invite-share-grid" aria-label="Share invite">
-        <button type="button" data-share-invite="telegram">Telegram</button>
-        <button type="button" data-share-invite="discord">Discord</button>
-        <button type="button" data-share-invite="x">X</button>
-        <button type="button" data-share-invite="email">Email</button>
-        <button type="button" data-share-invite="whatsapp">WhatsApp</button>
-      </div>
-      <div class="invite-wait-actions">
-        <button class="primary-action" type="button" data-counterparty-accept>
-          <i data-lucide="user-plus" class="size-5"></i>
-          <span>Preview Accept Invitation</span>
-        </button>
-      </div>
-    </section>
-  `;
+  return inviteWaitingCardMarkup(channel, {
+    inviteLink: channel.invited ? channel.inviteLink || createDealInviteLink() : "",
+  });
 }
 
 function renderFeedItem(item) {
@@ -3044,113 +2961,24 @@ function compactInviteAcceptedEvent(item = {}) {
 }
 
 function renderMessage(item) {
-  const self = item.self || item.sender === "You";
-  const actor = item.actor || (self ? "Alice" : item.sender);
-  return `
-    <article class="message ${self ? "self" : ""} ${itemStateClass(item)}">
-      <div class="message-stack ${self ? "right" : ""}">
-        <div class="message-meta ${self ? "text-right" : ""}">
-          <span>${escapeHtml(actor)}</span>
-          <time>${escapeHtml(formatTime(item.time))}</time>
-        </div>
-        <p class="bubble">${escapeHtml(item.body)}</p>
-        ${renderChainMeta(item, self)}
-      </div>
-    </article>
-  `;
-}
-
-function timelineIcon(item) {
-  const label = `${item.title || ""} ${item.subtitle || ""}`.toLowerCase();
-  if (label.includes("invite") || label.includes("joined")) return "user-plus";
-  if (label.includes("payment") || label.includes("memo")) return "file-text";
-  if (label.includes("escrow")) return "shield-check";
-  if (label.includes("offer") || label.includes("counter")) return "badge-dollar-sign";
-  return "shield";
+  return messageMarkup(item, {
+    itemStateClass,
+    renderChainMeta,
+  });
 }
 
 function renderOfferCard(item) {
-  const actorName = item.actor || (item.self || item.sender === "You" ? "Alice" : item.sender) || "System";
-  const actor = `<span class="timeline-actor">${escapeHtml(actorName)}</span>`;
-  return `
-    <article class="timeline-event offer-timeline ${itemStateClass(item)}">
-      <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
-      <div class="timeline-card">
-        ${actor}
-        <strong>${escapeHtml(item.title)}</strong>
-        <b>${escapeHtml(item.amount)}</b>
-        <small>${escapeHtml(item.subtitle)}</small>
-        ${renderChainMeta(item)}
-      </div>
-      <button type="button" data-open-route="deal">Open</button>
-    </article>
-  `;
-}
-
-function renderTimelineDetails(item) {
-  const rows = [];
-  if (Array.isArray(item.details)) rows.push(...item.details);
-  if (item.inviteLink) rows.push(["Invite Link", item.inviteLink]);
-  if (item.proofId) rows.push(["Proof ID", item.proofId]);
-  if (item.settlementHash) rows.push(["Settlement Hash", item.settlementHash]);
-  if (!rows.length) return "";
-  return `
-    <dl class="timeline-detail-list">
-      ${rows.map(([label, value]) => `
-        <div>
-          <dt>${escapeHtml(label)}</dt>
-          <dd>${escapeHtml(value)}</dd>
-        </div>
-      `).join("")}
-    </dl>
-  `;
-}
-
-function renderTimelineActions(item) {
-  if (item.inviteLink) {
-    return `
-      <div class="timeline-action-row">
-        <button type="button" data-copy-invite>Copy</button>
-        <button type="button" data-share-invite="share">Share</button>
-        <button type="button" data-qr-invite>QR Code</button>
-      </div>
-    `;
-  }
-  if (item.proofId || item.settlementHash) {
-    return `
-      <div class="timeline-action-row">
-        <button type="button" data-open-route="proof">View Proof</button>
-      </div>
-    `;
-  }
-  if (item.channelActions) {
-    return `
-      <div class="timeline-action-row three">
-        <button type="button" data-channel-complete-action="continue">Continue chatting</button>
-        <button type="button" data-channel-complete-action="new-escrow">Create new escrow</button>
-        <button type="button" data-channel-complete-action="close">Close deal</button>
-      </div>
-    `;
-  }
-  return "";
+  return offerCardMarkup(item, {
+    itemStateClass,
+    renderChainMeta,
+  });
 }
 
 function renderInlineEvent(item) {
-  const actorName = item.actor || (item.self || item.sender === "You" ? "Alice" : item.sender) || "System";
-  const actor = `<span class="timeline-actor">${escapeHtml(actorName)}</span>`;
-  return `
-    <article class="timeline-event ${itemStateClass(item)}">
-      <span class="timeline-marker"><i data-lucide="${timelineIcon(item)}" class="size-4"></i></span>
-      <div class="timeline-card">
-        ${actor}
-        <strong>${escapeHtml(item.title)}</strong>
-        <small>${escapeHtml(item.subtitle || formatTime(item.time))}</small>
-        ${renderTimelineDetails(item)}
-        ${renderChainMeta(item)}
-        ${renderTimelineActions(item)}
-      </div>
-    </article>
-  `;
+  return inlineEventMarkup(item, {
+    itemStateClass,
+    renderChainMeta,
+  });
 }
 
 function currentOfferProofItem() {
@@ -3354,16 +3182,7 @@ function workflowStageData() {
 function renderWorkflowProgress() {
   const stages = workflowStageData();
   document.querySelectorAll("[data-workflow-progress]").forEach((container) => {
-    container.innerHTML = `
-      <strong>${escapeHtml(currentChannel().title || "Rights Transfer")}</strong>
-      <ol>
-        ${stages.map((stage) => {
-          const stateClass = stage.done ? "complete" : stage.active ? "active" : "pending";
-          const icon = stage.done ? "check" : stage.active ? "circle-dot" : "circle";
-          return `<li class="${stateClass}"><span><i data-lucide="${icon}" class="size-3.5"></i></span><em>${escapeHtml(stage.label)}</em></li>`;
-        }).join("")}
-      </ol>
-    `;
+    container.innerHTML = workflowProgressMarkup(currentChannel().title || "Rights Transfer", stages);
   });
 }
 
@@ -3934,15 +3753,9 @@ function renderWalletRewards() {
 
   const recent = document.querySelector("#wallet-recent-rewards");
   const history = document.querySelector("#wallet-rewards-history");
-  const renderRows = (items) => items.map((item) => `
-    <li>
-      <strong>+${formatPoints(item.points)}</strong>
-      <span>${escapeHtml(item.label)}</span>
-    </li>
-  `).join("");
 
-  if (recent) recent.innerHTML = renderRows(state.rewardHistory.slice(0, 3));
-  if (history) history.innerHTML = renderRows(state.rewardHistory.slice(0, 8));
+  if (recent) recent.innerHTML = rewardRowsMarkup(state.rewardHistory.slice(0, 3), formatPoints);
+  if (history) history.innerHTML = rewardRowsMarkup(state.rewardHistory.slice(0, 8), formatPoints);
 }
 
 function renderSettings() {
