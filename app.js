@@ -14,7 +14,7 @@ import { escrowApprovalCompleteFromState, escrowConfirmationsCompleteFromState, 
 import { createInviteController } from "./src-app/features/invite/invite-controller.js";
 import { counterpartyAvatar, resolveCounterparty } from "./src-app/features/invite/invite-feature.js";
 import { createOfferController } from "./src-app/features/offer/offer-controller.js";
-import { paymentAmountLabel as buildPaymentAmountLabel, paymentMemoValue as buildPaymentMemoValue, paymentPrivacyLabel as buildPaymentPrivacyLabel } from "./src-app/features/payment/payment-feature.js";
+import { createPaymentController } from "./src-app/features/payment/payment-controller.js";
 import { createSettlementProofMeta, directPaymentProofItemFromMessages, directPaymentProofMarkup as buildDirectPaymentProofMarkup, escrowSettlementProofMarkup as buildEscrowSettlementProofMarkup } from "./src-app/features/settlement/settlement-feature.js";
 import { createLoadingController } from "./src-app/features/transactions/loading-state-feature.js";
 import { createTransactionModalController, transactionDelay } from "./src-app/features/transactions/transaction-modal-feature.js";
@@ -535,6 +535,24 @@ const offerController = createOfferController({
   renderWorkflowProgress,
   showScreen,
   fallbackOfferTime: () => now - 2 * minute,
+});
+
+const paymentController = createPaymentController({
+  state,
+  document,
+  paymentReviewModal,
+  recipient: PAYMENT_RECIPIENT,
+  estimateVeilFee,
+  rewardPoints: VEIL_REWARD_POINTS,
+  setElementText,
+  iconRefresh,
+  safeSubmit,
+  getVeilClient: () => veilClient,
+  transactionTransportMode,
+  awardReward,
+  currentChannel,
+  renderWorkflowProgress,
+  showScreen,
 });
 
 function createClient(transport) {
@@ -2505,51 +2523,27 @@ function hideOfferReview() {
 }
 
 function paymentAmountLabel() {
-  return buildPaymentAmountLabel(
-    document.querySelector("#payment-amount")?.value,
-    document.querySelector("#payment-asset")?.value,
-  );
+  return paymentController.paymentAmountLabel();
 }
 
 function paymentPrivacyLabel() {
-  return buildPaymentPrivacyLabel(state.paymentMode);
+  return paymentController.paymentPrivacyLabel();
 }
 
 function paymentMemoValue() {
-  return buildPaymentMemoValue(document.querySelector("#payment-memo")?.value);
+  return paymentController.paymentMemoValue();
 }
 
 function renderPaymentTransactionSummary() {
-  const amountLabel = paymentAmountLabel();
-  const fee = estimateVeilFee("directPayment", amountLabel, {
-    shielded: state.paymentMode === "shield",
-  });
-
-  setElementText("#payment-summary-amount", amountLabel);
-  setElementText("#payment-total-fee", fee.feeLabel);
-  setElementText("#payment-summary-total", fee.totalLabel);
-  setElementText("#payment-review-recipient", PAYMENT_RECIPIENT);
-  setElementText("#payment-review-amount", amountLabel);
-  setElementText("#payment-review-privacy", paymentPrivacyLabel());
-  setElementText("#payment-review-fee", fee.feeLabel);
-  setElementText("#payment-review-reward", `+${VEIL_REWARD_POINTS.directPayment} VEIL Points`);
-  setElementText("#payment-review-memo", paymentMemoValue());
-  setElementText("#payment-review-total", fee.totalLabel);
+  paymentController.renderPaymentTransactionSummary();
 }
 
 function showPaymentReview() {
-  renderPaymentTransactionSummary();
-  if (!paymentReviewModal) return;
-  paymentReviewModal.classList.remove("hidden");
-  document.body.classList.add("modal-open");
-  iconRefresh();
-  paymentReviewModal.querySelector("[data-payment-review-sign]")?.focus();
+  paymentController.showPaymentReview();
 }
 
 function hidePaymentReview() {
-  if (!paymentReviewModal) return;
-  paymentReviewModal.classList.add("hidden");
-  document.body.classList.remove("modal-open");
+  paymentController.hidePaymentReview();
 }
 
 function renderEscrowTransactionSummary() {
@@ -2853,27 +2847,7 @@ function renderEscrow() {
 }
 
 function renderPayment() {
-  const paymentDealStatus = document.querySelector("#payment-deal-status");
-  const settlementAction = document.querySelector("#payment-settlement-action");
-  if (paymentDealStatus) {
-    paymentDealStatus.textContent = state.paymentSent
-      ? "Settlement Complete"
-      : "Direct Transfer";
-  }
-  document.querySelectorAll("[data-payment-mode]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
-  });
-  renderPaymentTransactionSummary();
-  if (settlementAction) {
-    settlementAction.disabled = !state.paymentSent;
-    settlementAction.classList.toggle("disabled", !state.paymentSent);
-    settlementAction.innerHTML = state.paymentSent
-      ? `<i data-lucide="check" class="size-5"></i><span>View Settlement</span>`
-      : `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
-    setElementText("#payment-settlement-copy", state.paymentSent
-      ? "Settlement proof is ready."
-      : "Send payment to generate settlement proof.");
-  }
+  paymentController.renderPayment();
 }
 
 function expectedNetworkName() {
@@ -3439,39 +3413,7 @@ async function acceptOffer() {
 }
 
 async function sendPayment() {
-  const amount = document.querySelector("#payment-amount").value.trim() || "450";
-  const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
-  const memo = document.querySelector("#payment-memo").value.trim() || "Final settlement for rights transfer.";
-  const submitted = await safeSubmit(
-    () => veilClient.sendPaymentMemo({
-      channelId: state.channelId,
-      amount: `${amount} ${asset}`,
-      memo,
-      mode: transactionTransportMode(state.paymentMode),
-      sender: "you",
-    }),
-    {
-      type: "inline",
-      title: "Payment completed",
-      subtitle: `${amount} ${asset} to Bob`,
-      actor: "Alice",
-      time: Date.now(),
-      mode: state.paymentMode,
-    },
-    "Payment sent.",
-    {
-      actionLabel: "Sending Payment",
-      successTitle: "Shielded Payment Sent",
-      successSubtitle: `${amount} ${asset} payment recorded in the private channel.`,
-    },
-  );
-  if (!submitted) return;
-  awardReward("directPayment");
-  state.paymentSent = true;
-  currentChannel().status = "Deal Completed";
-  renderPayment();
-  renderWorkflowProgress();
-  showScreen("settlement");
+  return paymentController.sendPayment();
 }
 
 async function submitEscrowDeposit(key) {
