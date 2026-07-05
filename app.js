@@ -6,6 +6,13 @@ import { StarkZap } from "starkzap-sdk";
 import { accountPresets } from "starkzap-account-presets";
 import { ChainId } from "starkzap-config";
 import { OnboardStrategy } from "starkzap-onboard";
+import { estimateVeilFee } from "./src-app/domain/fees.js";
+import { createDealInviteLink as buildDealInviteLink, starkIdentityName } from "./src-app/domain/invites.js";
+import { VEIL_REWARD_LABELS, VEIL_REWARD_POINTS, nextRewardTier } from "./src-app/domain/rewards.js";
+import { statusPillClass } from "./src-app/domain/status.js";
+import { formatPoints, formatTime } from "./src-app/utils/format.js";
+import { demoTxHash, deterministicHex, displayTransactionHash, shortHash } from "./src-app/utils/hash.js";
+import { transactionExplorerUrl as buildTransactionExplorerUrl } from "./src-app/utils/transactions.js";
 
 const runtimeParams = new URLSearchParams(window.location.search);
 const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") === "demo";
@@ -52,45 +59,9 @@ const DIRECT_HELPER_MESSAGE_MODE = "unshield";
 const DEAL_OFFER_AMOUNT = "450 STRK";
 const ACTIVE_DEAL_LABEL = "Deal #381";
 const PAYMENT_RECIPIENT = "Bob";
-const STRK_SYMBOL = "STRK";
 const BOB_IDENTITY = "bob.stark";
 const BOB_WALLET_ADDRESS = "0x04c8a3d2f10b7e4c93f6a58219d0de8fa2";
 const BOB_WALLET_SHORT = "0x04...8fa2";
-const VEIL_FEE_MODEL = Object.freeze({
-  networkFeeStrk: 0.003,
-  strk20PrivacyFeeStrk: 0.01,
-  protocolRates: {
-    directPayment: 0.0015,
-    escrow: 0.005,
-    digitalAsset: 0.0075,
-    highValueEscrow: 0.01,
-  },
-});
-const VEIL_REWARD_POINTS = Object.freeze({
-  sendMessage: 1,
-  createOffer: 5,
-  counterOffer: 5,
-  acceptProposal: 10,
-  directPayment: 20,
-  escrowCreated: 450,
-  escrowCompleted: 50,
-  inviteUserJoined: 100,
-});
-const VEIL_REWARD_LABELS = Object.freeze({
-  sendMessage: "Shielded Message",
-  createOffer: "Alice created an offer",
-  counterOffer: "Bob created a counter offer",
-  acceptProposal: "Accept Proposal",
-  directPayment: "Direct Payment",
-  escrowCreated: "Escrow Deposit",
-  escrowCompleted: "Escrow Completed",
-  inviteUserJoined: "Invite User Joined",
-});
-const rewardTiers = [
-  { name: "Gold", threshold: 5_000 },
-  { name: "Platinum", threshold: 10_000 },
-  { name: "Diamond", threshold: 25_000 },
-];
 const VEIL_INVITE_BASE_URL = import.meta.env.VITE_VEIL_INVITE_URL || "https://veil.app/invite";
 const homeResourceLinks = {
   docs: import.meta.env.VITE_VEIL_DOCS_URL || "#",
@@ -148,27 +119,6 @@ function reliableRpcUrl(url, fallback) {
   return value;
 }
 
-function demoTxHash(seed) {
-  return deterministicHex(`tx:${seed}`, 64);
-}
-
-function deterministicHex(seed, length = 64) {
-  const text = String(seed || "veil");
-  let hash = 2166136261;
-  let output = "";
-  let round = 0;
-  while (output.length < length) {
-    const value = `${text}:${round}`;
-    for (let index = 0; index < value.length; index += 1) {
-      hash ^= value.charCodeAt(index);
-      hash = Math.imul(hash, 16777619) >>> 0;
-    }
-    output += hash.toString(16).padStart(8, "0");
-    round += 1;
-  }
-  return `0x${output.slice(0, length)}`;
-}
-
 function settlementProofMeta(channel = currentChannel?.()) {
   const source = currentDealId(channel);
   const hash = deterministicHex(`settlement:${source}`, 64);
@@ -176,12 +126,6 @@ function settlementProofMeta(channel = currentChannel?.()) {
     proofId: `VP-${String(source).replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase() || "DEAL"}-${hash.slice(2, 8).toUpperCase()}`,
     settlementHash: hash,
   };
-}
-
-function starkIdentityName(name = BOB_IDENTITY) {
-  return String(name || BOB_IDENTITY).toLowerCase().endsWith(".stark")
-    ? String(name || BOB_IDENTITY).toLowerCase()
-    : `${String(name || "bob").toLowerCase()}.stark`;
 }
 
 function confirmedTimelineMeta(seed, offset = 0) {
@@ -782,7 +726,7 @@ function saveLocalChannels() {
 }
 
 function createDealInviteLink() {
-  return `${VEIL_INVITE_BASE_URL}/${state.inviteCode}`;
+  return buildDealInviteLink(VEIL_INVITE_BASE_URL, state.inviteCode);
 }
 
 function newDealTitleValue() {
@@ -2758,7 +2702,7 @@ function renderTransactionModal() {
     setLucideIcon(icon, isSuccess ? "check" : isError ? "triangle-alert" : "loader-circle", "size-8");
   }
   if (link) {
-    const href = transactionExplorerUrl(modal.txHash);
+    const href = buildTransactionExplorerUrl(modal.txHash, STARKNET_SEPOLIA_EXPLORER_URL);
     link.hidden = !isSuccess || !href;
     if (href) link.href = href;
   }
@@ -2850,28 +2794,6 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function formatTime(timestamp) {
-  return new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp));
-}
-
-function transactionExplorerUrl(txHash) {
-  if (!txHash || String(txHash).startsWith("mock-")) return "";
-  return `${STARKNET_SEPOLIA_EXPLORER_URL}/tx/${encodeURIComponent(txHash)}`;
-}
-
-function displayTransactionHash(value) {
-  const text = String(value || "");
-  if (!text) return "";
-  if (text.startsWith("mock-")) return deterministicHex(`legacy:${text}`, 64);
-  return text;
-}
-
-function shortHash(value) {
-  const text = displayTransactionHash(value);
-  if (!text) return "";
-  return text.length > 18 ? `${text.slice(0, 10)}...${text.slice(-6)}` : text;
-}
-
 function transactionStatusInfo(item) {
   const status = String(item.status || "").toLowerCase();
   if (status === "failed") {
@@ -2888,7 +2810,7 @@ function transactionStatusInfo(item) {
 }
 
 function renderTransactionLink(item) {
-  const txUrl = transactionExplorerUrl(item.txHash);
+  const txUrl = buildTransactionExplorerUrl(item.txHash, STARKNET_SEPOLIA_EXPLORER_URL);
   const displayHash = displayTransactionHash(item.txHash);
   if (!txUrl) {
     const title = displayHash ? `Transaction hash: ${displayHash}` : "Transaction hash is not available yet";
@@ -3057,18 +2979,6 @@ function timelinePayloadToFeedItem(item, payload) {
     title: titles[payload.kind] || "Channel event",
     subtitle: payload.memo || payload.details || payload.label || payload.reason || "Encrypted event",
   };
-}
-
-function statusPillClass(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized.includes("negotiating") || normalized.includes("negotiation")) return "status-pill negotiating";
-  if (normalized.includes("deal completed") || normalized.includes("closed")) return "status-pill settlement";
-  if (normalized.includes("escrow")) return "status-pill escrow-active";
-  if (normalized.includes("funding complete")) return "status-pill escrow-active";
-  if (normalized.includes("approvals complete")) return "status-pill escrow-active";
-  if (normalized.includes("waiting")) return "status-pill waiting-deposit";
-  if (normalized.includes("settlement")) return "status-pill settlement";
-  return "status-pill deal-status";
 }
 
 function renderConversationList() {
@@ -3395,49 +3305,6 @@ function currentOfferProofItem() {
 function setElementText(selector, value) {
   const element = document.querySelector(selector);
   if (element) element.textContent = value;
-}
-
-function parseStrkAmount(value, fallback = 0) {
-  const match = String(value || "").match(/\d+(?:[.,]\d+)?/);
-  if (!match) return fallback;
-  const parsed = Number(match[0].replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatStrk(value) {
-  const rounded = Math.round((Number(value) + Number.EPSILON) * 1_000) / 1_000;
-  return `${rounded.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${STRK_SYMBOL}`;
-}
-
-function formatPoints(value) {
-  return Number(value || 0).toLocaleString("en-US");
-}
-
-function estimateVeilFee(kind, amountLabel, options = {}) {
-  const amount = parseStrkAmount(amountLabel);
-  const rate = VEIL_FEE_MODEL.protocolRates[kind] || 0;
-  const shielded = options.shielded !== false;
-  const privacyFee = shielded ? VEIL_FEE_MODEL.strk20PrivacyFeeStrk : 0;
-  const protocolFee = amount * rate;
-  const totalFee = VEIL_FEE_MODEL.networkFeeStrk + privacyFee + protocolFee;
-  const total = amount + totalFee;
-  return {
-    amount,
-    networkFee: VEIL_FEE_MODEL.networkFeeStrk,
-    privacyFee,
-    protocolFee,
-    totalFee,
-    total,
-    networkFeeLabel: formatStrk(VEIL_FEE_MODEL.networkFeeStrk),
-    privacyFeeLabel: formatStrk(privacyFee),
-    protocolFeeLabel: formatStrk(protocolFee),
-    feeLabel: formatStrk(totalFee),
-    totalLabel: formatStrk(total),
-  };
-}
-
-function nextRewardTier(points = state.rewardPoints) {
-  return rewardTiers.find((tier) => points < tier.threshold) || rewardTiers[rewardTiers.length - 1];
 }
 
 function awardReward(ruleKey) {
@@ -4244,7 +4111,7 @@ function renderWalletAssets() {
 }
 
 function renderWalletRewards() {
-  const tier = nextRewardTier();
+  const tier = nextRewardTier(state.rewardPoints);
   const remaining = Math.max(tier.threshold - state.rewardPoints, 0);
   setElementText("#wallet-reward-points", `${formatPoints(state.rewardPoints)} pts`);
   setElementText("#wallet-reward-tier", tier.name);
@@ -4468,7 +4335,7 @@ function renderProof() {
   if (proofFlow) proofFlow.innerHTML = directPaymentProof ? directPaymentProofMarkup() : escrowSettlementProofMarkup();
   setElementText("#settlement-proof-hash", txHash || "Available after wallet confirmation");
   if (proofLink) {
-    proofLink.href = txHash ? transactionExplorerUrl(txHash) : STARKNET_SEPOLIA_EXPLORER_URL;
+    proofLink.href = txHash ? buildTransactionExplorerUrl(txHash, STARKNET_SEPOLIA_EXPLORER_URL) : STARKNET_SEPOLIA_EXPLORER_URL;
     const label = proofLink.querySelector("span");
     if (label) label.textContent = txHash ? "View Transaction" : "View on Voyager";
   }
