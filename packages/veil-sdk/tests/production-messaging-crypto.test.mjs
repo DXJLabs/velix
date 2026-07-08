@@ -2,6 +2,7 @@
 import { assert, createFeeProvider, sdk } from "./production-messaging.helpers.mjs";
 
 const {
+  ChannelEncryptionAdapter,
   DirectHelperTransport,
   MemoryEncryptedPayloadStore,
   MemorySessionKeyStore,
@@ -16,6 +17,7 @@ const {
   analyzeClientActionBatch,
   assertValidClientActionBatch,
   buildPrivacyPoolChannelActions,
+  computeTimelinePayloadHash,
   decodeInvokeExternalEvent,
   decryptMessage,
   deriveSharedSecret,
@@ -25,6 +27,7 @@ const {
   estimateTotalCost,
   estimateTransactionFee,
   generateEcdhKeyPair,
+  generateChannelKey,
   getFeeInfo,
   getSupportedFeeModes,
   invokeExternalAction,
@@ -100,6 +103,43 @@ describe("VEIL production messaging crypto", () => {
       ]),
       /duplicate nonce/i,
     );
+  });
+
+  it("decrypts channel envelopes when timeline payloadHash is the onchain Poseidon commitment", async () => {
+    const channelId = "123";
+    const eventType = 1;
+    const payload = { kind: "chat", message: "canonical hash roundtrip", sender: "you" };
+    const payloadStore = new MemoryEncryptedPayloadStore();
+    const adapter = new ChannelEncryptionAdapter({
+      channelKey: await generateChannelKey(),
+      payloadStore,
+      now: () => 1_700_000_000_000,
+    });
+    const encrypted = await adapter.encryptPayload(payload, { channelId, eventType });
+    const timelinePayloadHash = computeTimelinePayloadHash({
+      conversationTag: channelId,
+      encryptedEventType: eventType,
+      encryptedPayload: encrypted.encryptedPayload,
+      payloadChunks: encrypted.payloadChunks,
+    });
+
+    assert.notEqual(timelinePayloadHash, encrypted.payloadHash);
+    const decrypted = await adapter.decryptPayload(
+      {
+        eventId: "1",
+        channelId,
+        eventType,
+        encryptedPayload: encrypted.encryptedPayload,
+        payloadHash: timelinePayloadHash,
+        envelopeHash: encrypted.envelopeHash,
+        nonce: encrypted.nonce,
+        payloadChunks: encrypted.payloadChunks,
+        timestamp: Date.now(),
+      },
+      { channelId, eventType },
+    );
+
+    assert.deepEqual(decrypted, payload);
   });
 });
 

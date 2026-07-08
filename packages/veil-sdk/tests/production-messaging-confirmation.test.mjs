@@ -122,7 +122,9 @@ describe("VEIL transport confirmation and direct helper", () => {
       account: {
         async execute(calls) {
           assert.equal(Array.isArray(calls), true);
-          assert.equal(calls[0].entrypoint, "privacy_invoke");
+          assert.equal(calls[0].entrypoint, "invoke");
+          assert.equal(calls[0].calldata[0], "5");
+          assert.equal(calls[0].calldata.at(-1), "0");
           return { transaction_hash: "0xabc" };
         },
       },
@@ -169,6 +171,39 @@ describe("VEIL transport confirmation and direct helper", () => {
     assert.equal(item.optimistic, false);
     assert.equal(item.blockNumber, 1234);
     assert.equal(item.timestamp, 1700000000000);
+  });
+
+  it("uses caller-provided canonical calldata for direct invoke submissions", async () => {
+    let submittedCalldata;
+    const transport = new DirectHelperTransport({
+      helperAddress: "0x123",
+      waitForConfirmation: false,
+      channelIdEncoder: () => "999",
+      account: {
+        async execute(calls) {
+          assert.equal(calls[0].entrypoint, "invoke");
+          submittedCalldata = calls[0].calldata;
+          return { transaction_hash: "0xabc" };
+        },
+      },
+    });
+
+    await transport.invokeExternal({
+      privacyPoolAddress: "0xpool",
+      helperAddress: "0x123",
+      mode: "unshield",
+      calldata: ["123", "1", "111", "222", "0"],
+      item: {
+        eventId: "0",
+        channelId: "rights-transfer",
+        eventType: 1,
+        encryptedPayload: "111",
+        payloadHash: "222",
+        timestamp: Date.now(),
+      },
+    });
+
+    assert.deepEqual(submittedCalldata, ["5", "123", "1", "111", "222", "0"]);
   });
 
   it("rejects shield mode on the direct helper transport", async () => {

@@ -60,7 +60,7 @@ VEIL constructs application payloads and ClientAction inputs, but the external S
 
 ## Direct Helper Transport
 
-`DirectHelperTransport` is implemented. It submits `privacy_invoke` directly to `VeilChannelHelper`, waits for confirmation by default, reads helper events, and returns confirmed timeline metadata.
+`DirectHelperTransport` is implemented. It submits `invoke` directly to `VeilChannelHelper`, waits for confirmation by default, reads helper events, and returns confirmed timeline metadata.
 
 Direct helper mode does not provide Privacy Pool anonymity.
 

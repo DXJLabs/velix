@@ -49,16 +49,19 @@ export class MockEncryptionAdapter implements EncryptionAdapter {
     const serializedPayload = JSON.stringify(payload);
     const ciphertext = bytesToBase64(textEncoder.encode(serializedPayload));
     const encryptedPayload = await hashToFelt(`veil:encrypted:${ciphertext}`);
-    const payloadHash = await hashToFelt(`veil:payload:${serializedPayload}`);
+    const envelopeHash = await hashToFelt(`veil:payload:${serializedPayload}`);
     const payloadChunks = stringToFeltChunks(JSON.stringify({
       version: 1,
       algorithm: "mock-base64",
+      encryptedPayload,
+      envelopeHash,
+      payloadHash: envelopeHash,
       ciphertext,
     }));
 
     this.#payloadCache.set(encryptedPayload, payload);
 
-    return { encryptedPayload, payloadHash, payloadChunks };
+    return { encryptedPayload, payloadHash: envelopeHash, envelopeHash, payloadChunks };
   }
 
   async decryptPayload(item: TimelineItem): Promise<VeilTimelinePayload | null> {

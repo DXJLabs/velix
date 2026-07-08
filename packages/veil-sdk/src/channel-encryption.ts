@@ -198,13 +198,14 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
     );
     const ciphertext = bytesToBase64(ciphertextBytes);
     const nonceValue = bytesToBase64(nonce);
-    const payloadHash = await hashToFelt(`veil:ciphertext:${ciphertext}`);
-    const encryptedPayload = await hashToFelt(`veil:payload-ref:${payloadHash}:${nonceValue}`);
+    const envelopeHash = await hashToFelt(`veil:ciphertext:${ciphertext}`);
+    const encryptedPayload = await hashToFelt(`veil:payload-ref:${envelopeHash}:${nonceValue}`);
     const envelope: EncryptedPayloadEnvelope = {
       version: 1,
       algorithm: AES_GCM_ALGORITHM,
       encryptedPayload,
-      payloadHash,
+      envelopeHash,
+      payloadHash: envelopeHash,
       ciphertext,
       nonce: nonceValue,
       createdAt: this.#now(),
@@ -218,7 +219,13 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
     }
 
     await this.#payloadStore.saveEnvelope(envelope);
-    return { encryptedPayload, payloadHash, nonce: nonceValue, payloadChunks: stringToFeltChunks(JSON.stringify(envelope)) };
+    return {
+      encryptedPayload,
+      payloadHash: envelopeHash,
+      envelopeHash,
+      nonce: nonceValue,
+      payloadChunks: stringToFeltChunks(JSON.stringify(envelope)),
+    };
   }
 
   async decryptPayload(item: TimelineItem, context?: EncryptionContext): Promise<VeilTimelinePayload | null> {
@@ -237,7 +244,18 @@ export class ChannelEncryptionAdapter implements EncryptionAdapter {
       return item.payload ?? null;
     }
 
-    if (envelope.payloadHash !== item.payloadHash) {
+    if (envelope.encryptedPayload !== item.encryptedPayload) {
+      throw new Error("Encrypted payload envelope reference mismatch.");
+    }
+
+    const envelopeHash = envelope.envelopeHash ?? envelope.payloadHash;
+    const expectedEnvelopeHash = await hashToFelt(`veil:ciphertext:${envelope.ciphertext}`);
+    if (envelopeHash !== expectedEnvelopeHash) {
+      throw new Error("Encrypted payload hash mismatch.");
+    }
+    const itemEnvelopeHash =
+      item.envelopeHash ?? (item.payloadHash === envelope.payloadHash ? item.payloadHash : undefined);
+    if (itemEnvelopeHash && itemEnvelopeHash !== envelopeHash) {
       throw new Error("Encrypted payload hash mismatch.");
     }
 

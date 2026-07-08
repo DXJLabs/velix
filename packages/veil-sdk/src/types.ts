@@ -44,6 +44,7 @@ export interface TimelineItem {
   eventType: number;
   encryptedPayload: string;
   payloadHash: string;
+  envelopeHash?: string;
   nonce?: string;
   mode?: VeilMessageMode;
   status?: VeilMessageStatus;
@@ -108,7 +109,9 @@ export interface ProofPayload extends BasePayload {
 
 export interface EncryptedPayload {
   encryptedPayload: string;
+  /** Local ciphertext envelope integrity hash. Kept as payloadHash for backwards compatibility. */
   payloadHash: string;
+  envelopeHash?: string;
   nonce?: string;
   payloadChunks?: string[];
 }
@@ -153,6 +156,7 @@ export interface InvokeExternalInput {
 
 export interface VeilTransport {
   supportedModes?: readonly VeilMessageMode[];
+  encodeConversationTag?(channelId: string): string;
   createChannel?(input: CreateChannelInput): Promise<CreateChannelResult>;
   invokeExternal(input: InvokeExternalInput): Promise<TimelineItem>;
   getEventCount(channelId: string): Promise<number>;

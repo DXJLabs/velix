@@ -20,7 +20,7 @@ flowchart TD
 Current behavior:
 
 - Submits a Starknet transaction through a configured account.
-- Calls the helper entrypoint, defaulting to `privacy_invoke`.
+- Calls the helper entrypoint, defaulting to `invoke`.
 - Waits for confirmation by default.
 - Reads helper event data after confirmation.
 - Returns transaction hash, block number when available, timestamp, and ciphertext metadata.

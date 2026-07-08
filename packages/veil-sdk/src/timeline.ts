@@ -1,14 +1,57 @@
-import { VeilEventType, type TimelineItem, type VeilEventGroup, type VeilTimelinePayload } from "./types";
+import { hash, shortString } from "starknet";
+import { VeilEventType, type FeltLike, type TimelineItem, type VeilEventGroup, type VeilTimelinePayload } from "./types";
 import type { DecodedPrivacyPoolEvent } from "./event_decoder";
 
-export function encodeInvokeCalldata(item: TimelineItem): readonly string[] {
+export const TIMELINE_PAYLOAD_DOMAIN = shortString.encodeShortString("VEIL_TIMELINE_V1");
+
+export interface TimelinePayloadHashInput {
+  conversationTag: FeltLike;
+  encryptedEventType: FeltLike;
+  encryptedPayload: FeltLike;
+  payloadChunks?: readonly FeltLike[];
+}
+
+function feltLikeToString(value: FeltLike, label: string): string {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`${label} must be a non-negative safe integer.`);
+    }
+    return String(value);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${label} cannot be empty.`);
+  }
+
+  return trimmed;
+}
+
+export function computeTimelinePayloadHash(input: TimelinePayloadHashInput): string {
+  const payloadChunks = input.payloadChunks ?? [];
+  return hash.computePoseidonHashOnElements([
+    TIMELINE_PAYLOAD_DOMAIN,
+    feltLikeToString(input.conversationTag, "conversation_tag"),
+    feltLikeToString(input.encryptedEventType, "encrypted_event_type"),
+    feltLikeToString(input.encryptedPayload, "encrypted_payload"),
+    String(payloadChunks.length),
+    ...payloadChunks.map((chunk) => feltLikeToString(chunk, "payload_chunk")),
+  ]);
+}
+
+export function encodeInvokeCalldata(item: TimelineItem, options: { conversationTag?: FeltLike } = {}): readonly string[] {
   const payloadChunks = item.payloadChunks ?? [];
   return [
-    item.channelId,
+    feltLikeToString(options.conversationTag ?? item.channelId, "conversation_tag"),
     String(item.eventType),
     item.encryptedPayload,
     item.payloadHash,
-    ...(payloadChunks.length ? [String(payloadChunks.length), ...payloadChunks] : []),
+    String(payloadChunks.length),
+    ...payloadChunks,
   ];
 }
 

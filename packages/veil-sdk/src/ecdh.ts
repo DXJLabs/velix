@@ -273,15 +273,16 @@ export async function encryptMessage(input: EncryptMessageInput): Promise<Encryp
   );
   const ciphertext = bytesToBase64(ciphertextBytes);
   const nonceValue = bytesToBase64(nonce);
-  const payloadHash = await hashToFelt(
+  const envelopeHash = await hashToFelt(
     `veil:privacy-pool:ciphertext:${ciphertext}:nonce:${nonceValue}:aad:${stableJson(input.context ?? {})}`,
   );
-  const encryptedPayload = await hashToFelt(`veil:privacy-pool:payload-ref:${payloadHash}:${nonceValue}`);
+  const encryptedPayload = await hashToFelt(`veil:privacy-pool:payload-ref:${envelopeHash}:${nonceValue}`);
   const envelope: EncryptedPayloadEnvelope = {
     version: 1,
     algorithm: PRIVACY_POOL_A256GCM_ALGORITHM,
     encryptedPayload,
-    payloadHash,
+    envelopeHash,
+    payloadHash: envelopeHash,
     ciphertext,
     nonce: nonceValue,
     createdAt: now(),
@@ -297,7 +298,8 @@ export async function encryptMessage(input: EncryptMessageInput): Promise<Encryp
   await payloadStore.saveEnvelope(envelope);
   return {
     encryptedPayload,
-    payloadHash,
+    payloadHash: envelopeHash,
+    envelopeHash,
     nonce: nonceValue,
     payloadChunks: stringToFeltChunks(JSON.stringify(envelope)),
   };
@@ -316,11 +318,24 @@ export async function decryptMessage(input: DecryptMessageInput): Promise<VeilTi
   if (!envelope) {
     return input.item.payload ?? null;
   }
-  if (envelope.payloadHash !== input.item.payloadHash) {
-    throw new Error("Encrypted payload hash mismatch.");
-  }
   if (envelope.algorithm !== PRIVACY_POOL_A256GCM_ALGORITHM) {
     throw new Error("Encrypted payload was not produced by the Privacy Pool message encryption adapter.");
+  }
+  if (envelope.encryptedPayload !== input.item.encryptedPayload) {
+    throw new Error("Encrypted payload envelope reference mismatch.");
+  }
+
+  const envelopeHash = envelope.envelopeHash ?? envelope.payloadHash;
+  const expectedEnvelopeHash = await hashToFelt(
+    `veil:privacy-pool:ciphertext:${envelope.ciphertext}:nonce:${envelope.nonce}:aad:${stableJson(input.context ?? {})}`,
+  );
+  if (envelopeHash !== expectedEnvelopeHash) {
+    throw new Error("Encrypted payload hash mismatch.");
+  }
+  const itemEnvelopeHash =
+    input.item.envelopeHash ?? (input.item.payloadHash === envelope.payloadHash ? input.item.payloadHash : undefined);
+  if (itemEnvelopeHash && itemEnvelopeHash !== envelopeHash) {
+    throw new Error("Encrypted payload hash mismatch.");
   }
 
   const nonce = base64ToBytes(envelope.nonce);

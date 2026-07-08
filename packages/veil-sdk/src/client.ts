@@ -1,5 +1,6 @@
 import { MockEncryptionAdapter } from "./encryption";
 import { MockPrivacyPoolAdapter } from "./privacy_pool_adapter";
+import { channelIdToFelt } from "./direct_helper_transport";
 import {
   deriveSharedSecret,
   decryptMessage,
@@ -21,7 +22,7 @@ import {
   type PrivacyPoolFeeMode,
 } from "./privacy_pool_fees";
 import type { CreateVeilSessionInput, VeilSessionPermission } from "./session-key-types";
-import { encodeInvokeCalldata } from "./timeline";
+import { computeTimelinePayloadHash, encodeInvokeCalldata } from "./timeline";
 import {
   VeilEventType,
   type EncryptedPayload,
@@ -410,21 +411,32 @@ export class VeilClient {
   ): Promise<TimelineItem> {
     const session = await this.#requirePermission(this.#permissionForEvent(eventType), channelId);
     const encrypted = await this.encryption.encryptPayload(payload, { channelId, eventType });
+    const payloadChunks = encrypted.payloadChunks ?? [];
+    const conversationTag = this.#conversationTag(channelId);
+    const timelinePayloadHash = computeTimelinePayloadHash({
+      conversationTag,
+      encryptedEventType: eventType,
+      encryptedPayload: encrypted.encryptedPayload,
+      payloadChunks,
+    });
+    const envelopeHash = encrypted.envelopeHash ?? encrypted.payloadHash;
     const item: TimelineItem = {
       eventId: "0",
       channelId,
       eventType,
       encryptedPayload: encrypted.encryptedPayload,
-      payloadHash: encrypted.payloadHash,
+      payloadHash: timelinePayloadHash,
+      envelopeHash,
       ...(encrypted.nonce ? { nonce: encrypted.nonce } : {}),
       mode,
       status: "signing",
-      ...(encrypted.payloadChunks?.length
-        ? { payloadChunkCount: encrypted.payloadChunks.length, payloadChunks: encrypted.payloadChunks }
+      payloadChunkCount: payloadChunks.length,
+      ...(payloadChunks.length
+        ? { payloadChunks }
         : {}),
       timestamp: this.#now(),
     };
-    const calldata = encodeInvokeCalldata(item);
+    const calldata = encodeInvokeCalldata(item, { conversationTag });
     const invokeInput: InvokeExternalInput = {
       privacyPoolAddress: this.privacyPoolAddress,
       helperAddress: this.helperAddress,
@@ -440,6 +452,10 @@ export class VeilClient {
     }
 
     return this.transport.invokeExternal(invokeInput);
+  }
+
+  #conversationTag(channelId: string): string {
+    return this.transport.encodeConversationTag?.(channelId) ?? channelIdToFelt(channelId);
   }
 
   async #withDecryptedPayload(item: TimelineItem): Promise<TimelineItem> {

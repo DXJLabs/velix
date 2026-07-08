@@ -146,6 +146,8 @@ export {
   decodeTransactionCalldata,
 } from "./transaction_analyzer";
 export {
+  TIMELINE_PAYLOAD_DOMAIN,
+  computeTimelinePayloadHash,
   createOptimisticTimelineItem,
   encodeInvokeCalldata,
   eventTypeToPayloadKind,
@@ -159,6 +161,7 @@ export {
   mergeTimelineItems,
   sortTimeline,
   timelineItemsFromDecodedEvents,
+  type TimelinePayloadHashInput,
 } from "./timeline";
 export {
   VeilEventType,

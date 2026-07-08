@@ -1,4 +1,5 @@
 ﻿import { channelIdToFelt } from "../direct_helper_transport";
+import { encodeInvokeCalldata } from "../timeline";
 import {
   analyzeClientActionBatch,
   buildPrivacyPoolChannelActions,
@@ -76,6 +77,10 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     this.#privateFeeBalance = config.privateFeeBalance;
     this.#feeEstimator = config.feeEstimator;
     this.#gasEstimate = config.gasEstimate;
+  }
+
+  encodeConversationTag(channelId: string): string {
+    return this.#channelIdEncoder(channelId);
   }
 
   async createChannel(input: CreateChannelInput = {}): Promise<CreateChannelResult> {
@@ -176,18 +181,11 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     const eventIndex = this.#waitForConfirmation
       ? await this.#readTransport.getEventCount(input.item.channelId)
       : undefined;
-    const helperCalldata = [
-      this.#channelIdEncoder(input.item.channelId),
-      toFeltString(input.item.eventType, "event_type"),
-      toFeltString(input.item.encryptedPayload, "encrypted_payload"),
-      toFeltString(input.item.payloadHash, "payload_hash"),
-      ...(input.item.payloadChunks?.length
-        ? [
-            String(input.item.payloadChunks.length),
-            ...input.item.payloadChunks.map((chunk) => toFeltString(chunk, "payload_chunk")),
-          ]
-        : []),
-    ];
+    const helperCalldata = input.calldata.length
+      ? input.calldata.map((felt, index) => toFeltString(felt, `calldata_${index}`))
+      : encodeInvokeCalldata(input.item, {
+          conversationTag: this.#channelIdEncoder(input.item.channelId),
+        });
     const helperCall = createSpanHelperCall(input.helperAddress || this.#helperAddress, helperCalldata);
     const clientActions = [
       ...buildPrivacyPoolMessageActions(input.privacyPool),

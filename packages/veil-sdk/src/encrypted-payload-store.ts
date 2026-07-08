@@ -2,6 +2,8 @@ export interface EncryptedPayloadEnvelope {
   version: 1;
   algorithm: "AES-GCM" | "ECDH-HKDF-SHA-256+A256GCM" | "STRK20-PRIVACY-POOL-HKDF-SHA-256+A256GCM";
   encryptedPayload: string;
+  envelopeHash?: string;
+  /** @deprecated Local envelope hash; use envelopeHash. */
   payloadHash: string;
   ciphertext: string;
   nonce: string;

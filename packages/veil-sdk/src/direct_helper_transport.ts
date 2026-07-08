@@ -1,4 +1,4 @@
-import { sortTimeline } from "./timeline";
+import { encodeInvokeCalldata, sortTimeline } from "./timeline";
 import {
   type CreateChannelInput,
   type CreateChannelResult,
@@ -145,6 +145,10 @@ export class DirectHelperTransport implements VeilTransport {
     this.#confirmationPollMs = config.confirmationPollMs ?? 2_500;
   }
 
+  encodeConversationTag(channelId: string): string {
+    return this.#channelIdEncoder(channelId);
+  }
+
   async createChannel(input: CreateChannelInput = {}): Promise<CreateChannelResult> {
     const channelId = input.channelId ?? "1";
     const result: CreateChannelResult = {
@@ -171,23 +175,17 @@ export class DirectHelperTransport implements VeilTransport {
     }
 
     const channelFelt = this.#channelIdEncoder(input.item.channelId);
+    if (!this.#storePayloadChunks && input.item.payloadChunks?.length) {
+      throw new Error("DirectHelperTransport cannot omit payload chunks because payload_hash commits to them.");
+    }
     const eventCount = this.#provider
       ? this.#waitForConfirmation
         ? await this.getEventCount(input.item.channelId)
         : await this.getEventCount(input.item.channelId).catch(() => undefined)
       : undefined;
-    const calldata = [
-      channelFelt,
-      toFeltString(input.item.eventType, "event_type"),
-      toFeltString(input.item.encryptedPayload, "encrypted_payload"),
-      toFeltString(input.item.payloadHash, "payload_hash"),
-      ...(this.#storePayloadChunks && input.item.payloadChunks?.length
-        ? [
-            String(input.item.payloadChunks.length),
-            ...input.item.payloadChunks.map((chunk) => toFeltString(chunk, "payload_chunk")),
-          ]
-        : []),
-    ];
+    const calldata = input.calldata.length
+      ? input.calldata.map((felt, index) => toFeltString(felt, `calldata_${index}`))
+      : encodeInvokeCalldata(input.item, { conversationTag: channelFelt });
 
     const result = await account.execute([
       createSpanHelperCall(input.helperAddress || this.#helperAddress, this.#entrypoint, calldata),

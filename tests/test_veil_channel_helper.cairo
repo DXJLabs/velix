@@ -156,6 +156,35 @@ fn direct_invoke_stores_timeline_event() {
 }
 
 #[test]
+fn payload_hash_matches_sdk_test_vector() {
+    let compact_hash = compute_payload_hash(
+        1001,
+        2002,
+        3003,
+        0,
+        0,
+        0,
+    );
+    assert(
+        compact_hash == 0x2a4ac8ff8d3bccf56f474476045a9b67da37a6ceb9433344ae37f77f924699,
+        'Bad compact vector',
+    );
+
+    let chunked_hash = compute_payload_hash(
+        7007,
+        8008,
+        9009,
+        111,
+        222,
+        2,
+    );
+    assert(
+        chunked_hash == 0x7c313dafedaabe86f45f8a5cea959a9417137719bc5c10534608339def3202a,
+        'Bad chunked vector',
+    );
+}
+
+#[test]
 fn privacy_invoke_accepts_configured_pool() {
     let contract_address = deploy_contract();
     let dispatcher = IVeilChannelHelperDispatcher { contract_address };

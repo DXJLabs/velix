@@ -174,18 +174,19 @@ describe("VEIL onchain transport metadata and action preparation", () => {
 
     const invoke = await adapter.prepareInvokeExternal({
       contractAddress: "0xhelper",
-      calldata: ["123", "1", "111", "222"],
+      calldata: ["123", "1", "111", "222", "0"],
     });
     assert.equal(invoke.hasReplayProtection, false);
     assert.deepEqual(invoke.encodedClientActions, [
       "1",
       "8",
       "0xhelper",
-      "4",
+      "5",
       "123",
       "1",
       "111",
       "222",
+      "0",
     ]);
   });
 
@@ -255,7 +256,7 @@ describe("VEIL onchain transport metadata and action preparation", () => {
     assert.equal(item.status, "pending");
     assert.equal(builderInput.clientActions[0].type, "CreateEncNote");
     assert.equal(builderInput.clientActions[1].type, "InvokeExternal");
-    assert.deepEqual(builderInput.helperCalldata, ["123", "1", "111", "222"]);
+    assert.deepEqual(builderInput.helperCalldata, ["123", "1", "111", "222", "0"]);
     assert.deepEqual(builderInput.encodedClientActions, [
       "2",
       "3",
@@ -267,11 +268,12 @@ describe("VEIL onchain transport metadata and action preparation", () => {
       "66",
       "8",
       "0xhelper",
-      "4",
+      "5",
       "123",
       "1",
       "111",
       "222",
+      "0",
     ]);
     assert.equal(builderInput.actionBatch.hasReplayProtection, true);
     assert.equal(builderInput.feeMode, "sponsored");

@@ -142,7 +142,11 @@ describe("VEIL shield transport submission", () => {
     assert.equal(item.optimistic, false);
     assert.equal(item.blockNumber, 99);
     assert.equal(item.timestamp, 1710000000000);
+    assert.equal(sdkMessageInput.helperCall.entrypoint, "privacy_invoke");
+    assert.equal(sdkMessageInput.helperCall.contractAddress, "0xhelper");
     assert.equal(applyInput.proof.raw.proof, true);
+    assert.equal(applyInput.applyActionsCall.entrypoint, "apply_actions");
+    assert.equal(applyInput.applyActionsCall.contractAddress, "0xpool");
     assert.deepEqual(calls, [
       "count:123",
       "compile",
