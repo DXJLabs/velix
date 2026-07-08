@@ -7,11 +7,7 @@ pub mod VeilEscrow {
     use openzeppelin_security::reentrancyguard::ReentrancyGuardComponent::InternalTrait
         as ReentrancyGuardInternalTrait;
 
-    use starknet::{
-        ContractAddress,
-        get_block_timestamp,
-        get_caller_address,
-    };
+    use starknet::ContractAddress;
 
     use starknet::storage::{
         Map,
@@ -32,17 +28,8 @@ pub mod VeilEscrow {
     };
 
     use crate::interfaces::escrow_interfaces::{
-        ISettlementAdapterDispatcher,
-        ISettlementAdapterDispatcherTrait,
         IVeilEscrow,
     };
-
-    use crate::offers::offer_interfaces::{
-        IVeilOfferDispatcher,
-        IVeilOfferDispatcherTrait,
-    };
-
-    use crate::offers::offer_types::OfferStatus;
 
     use crate::escrow::escrow_types::{
         Escrow,
@@ -50,19 +37,7 @@ pub mod VeilEscrow {
     };
 
     use crate::escrow::escrow_validation::{
-        assert_can_activate,
-        assert_can_cancel,
-        assert_can_confirm_buyer_deposit,
-        assert_can_confirm_seller_deposit,
-        assert_can_settle,
-        assert_different_parties,
-        assert_non_zero,
         assert_non_zero_address,
-        assert_only_buyer,
-        assert_only_seller,
-        assert_participant,
-        assert_valid_settlement_adapter,
-        assert_valid_status_transition,
     };
 
     const IVEIL_ESCROW_ID: felt252 =
@@ -84,13 +59,13 @@ pub mod VeilEscrow {
     impl SRC5Impl =
         SRC5Component::SRC5Impl<ContractState>;
 
-    #[path("escrow_creation_actions.cairo")]
+    #[path("../../contracts/escrow/escrow_creation_actions.cairo")]
     mod escrow_creation_actions;
 
-    #[path("escrow_funding_actions.cairo")]
+    #[path("../../contracts/escrow/escrow_funding_actions.cairo")]
     mod escrow_funding_actions;
 
-    #[path("escrow_resolution_actions.cairo")]
+    #[path("../../contracts/escrow/escrow_resolution_actions.cairo")]
     mod escrow_resolution_actions;
 
     // -------------------------------------------------------------------------

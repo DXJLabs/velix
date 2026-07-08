@@ -1,130 +1,54 @@
 use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
 use starknet::ContractAddress;
 
-/// Maximum number of additional ciphertext chunks accepted
-/// by a single timeline append operation.
-///
-/// This bound prevents unbounded calldata, storage growth,
-/// and unexpectedly large execution costs.
 pub const MAX_PAYLOAD_CHUNKS: u64 = 64;
 
-/// Domain separator for Veil timeline payload commitments.
-///
-/// The commitment intentionally binds:
-/// - protocol domain
-/// - conversation tag
-/// - encrypted event type
-/// - encrypted payload envelope
-/// - chunk count
-/// - payload chunks
 pub const TIMELINE_PAYLOAD_DOMAIN: felt252 = 'VEIL_TIMELINE_V1';
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct VeilTimelineEvent {
-    /// Monotonic application event id within this opaque conversation tag.
     pub event_id: felt252,
 
-    /// Opaque Veil application-level conversation tag.
-    ///
-    /// This must NOT be:
-    /// - a wallet address
-    /// - a recipient address
-    /// - a plaintext conversation identifier
-    /// - a Canonical Privacy Pool channel identifier
     pub conversation_tag: felt252,
 
-    /// Encrypted event kind.
-    ///
-    /// Examples such as CHAT, OFFER, COUNTER_OFFER,
-    /// ACCEPT, ESCROW, and SETTLEMENT must be encrypted
-    /// by the Veil SDK.
-    ///
-    /// The contract intentionally does not interpret
-    /// or expose plaintext application semantics.
     pub encrypted_event_type: felt252,
 
-    /// First ciphertext felt or encrypted payload envelope.
     pub encrypted_payload: felt252,
 
-    /// Domain-separated Poseidon commitment over:
-    ///
-    /// [
-    ///   TIMELINE_PAYLOAD_DOMAIN,
-    ///   conversation_tag,
-    ///   encrypted_event_type,
-    ///   encrypted_payload,
-    ///   payload_chunk_count,
-    ///   ...payload_chunks
-    /// ]
     pub payload_hash: felt252,
 
-    /// Number of additional ciphertext chunks.
     pub payload_chunk_count: u64,
 
-    /// Block timestamp used for application ordering.
-    ///
-    /// Transaction timing is public on a public blockchain.
     pub created_at: u64,
 }
 
 #[starknet::interface]
 pub trait IVeilChannelHelper<TContractState> {
-    /// Canonical Privacy Pool entrypoint.
-    ///
-    /// Expected calldata:
-    ///
-    /// [
-    ///   conversation_tag,
-    ///   encrypted_event_type,
-    ///   encrypted_payload,
-    ///   payload_hash,
-    ///   payload_chunk_count,
-    ///   ...payload_chunks
-    /// ]
-    ///
-    /// This entrypoint is intended to be called through:
-    ///
-    /// Canonical Privacy Pool
-    ///   -> InvokeExternal
-    ///   -> privacy_invoke(...)
     fn privacy_invoke(
         ref self: TContractState,
         calldata: Span<felt252>,
     ) -> Span<OpenNoteDeposit>;
 
-    /// Direct/unshielded timeline append path.
-    ///
-    /// Uses the same calldata encoding as `privacy_invoke`.
-    ///
-    /// IMPORTANT:
-    /// This entrypoint does not claim Privacy Pool provenance.
-    /// Direct participant authorization must be enforced by the
-    /// application flow and verified by the client/indexer.
     fn invoke(
         ref self: TContractState,
         calldata: Span<felt252>,
     ) -> Span<OpenNoteDeposit>;
 
-    /// Return the configured Canonical Privacy Pool address.
     fn get_privacy_pool(
         self: @TContractState,
     ) -> ContractAddress;
 
-    /// Return the number of timeline events stored
-    /// for an opaque conversation tag.
     fn get_event_count(
         self: @TContractState,
         conversation_tag: felt252,
     ) -> u64;
 
-    /// Return a specific timeline event.
     fn get_event(
         self: @TContractState,
         conversation_tag: felt252,
         index: u64,
     ) -> VeilTimelineEvent;
 
-    /// Return a specific additional ciphertext chunk.
     fn get_payload_chunk(
         self: @TContractState,
         conversation_tag: felt252,
@@ -153,40 +77,22 @@ pub mod VeilChannelHelper {
         IVeilChannelHelper,
         MAX_PAYLOAD_CHUNKS,
         OpenNoteDeposit,
-        TIMELINE_PAYLOAD_DOMAIN,
         VeilTimelineEvent,
     };
 
-    #[path("timeline_payload_hash.cairo")]
+    #[path("../../contracts/messaging/timeline_payload_hash.cairo")]
     mod timeline_payload_hash;
-
-    // -------------------------------------------------------------------------
-    // Storage
-    // -------------------------------------------------------------------------
 
     #[storage]
     struct Storage {
-        /// Canonical Privacy Pool authorized to call
-        /// the shielded `privacy_invoke` entrypoint.
         privacy_pool: ContractAddress,
 
-        /// Timeline events indexed by:
-        ///
-        /// (opaque conversation tag, local event index)
         events: Map<(felt252, u64), VeilTimelineEvent>,
 
-        /// Additional ciphertext chunks indexed by:
-        ///
-        /// (conversation tag, event index, chunk index)
         payload_chunks: Map<(felt252, u64, u64), felt252>,
 
-        /// Number of events per opaque conversation tag.
         event_count: Map<felt252, u64>,
     }
-
-    // -------------------------------------------------------------------------
-    // Events
-    // -------------------------------------------------------------------------
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -194,16 +100,6 @@ pub mod VeilChannelHelper {
         TimelineCommitmentStored: TimelineCommitmentStored,
     }
 
-    /// Minimal public timeline commitment event.
-    ///
-    /// The contract intentionally does NOT emit:
-    /// - plaintext application event type
-    /// - payload chunks
-    /// - sender address
-    /// - recipient address
-    /// - user-supplied execution mode
-    ///
-    /// Ciphertext remains available through contract storage.
     #[derive(Drop, starknet::Event)]
     struct TimelineCommitmentStored {
         #[key]
@@ -214,10 +110,6 @@ pub mod VeilChannelHelper {
 
         payload_hash: felt252,
     }
-
-    // -------------------------------------------------------------------------
-    // Constructor
-    // -------------------------------------------------------------------------
 
     #[constructor]
     fn constructor(

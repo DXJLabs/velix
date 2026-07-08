@@ -7,11 +7,7 @@ pub mod VeilOffer {
     use openzeppelin_security::reentrancyguard::ReentrancyGuardComponent::InternalTrait
         as ReentrancyGuardInternalTrait;
 
-    use starknet::{
-        ContractAddress,
-        get_block_timestamp,
-        get_caller_address,
-    };
+    use starknet::ContractAddress;
 
     use starknet::storage::{
         Map,
@@ -39,20 +35,7 @@ pub mod VeilOffer {
     };
 
     use crate::offers::offer_validation::{
-        assert_non_zero,
         assert_non_zero_address,
-        assert_different_parties,
-        assert_maker,
-        assert_taker,
-        assert_can_counter,
-        assert_can_accept,
-        assert_can_reject,
-        assert_can_cancel,
-        assert_can_convert_to_escrow,
-        assert_not_expired,
-        assert_expired,
-        assert_valid_expiry,
-        assert_valid_status_transition,
     };
 
     const IVEIL_OFFER_ID: felt252 =
@@ -72,12 +55,13 @@ pub mod VeilOffer {
 
     #[abi(embed_v0)]
     impl SRC5Impl =
-    #[path("offer_lifecycle_actions.cairo")]
+        SRC5Component::SRC5Impl<ContractState>;
+
+    #[path("../../contracts/offers/offer_lifecycle_actions.cairo")]
     mod offer_lifecycle_actions;
 
-    #[path("offer_resolution_actions.cairo")]
+    #[path("../../contracts/offers/offer_resolution_actions.cairo")]
     mod offer_resolution_actions;
-        SRC5Component::SRC5Impl<ContractState>;
 
     // -------------------------------------------------------------------------
     // Storage

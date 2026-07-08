@@ -3,6 +3,7 @@ use starknet::{
     get_block_timestamp,
     get_caller_address,
 };
+use starknet::event::EventEmitter;
 use starknet::storage::{
     StorageMapWriteAccess,
     StoragePointerReadAccess,
