@@ -3,10 +3,11 @@ use snforge_std::{
     ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
 };
 use starknet::ContractAddress;
-use veilc::veil_channel_helper::{
+use veilc::messaging_interfaces::{
     IVeilChannelHelperDispatcher, IVeilChannelHelperDispatcherTrait,
-    TIMELINE_PAYLOAD_DOMAIN, VeilTimelineEvent,
 };
+use veilc::messaging_types::VeilTimelineEvent;
+use veilc::utils::constants::TIMELINE_PAYLOAD_DOMAIN;
 
 const PRIVACY_POOL: felt252 = 0x123;
 const OTHER_CALLER: felt252 = 0x456;

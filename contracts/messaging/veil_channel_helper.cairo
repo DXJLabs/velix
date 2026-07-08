@@ -1,64 +1,11 @@
-use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
-use starknet::ContractAddress;
-
-pub const MAX_PAYLOAD_CHUNKS: u64 = 64;
-
-pub const TIMELINE_PAYLOAD_DOMAIN: felt252 = 'VEIL_TIMELINE_V1';
-
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct VeilTimelineEvent {
-    pub event_id: felt252,
-
-    pub conversation_tag: felt252,
-
-    pub encrypted_event_type: felt252,
-
-    pub encrypted_payload: felt252,
-
-    pub payload_hash: felt252,
-
-    pub payload_chunk_count: u64,
-
-    pub created_at: u64,
-}
-
-#[starknet::interface]
-pub trait IVeilChannelHelper<TContractState> {
-    fn privacy_invoke(
-        ref self: TContractState,
-        calldata: Span<felt252>,
-    ) -> Span<OpenNoteDeposit>;
-
-    fn invoke(
-        ref self: TContractState,
-        calldata: Span<felt252>,
-    ) -> Span<OpenNoteDeposit>;
-
-    fn get_privacy_pool(
-        self: @TContractState,
-    ) -> ContractAddress;
-
-    fn get_event_count(
-        self: @TContractState,
-        conversation_tag: felt252,
-    ) -> u64;
-
-    fn get_event(
-        self: @TContractState,
-        conversation_tag: felt252,
-        index: u64,
-    ) -> VeilTimelineEvent;
-
-    fn get_payload_chunk(
-        self: @TContractState,
-        conversation_tag: felt252,
-        event_index: u64,
-        chunk_index: u64,
-    ) -> felt252;
-}
-
 #[starknet::contract]
 pub mod VeilChannelHelper {
+    use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
+    use crate::messaging::messaging_events::TimelineCommitmentStored;
+    use crate::messaging::messaging_interfaces::IVeilChannelHelper;
+    use crate::messaging::messaging_types::VeilTimelineEvent;
+    use crate::utils::constants::MAX_PAYLOAD_CHUNKS;
+
     use starknet::{
         ContractAddress,
         get_block_timestamp,
@@ -71,13 +18,6 @@ pub mod VeilChannelHelper {
         StorageMapWriteAccess,
         StoragePointerReadAccess,
         StoragePointerWriteAccess,
-    };
-
-    use super::{
-        IVeilChannelHelper,
-        MAX_PAYLOAD_CHUNKS,
-        OpenNoteDeposit,
-        VeilTimelineEvent,
     };
 
     #[path("../../contracts/messaging/timeline_payload_hash.cairo")]
@@ -98,17 +38,6 @@ pub mod VeilChannelHelper {
     #[derive(Drop, starknet::Event)]
     enum Event {
         TimelineCommitmentStored: TimelineCommitmentStored,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct TimelineCommitmentStored {
-        #[key]
-        conversation_tag: felt252,
-
-        #[key]
-        event_id: felt252,
-
-        payload_hash: felt252,
     }
 
     #[constructor]

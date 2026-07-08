@@ -1,4 +1,5 @@
 use core::poseidon::poseidon_hash_span;
+use crate::utils::constants::TIMELINE_PAYLOAD_DOMAIN;
 
 /// Compute the domain-separated payload commitment.
 ///
@@ -27,7 +28,7 @@ pub fn compute_payload_hash(
         ArrayTrait::<felt252>::new();
 
     hash_input.append(
-        super::super::TIMELINE_PAYLOAD_DOMAIN,
+        TIMELINE_PAYLOAD_DOMAIN,
     );
 
     hash_input.append(
