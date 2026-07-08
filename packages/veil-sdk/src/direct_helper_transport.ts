@@ -158,7 +158,7 @@ export class DirectHelperTransport implements VeilTransport {
 
   constructor(config: DirectHelperTransportConfig) {
     this.#helperAddress = config.helperAddress;
-    this.#entrypoint = config.entrypoint ?? "invoke";
+    this.#entrypoint = config.entrypoint ?? "privacy_invoke";
     this.#account = config.account;
     this.#provider = config.provider;
     this.#storePayloadChunks = config.storePayloadChunks ?? true;
