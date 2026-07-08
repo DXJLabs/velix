@@ -11,8 +11,11 @@ export const STARKNET_SEPOLIA_EXPLORER_URL = "https://sepolia.voyager.online";
 export const WALLET_INIT_TIMEOUT_MS = 30_000;
 export const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "deploying", "connecting_paymaster"]);
 
-const LEGACY_CHANNEL_HELPER_ADDRESS = "0x0333e805547d0e91cec741045bf7305e8ff58e8b7d1e9f70ecb3ca559712ef6c";
-const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x018b25f0b870610e9d28a764c432dd17c18cad7d3c09aebb6e61b4efdef4efd7";
+const LEGACY_CHANNEL_HELPER_ADDRESSES = new Set([
+  "0x0333e805547d0e91cec741045bf7305e8ff58e8b7d1e9f70ecb3ca559712ef6c",
+  "0x018b25f0b870610e9d28a764c432dd17c18cad7d3c09aebb6e61b4efdef4efd7",
+]);
+const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x0335b9a8b03e4d4478e29cfa77dba3672e0f87873a369c54353314ae033e1d5c";
 
 export function normalizeChainId(value) {
   const normalized = String(value || "").trim().toUpperCase();
@@ -59,7 +62,7 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
   if (!privyLoginMethods.length && privyAppId) privyLoginMethods.push("google");
 
   const configuredHelperAddress = env.VITE_VEIL_CHANNEL_HELPER_ADDRESS || "";
-  const helperAddress = configuredHelperAddress.toLowerCase() === LEGACY_CHANNEL_HELPER_ADDRESS
+  const helperAddress = LEGACY_CHANNEL_HELPER_ADDRESSES.has(configuredHelperAddress.toLowerCase())
     ? DEPLOYED_CHANNEL_HELPER_ADDRESS
     : configuredHelperAddress || DEPLOYED_CHANNEL_HELPER_ADDRESS;
   const configuredRpcUrl = env.VITE_STARKNET_RPC_URL || "";
@@ -76,6 +79,9 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
     privyLoginMethods,
     removedPrivyLoginMethods: configuredPrivyLoginMethods.filter((method) => !privyLoginMethods.includes(method)),
     helperAddress,
+    offerAddress: env.VITE_VEIL_OFFER_ADDRESS || "",
+    escrowAddress: env.VITE_VEIL_ESCROW_ADDRESS || "",
+    settlementHelperAddress: env.VITE_VEIL_SETTLEMENT_HELPER_ADDRESS || "",
     privacyPoolAddress: env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool",
     rpcUrl,
     configuredChannelKey: env.VITE_VEIL_CHANNEL_KEY || "",

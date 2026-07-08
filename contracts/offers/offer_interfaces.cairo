@@ -125,6 +125,15 @@ pub trait IVeilOffer<TContractState> {
         escrow_id: felt252,
     );
 
+    /// Set the trusted VeilEscrow contract after a two-step deployment.
+    ///
+    /// This is restricted by the implementation and may only be used while the
+    /// escrow contract has not been configured yet.
+    fn set_escrow_contract(
+        ref self: TContractState,
+        escrow_contract: ContractAddress,
+    );
+
     /// Return the complete offer state.
     fn get_offer(
         self: @TContractState,
@@ -153,6 +162,11 @@ pub trait IVeilOffer<TContractState> {
     /// Trusted VeilEscrow contract allowed to call
     /// mark_converted_to_escrow().
     fn get_escrow_contract(
+        self: @TContractState,
+    ) -> ContractAddress;
+
+    /// Deployment owner allowed to finish two-step wiring.
+    fn get_owner(
         self: @TContractState,
     ) -> ContractAddress;
 }

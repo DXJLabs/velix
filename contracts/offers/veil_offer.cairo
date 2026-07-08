@@ -7,7 +7,10 @@ pub mod VeilOffer {
     use openzeppelin_security::reentrancyguard::ReentrancyGuardComponent::InternalTrait
         as ReentrancyGuardInternalTrait;
 
-    use starknet::ContractAddress;
+    use starknet::{
+        ContractAddress,
+        get_caller_address,
+    };
 
     use starknet::storage::{
         Map,
@@ -92,6 +95,9 @@ pub mod VeilOffer {
         /// Only this contract may convert an Accepted offer
         /// into ConvertedToEscrow.
         escrow_contract: ContractAddress,
+
+        /// Deployment owner allowed to complete two-step wiring.
+        owner: ContractAddress,
     }
 
     // -------------------------------------------------------------------------
@@ -125,10 +131,19 @@ pub mod VeilOffer {
     fn constructor(
         ref self: ContractState,
         escrow_contract: ContractAddress,
+        owner: ContractAddress,
     ) {
-        assert_non_zero_address(escrow_contract);
+        assert_non_zero_address(owner);
+
+        let zero_address: ContractAddress =
+            0.try_into().unwrap();
+
+        if escrow_contract != zero_address {
+            assert_non_zero_address(escrow_contract);
+        }
 
         self.escrow_contract.write(escrow_contract);
+        self.owner.write(owner);
 
         self.src5.register_interface(
             IVEIL_OFFER_ID,
@@ -232,6 +247,36 @@ pub mod VeilOffer {
                 escrow_id,
             );
         }
+
+        fn set_escrow_contract(
+            ref self: ContractState,
+            escrow_contract: ContractAddress,
+        ) {
+            let caller =
+                get_caller_address();
+
+            assert(
+                caller == self.owner.read(),
+                'Only owner',
+            );
+
+            assert_non_zero_address(escrow_contract);
+
+            let zero_address: ContractAddress =
+                0.try_into().unwrap();
+
+            let current_escrow =
+                self.escrow_contract.read();
+
+            assert(
+                current_escrow == zero_address
+                    || current_escrow == escrow_contract,
+                'Escrow already set',
+            );
+
+            self.escrow_contract.write(escrow_contract);
+        }
+
         // ---------------------------------------------------------------------
         // Views
         // ---------------------------------------------------------------------
@@ -273,6 +318,12 @@ pub mod VeilOffer {
             self: @ContractState,
         ) -> ContractAddress {
             self.escrow_contract.read()
+        }
+
+        fn get_owner(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.owner.read()
         }
     }
 
