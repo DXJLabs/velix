@@ -85,6 +85,11 @@ pub struct Escrow {
     /// Current escrow lifecycle status.
     pub status: EscrowStatus,
 
+    /// Adapter-defined settlement result, commitment, or receipt reference.
+    ///
+    /// Zero means the escrow has not settled yet.
+    pub settlement_result: felt252,
+
     /// Escrow creation timestamp.
     pub created_at: u64,
 

@@ -1,11 +1,13 @@
-use starknet::ContractAddress;
 use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
 use crate::settlement::settlement_types::SettlementReceipt;
 use crate::settlement::settlement_interfaces::IVeilSettlementHelper;
 
 #[starknet::contract]
 pub mod VeilSettlementHelper {
-    use openzeppelin::interfaces::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use openzeppelin_token::erc20::interface::{
+        IERC20Dispatcher,
+        IERC20DispatcherTrait,
+    };
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess, StoragePointerWriteAccess};
     use super::{IVeilSettlementHelper, OpenNoteDeposit, SettlementReceipt};

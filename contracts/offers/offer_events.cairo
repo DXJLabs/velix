@@ -62,6 +62,17 @@ pub struct OfferRejected {
 }
 
 #[derive(Drop, starknet::Event)]
+pub struct OfferCancelled {
+    #[key]
+    pub offer_id: felt252,
+
+    /// Cross-reference for the Veil conversation timeline.
+    pub conversation_tag: felt252,
+
+    pub timestamp: u64,
+}
+
+#[derive(Drop, starknet::Event)]
 pub struct OfferExpired {
     #[key]
     pub offer_id: felt252,
