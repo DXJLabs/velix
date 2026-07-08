@@ -204,10 +204,11 @@ export class DirectHelperTransport implements VeilTransport {
     if (!this.#storePayloadChunks && input.item.payloadChunks?.length) {
       throw new Error("DirectHelperTransport cannot omit payload chunks because payload_hash commits to them.");
     }
+    // Best-effort only. A temporary RPC 429 must not block transaction submission.
+    // If unavailable, preserve the caller-provided eventId and let later indexing
+    // resolve the canonical event position.
     const eventCount = this.#provider
-      ? this.#waitForConfirmation
-        ? await this.getEventCount(input.item.channelId)
-        : await this.getEventCount(input.item.channelId).catch(() => undefined)
+      ? await this.getEventCount(input.item.channelId).catch(() => undefined)
       : undefined;
     const calldata = input.calldata.length
       ? input.calldata.map((felt, index) => toFeltString(felt, `calldata_${index}`))
@@ -231,20 +232,19 @@ export class DirectHelperTransport implements VeilTransport {
     if (this.#waitForConfirmation) {
       const receipt = await this.#waitForReceipt(transactionHash);
       const blockNumber = extractBlockNumber(receipt);
-      if (eventCount === undefined) {
-        throw new Error("DirectHelperTransport could not determine the helper event index for confirmation.");
-      }
-      const confirmedItem = await this.getEvent(input.item.channelId, eventCount);
-      const resolvedBlockNumber = blockNumber ?? confirmedItem.blockNumber;
+
+      // Do not immediately read the event and every payload chunk back from RPC.
+      // The transaction has already been submitted and confirmed at this point.
+      // A post-submit RPC 429 must not be misreported as transaction failure.
       const returnedItem: TimelineItem = {
-        ...confirmedItem,
+        ...item,
         transactionHash,
         mode: input.mode,
         status: "confirmed",
         optimistic: false,
       };
-      if (resolvedBlockNumber !== undefined) {
-        returnedItem.blockNumber = resolvedBlockNumber;
+      if (blockNumber !== undefined) {
+        returnedItem.blockNumber = blockNumber;
       }
       return returnedItem;
     }
