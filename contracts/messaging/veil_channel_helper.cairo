@@ -1,225 +1,661 @@
+use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
 use starknet::ContractAddress;
 
-pub const EVENT_CHAT: felt252 = 1;
-pub const EVENT_PAYMENT_MEMO: felt252 = 2;
-pub const EVENT_OFFER: felt252 = 3;
-pub const EVENT_COUNTER_OFFER: felt252 = 4;
-pub const EVENT_ACCEPT_OFFER: felt252 = 5;
-pub const EVENT_REJECT_OFFER: felt252 = 6;
-pub const EVENT_ESCROW_CREATED: felt252 = 7;
-pub const EVENT_ESCROW_DEPOSITED: felt252 = 8;
-pub const EVENT_ESCROW_SETTLED: felt252 = 9;
-pub const EVENT_ESCROW_CANCELLED: felt252 = 10;
-pub const EVENT_PROOF_ATTACHED: felt252 = 11;
+/// Maximum number of additional ciphertext chunks accepted
+/// by a single timeline append operation.
+///
+/// This bound prevents unbounded calldata, storage growth,
+/// and unexpectedly large execution costs.
+pub const MAX_PAYLOAD_CHUNKS: u64 = 64;
 
-#[derive(Copy, Drop, Serde)]
-pub struct OpenNoteDeposit {
-    pub note_id: felt252,
-    pub token: ContractAddress,
-    pub amount: u256,
-}
+/// Domain separator for Veil timeline payload commitments.
+///
+/// The commitment intentionally binds:
+/// - protocol domain
+/// - conversation tag
+/// - encrypted event type
+/// - encrypted payload envelope
+/// - chunk count
+/// - payload chunks
+pub const TIMELINE_PAYLOAD_DOMAIN: felt252 = 'VEIL_TIMELINE_V1';
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct VeilTimelineEvent {
+    /// Monotonic application event id within this opaque conversation tag.
     pub event_id: felt252,
-    pub channel_id: felt252,
-    pub event_type: felt252,
+
+    /// Opaque Veil application-level conversation tag.
+    ///
+    /// This must NOT be:
+    /// - a wallet address
+    /// - a recipient address
+    /// - a plaintext conversation identifier
+    /// - a Canonical Privacy Pool channel identifier
+    pub conversation_tag: felt252,
+
+    /// Encrypted event kind.
+    ///
+    /// Examples such as CHAT, OFFER, COUNTER_OFFER,
+    /// ACCEPT, ESCROW, and SETTLEMENT must be encrypted
+    /// by the Veil SDK.
+    ///
+    /// The contract intentionally does not interpret
+    /// or expose plaintext application semantics.
+    pub encrypted_event_type: felt252,
+
+    /// First ciphertext felt or encrypted payload envelope.
     pub encrypted_payload: felt252,
+
+    /// Domain-separated Poseidon commitment over:
+    ///
+    /// [
+    ///   TIMELINE_PAYLOAD_DOMAIN,
+    ///   conversation_tag,
+    ///   encrypted_event_type,
+    ///   encrypted_payload,
+    ///   payload_chunk_count,
+    ///   ...payload_chunks
+    /// ]
     pub payload_hash: felt252,
+
+    /// Number of additional ciphertext chunks.
     pub payload_chunk_count: u64,
+
+    /// Block timestamp used for application ordering.
+    ///
+    /// Transaction timing is public on a public blockchain.
     pub created_at: u64,
 }
 
 #[starknet::interface]
 pub trait IVeilChannelHelper<TContractState> {
+    /// Canonical Privacy Pool entrypoint.
+    ///
+    /// Expected calldata:
+    ///
+    /// [
+    ///   conversation_tag,
+    ///   encrypted_event_type,
+    ///   encrypted_payload,
+    ///   payload_hash,
+    ///   payload_chunk_count,
+    ///   ...payload_chunks
+    /// ]
+    ///
+    /// This entrypoint is intended to be called through:
+    ///
+    /// Canonical Privacy Pool
+    ///   -> InvokeExternal
+    ///   -> privacy_invoke(...)
     fn privacy_invoke(
-        ref self: TContractState, calldata: Span<felt252>,
+        ref self: TContractState,
+        calldata: Span<felt252>,
     ) -> Span<OpenNoteDeposit>;
-    fn invoke(ref self: TContractState, calldata: Span<felt252>) -> Span<OpenNoteDeposit>;
-    fn get_event_count(self: @TContractState, channel_id: felt252) -> u64;
-    fn get_event(self: @TContractState, channel_id: felt252, index: u64) -> VeilTimelineEvent;
+
+    /// Direct/unshielded timeline append path.
+    ///
+    /// Uses the same calldata encoding as `privacy_invoke`.
+    ///
+    /// IMPORTANT:
+    /// This entrypoint does not claim Privacy Pool provenance.
+    /// Direct participant authorization must be enforced by the
+    /// application flow and verified by the client/indexer.
+    fn invoke(
+        ref self: TContractState,
+        calldata: Span<felt252>,
+    ) -> Span<OpenNoteDeposit>;
+
+    /// Return the configured Canonical Privacy Pool address.
+    fn get_privacy_pool(
+        self: @TContractState,
+    ) -> ContractAddress;
+
+    /// Return the number of timeline events stored
+    /// for an opaque conversation tag.
+    fn get_event_count(
+        self: @TContractState,
+        conversation_tag: felt252,
+    ) -> u64;
+
+    /// Return a specific timeline event.
+    fn get_event(
+        self: @TContractState,
+        conversation_tag: felt252,
+        index: u64,
+    ) -> VeilTimelineEvent;
+
+    /// Return a specific additional ciphertext chunk.
     fn get_payload_chunk(
-        self: @TContractState, channel_id: felt252, event_index: u64, chunk_index: u64,
+        self: @TContractState,
+        conversation_tag: felt252,
+        event_index: u64,
+        chunk_index: u64,
     ) -> felt252;
 }
 
 #[starknet::contract]
 pub mod VeilChannelHelper {
-    use starknet::get_block_timestamp;
-    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
-    use super::{
-        EVENT_ACCEPT_OFFER, EVENT_CHAT, EVENT_COUNTER_OFFER, EVENT_ESCROW_CANCELLED,
-        EVENT_ESCROW_CREATED, EVENT_ESCROW_DEPOSITED, EVENT_ESCROW_SETTLED, EVENT_OFFER,
-        EVENT_PAYMENT_MEMO, EVENT_PROOF_ATTACHED, EVENT_REJECT_OFFER, IVeilChannelHelper,
-        OpenNoteDeposit, VeilTimelineEvent,
+    use core::poseidon::poseidon_hash_span;
+
+    use starknet::{
+        ContractAddress,
+        get_block_timestamp,
+        get_caller_address,
     };
+
+    use starknet::storage::{
+        Map,
+        StorageMapReadAccess,
+        StorageMapWriteAccess,
+        StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+    };
+
+    use super::{
+        IVeilChannelHelper,
+        MAX_PAYLOAD_CHUNKS,
+        OpenNoteDeposit,
+        TIMELINE_PAYLOAD_DOMAIN,
+        VeilTimelineEvent,
+    };
+
+    // -------------------------------------------------------------------------
+    // Storage
+    // -------------------------------------------------------------------------
 
     #[storage]
     struct Storage {
+        /// Canonical Privacy Pool authorized to call
+        /// the shielded `privacy_invoke` entrypoint.
+        privacy_pool: ContractAddress,
+
+        /// Timeline events indexed by:
+        ///
+        /// (opaque conversation tag, local event index)
         events: Map<(felt252, u64), VeilTimelineEvent>,
+
+        /// Additional ciphertext chunks indexed by:
+        ///
+        /// (conversation tag, event index, chunk index)
         payload_chunks: Map<(felt252, u64, u64), felt252>,
+
+        /// Number of events per opaque conversation tag.
         event_count: Map<felt252, u64>,
     }
+
+    // -------------------------------------------------------------------------
+    // Events
+    // -------------------------------------------------------------------------
 
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
-        TimelineEventStored: TimelineEventStored,
-        TimelinePayloadChunkStored: TimelinePayloadChunkStored,
+        TimelineCommitmentStored: TimelineCommitmentStored,
     }
 
+    /// Minimal public timeline commitment event.
+    ///
+    /// The contract intentionally does NOT emit:
+    /// - plaintext application event type
+    /// - payload chunks
+    /// - sender address
+    /// - recipient address
+    /// - user-supplied execution mode
+    ///
+    /// Ciphertext remains available through contract storage.
     #[derive(Drop, starknet::Event)]
-    struct TimelineEventStored {
+    struct TimelineCommitmentStored {
         #[key]
-        channel_id: felt252,
-        #[key]
-        event_type: felt252,
+        conversation_tag: felt252,
+
         #[key]
         event_id: felt252,
-        encrypted_payload: felt252,
+
         payload_hash: felt252,
-        payload_chunk_count: u64,
-        created_at: u64,
     }
 
-    #[derive(Drop, starknet::Event)]
-    struct TimelinePayloadChunkStored {
-        #[key]
-        channel_id: felt252,
-        #[key]
-        event_id: felt252,
-        #[key]
-        chunk_index: u64,
-        chunk: felt252,
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
+
+    #[constructor]
+    fn constructor(
+        ref self: ContractState,
+        privacy_pool: ContractAddress,
+    ) {
+        let zero_address: ContractAddress =
+            0.try_into().unwrap();
+
+        assert(
+            privacy_pool != zero_address,
+            'Invalid privacy pool',
+        );
+
+        self.privacy_pool.write(
+            privacy_pool,
+        );
     }
+
+    // -------------------------------------------------------------------------
+    // Public implementation
+    // -------------------------------------------------------------------------
 
     #[abi(embed_v0)]
     impl VeilChannelHelperImpl of IVeilChannelHelper<ContractState> {
+        /// Shielded/private timeline append path.
+        ///
+        /// The caller must be the configured Canonical Privacy Pool.
+        ///
+        /// This prevents a wallet from directly calling
+        /// `privacy_invoke` and pretending that an event originated
+        /// through Privacy Pool InvokeExternal.
         fn privacy_invoke(
-            ref self: ContractState, calldata: Span<felt252>,
+            ref self: ContractState,
+            calldata: Span<felt252>,
         ) -> Span<OpenNoteDeposit> {
-            self.store_timeline_event(calldata)
+            let caller =
+                get_caller_address();
+
+            let expected_privacy_pool =
+                self.privacy_pool.read();
+
+            assert(
+                caller == expected_privacy_pool,
+                'Unauthorized privacy caller',
+            );
+
+            self.store_timeline_event(
+                calldata,
+            )
         }
 
-        fn invoke(ref self: ContractState, calldata: Span<felt252>) -> Span<OpenNoteDeposit> {
-            self.store_timeline_event(calldata)
+        /// Direct/unshielded timeline append path.
+        ///
+        /// This entrypoint is intentionally distinct from
+        /// `privacy_invoke`.
+        ///
+        /// Transaction provenance can therefore distinguish:
+        ///
+        /// - authenticated Privacy Pool path
+        /// - direct application path
+        ///
+        /// without trusting a user-provided mode field.
+        fn invoke(
+            ref self: ContractState,
+            calldata: Span<felt252>,
+        ) -> Span<OpenNoteDeposit> {
+            self.store_timeline_event(
+                calldata,
+            )
         }
 
-        fn get_event_count(self: @ContractState, channel_id: felt252) -> u64 {
-            self.event_count.read(channel_id)
+        fn get_privacy_pool(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.privacy_pool.read()
         }
 
-        fn get_event(self: @ContractState, channel_id: felt252, index: u64) -> VeilTimelineEvent {
-            self.events.read((channel_id, index))
+        fn get_event_count(
+            self: @ContractState,
+            conversation_tag: felt252,
+        ) -> u64 {
+            self.event_count.read(
+                conversation_tag,
+            )
+        }
+
+        fn get_event(
+            self: @ContractState,
+            conversation_tag: felt252,
+            index: u64,
+        ) -> VeilTimelineEvent {
+            let count =
+                self.event_count.read(
+                    conversation_tag,
+                );
+
+            assert(
+                index < count,
+                'Event not found',
+            );
+
+            self.events.read(
+                (
+                    conversation_tag,
+                    index,
+                ),
+            )
         }
 
         fn get_payload_chunk(
-            self: @ContractState, channel_id: felt252, event_index: u64, chunk_index: u64,
+            self: @ContractState,
+            conversation_tag: felt252,
+            event_index: u64,
+            chunk_index: u64,
         ) -> felt252 {
-            self.payload_chunks.read((channel_id, event_index, chunk_index))
-        }
-    }
+            let count =
+                self.event_count.read(
+                    conversation_tag,
+                );
 
-    #[generate_trait]
-    impl InternalImpl of InternalTrait {
-        fn store_timeline_event(
-            ref self: ContractState, calldata: Span<felt252>,
-        ) -> Span<OpenNoteDeposit> {
-            assert(calldata.len() == 4 || calldata.len() >= 5, 'Invalid calldata');
+            assert(
+                event_index < count,
+                'Event not found',
+            );
 
-            let channel_id = *calldata.at(0);
-            let event_type = *calldata.at(1);
-            let encrypted_payload = *calldata.at(2);
-            let payload_hash = *calldata.at(3);
-            let mut payload_chunk_count: u64 = 0;
-            if calldata.len() >= 5 {
-                payload_chunk_count = (*calldata.at(4)).try_into().unwrap();
-                assert(payload_chunk_count > 0, 'Invalid payload size');
-                assert(calldata.len() == 5 + payload_chunk_count.try_into().unwrap(), 'Invalid payload size');
-            }
-
-            assert(channel_id != 0, 'Invalid channel');
-            assert_valid_event_type(event_type);
-            assert(encrypted_payload != 0, 'Invalid payload');
-            assert(payload_hash != 0, 'Invalid hash');
-
-            let current_count = self.event_count.read(channel_id);
-            let event_id = current_count.into() + 1;
-            let created_at = get_block_timestamp();
-            let timeline_event = VeilTimelineEvent {
-                event_id,
-                channel_id,
-                event_type,
-                encrypted_payload,
-                payload_hash,
-                payload_chunk_count,
-                created_at,
-            };
-
-            self.events.write((channel_id, current_count), timeline_event);
-            self.store_payload_chunks(channel_id, current_count, event_id, payload_chunk_count, calldata);
-            self.event_count.write(channel_id, current_count + 1);
-            self
-                .emit(
-                    Event::TimelineEventStored(
-                        TimelineEventStored {
-                            channel_id,
-                            event_type,
-                            event_id,
-                            encrypted_payload,
-                            payload_hash,
-                            payload_chunk_count,
-                            created_at,
-                        },
+            let timeline_event =
+                self.events.read(
+                    (
+                        conversation_tag,
+                        event_index,
                     ),
                 );
 
-            ArrayTrait::<OpenNoteDeposit>::new().span()
+            assert(
+                chunk_index
+                    < timeline_event.payload_chunk_count,
+                'Chunk not found',
+            );
+
+            self.payload_chunks.read(
+                (
+                    conversation_tag,
+                    event_index,
+                    chunk_index,
+                ),
+            )
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal implementation
+    // -------------------------------------------------------------------------
+
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        /// Validate, commit, and persist one encrypted
+        /// Veil conversation timeline event.
+        fn store_timeline_event(
+            ref self: ContractState,
+            calldata: Span<felt252>,
+        ) -> Span<OpenNoteDeposit> {
+            // Required calldata header:
+            //
+            // 0 conversation_tag
+            // 1 encrypted_event_type
+            // 2 encrypted_payload
+            // 3 payload_hash
+            // 4 payload_chunk_count
+            assert(
+                calldata.len() >= 5,
+                'Invalid calldata',
+            );
+
+            let conversation_tag =
+                *calldata.at(0);
+
+            let encrypted_event_type =
+                *calldata.at(1);
+
+            let encrypted_payload =
+                *calldata.at(2);
+
+            let claimed_payload_hash =
+                *calldata.at(3);
+
+            let payload_chunk_count: u64 =
+                (*calldata.at(4))
+                    .try_into()
+                    .expect('Invalid chunk count');
+
+            // Prevent unbounded calldata and storage growth.
+            assert(
+                payload_chunk_count
+                    <= MAX_PAYLOAD_CHUNKS,
+                'Too many chunks',
+            );
+
+            let chunk_count_usize: usize =
+                payload_chunk_count
+                    .try_into()
+                    .expect('Chunk count overflow');
+
+            assert(
+                calldata.len()
+                    == 5 + chunk_count_usize,
+                'Invalid payload size',
+            );
+
+            // Only the opaque conversation tag is required
+            // to be non-zero.
+            //
+            // Encrypted felt values are intentionally NOT
+            // rejected when zero because valid ciphertext
+            // representations may contain zero-valued fields.
+            assert(
+                conversation_tag != 0,
+                'Invalid conversation tag',
+            );
+
+            // Compute a domain-separated commitment.
+            let computed_payload_hash =
+                compute_payload_hash(
+                    conversation_tag,
+                    encrypted_event_type,
+                    encrypted_payload,
+                    payload_chunk_count,
+                    calldata,
+                );
+
+            assert(
+                computed_payload_hash
+                    == claimed_payload_hash,
+                'Payload hash mismatch',
+            );
+
+            let current_count =
+                self.event_count.read(
+                    conversation_tag,
+                );
+
+            let event_id: felt252 =
+                current_count.into() + 1;
+
+            let created_at =
+                get_block_timestamp();
+
+            let timeline_event =
+                VeilTimelineEvent {
+                    event_id,
+
+                    conversation_tag,
+
+                    encrypted_event_type,
+
+                    encrypted_payload,
+
+                    payload_hash:
+                        computed_payload_hash,
+
+                    payload_chunk_count,
+
+                    created_at,
+                };
+
+            self.events.write(
+                (
+                    conversation_tag,
+                    current_count,
+                ),
+                timeline_event,
+            );
+
+            self.store_payload_chunks(
+                conversation_tag,
+                current_count,
+                payload_chunk_count,
+                calldata,
+            );
+
+            self.event_count.write(
+                conversation_tag,
+                current_count + 1,
+            );
+
+            // Emit only the minimum timeline commitment
+            // required by an indexer.
+            //
+            // Payload chunks are not duplicated
+            // into public event logs.
+            self.emit(
+                Event::TimelineCommitmentStored(
+                    TimelineCommitmentStored {
+                        conversation_tag,
+
+                        event_id,
+
+                        payload_hash:
+                            computed_payload_hash,
+                    },
+                ),
+            );
+
+            // Messaging does not create an OpenNoteDeposit.
+            //
+            // The exact canonical ABI type is imported from:
+            //
+            // privacy::objects::OpenNoteDeposit
+            ArrayTrait::<OpenNoteDeposit>::new()
+                .span()
         }
 
+        /// Persist additional ciphertext payload chunks.
         fn store_payload_chunks(
             ref self: ContractState,
-            channel_id: felt252,
+            conversation_tag: felt252,
             event_index: u64,
-            event_id: felt252,
             payload_chunk_count: u64,
             calldata: Span<felt252>,
         ) {
             let mut chunk_index: u64 = 0;
+
             loop {
-                if chunk_index == payload_chunk_count {
+                if chunk_index
+                    == payload_chunk_count
+                {
                     break;
                 }
 
-                let calldata_index: usize = 5 + chunk_index.try_into().unwrap();
-                let chunk = *calldata.at(calldata_index);
-                assert(chunk != 0, 'Invalid payload chunk');
-                self.payload_chunks.write((channel_id, event_index, chunk_index), chunk);
-                self
-                    .emit(
-                        Event::TimelinePayloadChunkStored(
-                            TimelinePayloadChunkStored {
-                                channel_id, event_id, chunk_index, chunk,
-                            },
-                        ),
+                let chunk_offset: usize =
+                    chunk_index
+                        .try_into()
+                        .expect('Chunk index overflow');
+
+                let calldata_index =
+                    5 + chunk_offset;
+
+                let chunk =
+                    *calldata.at(
+                        calldata_index,
                     );
+
+                // Ciphertext chunks are opaque.
+                //
+                // Zero is intentionally accepted because
+                // valid encrypted representations may contain
+                // zero-valued felt fields.
+                self.payload_chunks.write(
+                    (
+                        conversation_tag,
+                        event_index,
+                        chunk_index,
+                    ),
+                    chunk,
+                );
+
                 chunk_index += 1;
             };
         }
     }
 
-    fn assert_valid_event_type(event_type: felt252) {
-        let is_valid = event_type == EVENT_CHAT
-            || event_type == EVENT_PAYMENT_MEMO
-            || event_type == EVENT_OFFER
-            || event_type == EVENT_COUNTER_OFFER
-            || event_type == EVENT_ACCEPT_OFFER
-            || event_type == EVENT_REJECT_OFFER
-            || event_type == EVENT_ESCROW_CREATED
-            || event_type == EVENT_ESCROW_DEPOSITED
-            || event_type == EVENT_ESCROW_SETTLED
-            || event_type == EVENT_ESCROW_CANCELLED
-            || event_type == EVENT_PROOF_ATTACHED;
-        assert(is_valid, 'Invalid event type');
+    // -------------------------------------------------------------------------
+    // Pure helpers
+    // -------------------------------------------------------------------------
+
+    /// Compute the domain-separated payload commitment.
+    ///
+    /// Commitment:
+    ///
+    /// Poseidon(
+    ///   TIMELINE_PAYLOAD_DOMAIN,
+    ///   conversation_tag,
+    ///   encrypted_event_type,
+    ///   encrypted_payload,
+    ///   payload_chunk_count,
+    ///   ...payload_chunks
+    /// )
+    ///
+    /// Including `conversation_tag` prevents the same payload
+    /// commitment from being silently reused across unrelated
+    /// Veil conversations.
+    fn compute_payload_hash(
+        conversation_tag: felt252,
+        encrypted_event_type: felt252,
+        encrypted_payload: felt252,
+        payload_chunk_count: u64,
+        calldata: Span<felt252>,
+    ) -> felt252 {
+        let mut hash_input =
+            ArrayTrait::<felt252>::new();
+
+        hash_input.append(
+            TIMELINE_PAYLOAD_DOMAIN,
+        );
+
+        hash_input.append(
+            conversation_tag,
+        );
+
+        hash_input.append(
+            encrypted_event_type,
+        );
+
+        hash_input.append(
+            encrypted_payload,
+        );
+
+        hash_input.append(
+            payload_chunk_count.into(),
+        );
+
+        let mut chunk_index: u64 = 0;
+
+        loop {
+            if chunk_index
+                == payload_chunk_count
+            {
+                break;
+            }
+
+            let chunk_offset: usize =
+                chunk_index
+                    .try_into()
+                    .expect('Chunk index overflow');
+
+            let calldata_index =
+                5 + chunk_offset;
+
+            hash_input.append(
+                *calldata.at(
+                    calldata_index,
+                ),
+            );
+
+            chunk_index += 1;
+        };
+
+        poseidon_hash_span(
+            hash_input.span(),
+        )
     }
 }
