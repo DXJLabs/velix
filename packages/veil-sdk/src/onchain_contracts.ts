@@ -66,8 +66,28 @@ const DEFAULT_EXPIRY_SECONDS = 24 * 60 * 60;
 const CONFIRMATION_TIMEOUT_MS = 120_000;
 const CONFIRMATION_POLL_MS = 2_500;
 
-function normalizeCallResult(result: readonly FeltLike[] | { result: readonly FeltLike[] }): readonly FeltLike[] {
-  return "result" in result ? result.result : result;
+function normalizeCallResult(
+  result: readonly FeltLike[] | { result: readonly FeltLike[] } | null | undefined,
+): readonly FeltLike[] {
+  if (result == null) {
+    throw new Error(
+      "Starknet RPC returned no call result. The RPC may be rate-limited or temporarily unavailable.",
+    );
+  }
+
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  if (
+    typeof result === "object" &&
+    "result" in result &&
+    Array.isArray(result.result)
+  ) {
+    return result.result;
+  }
+
+  throw new Error("Starknet RPC returned an invalid callContract response.");
 }
 
 function feltLikeToBigInt(value: FeltLike, label: string): bigint {
@@ -98,8 +118,15 @@ function feltLikeToString(value: FeltLike, label: string): string {
   return trimmed;
 }
 
-function extractTransactionHash(result: StarknetExecuteResult | string): string | undefined {
+function extractTransactionHash(
+  result: StarknetExecuteResult | string | null | undefined,
+): string | undefined {
   if (typeof result === "string") return result;
+
+  if (!result || typeof result !== "object") {
+    return undefined;
+  }
+
   const maybeHash = result as StarknetExecuteResult & { hash?: string };
   return maybeHash.transaction_hash ?? maybeHash.transactionHash ?? maybeHash.hash;
 }

@@ -55,13 +55,39 @@ function feltToNumber(value: FeltLike, label: string): number {
   return parsed;
 }
 
-function normalizeCallResult(result: readonly FeltLike[] | { result: readonly FeltLike[] }): readonly FeltLike[] {
-  return "result" in result ? result.result : result;
+function normalizeCallResult(
+  result: readonly FeltLike[] | { result: readonly FeltLike[] } | null | undefined,
+): readonly FeltLike[] {
+  if (result == null) {
+    throw new Error(
+      "Starknet RPC returned no call result. The RPC may be rate-limited or temporarily unavailable.",
+    );
+  }
+
+  if (Array.isArray(result)) {
+    return result;
+  }
+
+  if (
+    typeof result === "object" &&
+    "result" in result &&
+    Array.isArray(result.result)
+  ) {
+    return result.result;
+  }
+
+  throw new Error("Starknet RPC returned an invalid callContract response.");
 }
 
-function extractTransactionHash(result: Awaited<ReturnType<StarknetAccountLike["execute"]>>): string | undefined {
+function extractTransactionHash(
+  result: Awaited<ReturnType<StarknetAccountLike["execute"]>> | null | undefined,
+): string | undefined {
   if (typeof result === "string") {
     return result;
+  }
+
+  if (!result || typeof result !== "object") {
+    return undefined;
   }
 
   if ("hash" in result && typeof result.hash === "string") {
@@ -246,11 +272,7 @@ export class DirectHelperTransport implements VeilTransport {
       ? feltToNumber(result[5] as FeltLike, "payload_chunk_count")
       : 0;
     const payloadChunks = payloadChunkCount > 0
-      ? await Promise.all(
-          Array.from({ length: payloadChunkCount }, async (_, chunkIndex) =>
-            this.#getPayloadChunk(channelId, index, chunkIndex),
-          ),
-        )
+      ? await this.#getPayloadChunksSequentially(channelId, index, payloadChunkCount)
       : undefined;
     const payloadChunkFields = payloadChunks ? { payloadChunkCount, payloadChunks } : {};
 
@@ -270,9 +292,13 @@ export class DirectHelperTransport implements VeilTransport {
 
   async getTimeline(channelId: string): Promise<TimelineItem[]> {
     const count = await this.getEventCount(channelId);
-    const events = await Promise.all(
-      Array.from({ length: count }, async (_, index) => this.getEvent(channelId, index)),
-    );
+    const events: TimelineItem[] = [];
+
+    // Read sequentially to avoid bursting the RPC with many concurrent calls.
+    for (let index = 0; index < count; index += 1) {
+      events.push(await this.getEvent(channelId, index));
+    }
+
     return sortTimeline(events);
   }
 
@@ -284,6 +310,21 @@ export class DirectHelperTransport implements VeilTransport {
     return normalizeCallResult(
       await this.#provider.callContract(createHelperCall(this.#helperAddress, entrypoint, calldata)),
     );
+  }
+
+  async #getPayloadChunksSequentially(
+    channelId: string,
+    eventIndex: number,
+    count: number,
+  ): Promise<string[]> {
+    const chunks: string[] = [];
+
+    // Sequential reads intentionally trade some latency for RPC stability.
+    for (let chunkIndex = 0; chunkIndex < count; chunkIndex += 1) {
+      chunks.push(await this.#getPayloadChunk(channelId, eventIndex, chunkIndex));
+    }
+
+    return chunks;
   }
 
   async #getPayloadChunk(channelId: string, eventIndex: number, chunkIndex: number): Promise<string> {
