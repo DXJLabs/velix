@@ -14,8 +14,13 @@ export const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_accou
 const LEGACY_CHANNEL_HELPER_ADDRESSES = new Set([
   "0x0333e805547d0e91cec741045bf7305e8ff58e8b7d1e9f70ecb3ca559712ef6c",
   "0x018b25f0b870610e9d28a764c432dd17c18cad7d3c09aebb6e61b4efdef4efd7",
+  "0x0335b9a8b03e4d4478e29cfa77dba3672e0f87873a369c54353314ae033e1d5c",
 ]);
-const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x0335b9a8b03e4d4478e29cfa77dba3672e0f87873a369c54353314ae033e1d5c";
+const DEPLOYED_PRIVACY_POOL_ADDRESS = "0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5";
+const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23";
+const DEPLOYED_OFFER_ADDRESS = "0x02f31ea76073dbf57f404513d2160fb0ca81d6d7432be594be10cca37441feab";
+const DEPLOYED_ESCROW_ADDRESS = "0x039922336d0a0fbcbf765bc9c8a5992eb62dabfe80e59d0773b70a172aacd53a";
+const DEPLOYED_SETTLEMENT_HELPER_ADDRESS = "0x04b327c028534000e87512ac962cb0f30f72f215632b88dd39282ad7ded5ef65";
 
 export function normalizeChainId(value) {
   const normalized = String(value || "").trim().toUpperCase();
@@ -79,10 +84,10 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
     privyLoginMethods,
     removedPrivyLoginMethods: configuredPrivyLoginMethods.filter((method) => !privyLoginMethods.includes(method)),
     helperAddress,
-    offerAddress: env.VITE_VEIL_OFFER_ADDRESS || "",
-    escrowAddress: env.VITE_VEIL_ESCROW_ADDRESS || "",
-    settlementHelperAddress: env.VITE_VEIL_SETTLEMENT_HELPER_ADDRESS || "",
-    privacyPoolAddress: env.VITE_PRIVACY_POOL_ADDRESS || "mock-privacy-pool",
+    offerAddress: env.VITE_VEIL_OFFER_ADDRESS || DEPLOYED_OFFER_ADDRESS,
+    escrowAddress: env.VITE_VEIL_ESCROW_ADDRESS || DEPLOYED_ESCROW_ADDRESS,
+    settlementHelperAddress: env.VITE_VEIL_SETTLEMENT_HELPER_ADDRESS || DEPLOYED_SETTLEMENT_HELPER_ADDRESS,
+    privacyPoolAddress: env.VITE_PRIVACY_POOL_ADDRESS || DEPLOYED_PRIVACY_POOL_ADDRESS,
     rpcUrl,
     configuredChannelKey: env.VITE_VEIL_CHANNEL_KEY || "",
     onchainPayloads: (env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true"
