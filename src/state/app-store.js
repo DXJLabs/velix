@@ -61,6 +61,10 @@ export function createAppStore({
     negotiationStep: "decision",
     initialOfferAmount: "500 STRK",
     latestOfferAmount: DEAL_OFFER_AMOUNT,
+    latestOfferId: "",
+    latestOfferCommitments: null,
+    latestOfferSellerAddress: "",
+    latestEscrowId: "",
     offerAccepted: true,
     paymentSent: false,
     escrowDeposits: {
@@ -68,6 +72,7 @@ export function createAppStore({
       seller: false,
     },
     escrowReleased: false,
+    escrowActivated: false,
     escrowConfirmations: {
       buyer: false,
       seller: false,

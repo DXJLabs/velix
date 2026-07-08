@@ -45,6 +45,7 @@ export function renderOfferDealView({
   const dealStatusEl = document.querySelector("#deal-status");
   const negotiationActions = document.querySelector("#deal-negotiation-actions");
   const counterAction = document.querySelector("#deal-counter-action");
+  const acceptAction = document.querySelector("#deal-accept-action");
   const dealTurnLabel = document.querySelector("#deal-turn-label");
   const offerHistoryPanel = document.querySelector("#offer-history-panel");
   const nextStepPanel = document.querySelector("#deal-next-step-panel");
@@ -82,12 +83,13 @@ export function renderOfferDealView({
     dealStatusEl.textContent = currentStatus;
     dealStatusEl.className = statusPillClass(currentStatus);
   }
-  if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted || waitingForCounterparty);
+  if (negotiationActions) negotiationActions.classList.toggle("hidden", accepted);
   if (counterAction) {
     counterAction.disabled = false;
     counterAction.classList.remove("disabled");
-    counterAction.textContent = "Counter Again";
+    counterAction.textContent = waitingForCounterparty ? "Submit Counter" : "Counter Again";
   }
+  if (acceptAction) acceptAction.hidden = waitingForCounterparty;
   if (dealTurnLabel) dealTurnLabel.textContent = accepted ? "Escrow Funding" : waitingForCounterparty ? "Waiting for Bob" : "Your Decision";
   if (nextStepCopy) nextStepCopy.textContent = accepted
     ? "Negotiation completed. Escrow funding is ready."

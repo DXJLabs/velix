@@ -64,6 +64,7 @@ export function buildRuntimeApi({
     submitEscrowDeposit: (...args) => registry.escrowController.submitEscrowDeposit(...args),
     approveEscrowRelease: (...args) => registry.escrowController.approveEscrowRelease(...args),
     releaseEscrow: (...args) => registry.escrowController.releaseEscrow(...args),
+    cancelEscrow: (...args) => registry.escrowController.cancelEscrow(...args),
     continueCompletedChannel: (...args) => registry.escrowController.continueCompletedChannel(...args),
     startNewEscrowInCurrentChannel: (...args) => registry.escrowController.startNewEscrowInCurrentChannel(...args),
     closeCurrentDeal: (...args) => registry.escrowController.closeCurrentDeal(...args),

@@ -30,6 +30,7 @@ export function createEscrowController({
   iconRefresh,
   safeSubmit,
   getVeilClient,
+  getOnchainContracts,
   awardReward,
   addLocalItem,
   confirmedTimelineMeta,
@@ -93,6 +94,21 @@ export function createEscrowController({
 
   function renderEscrowProofMeta(item) {
     return hasRealTransactionHash(item) ? renderChainMeta(item) : "";
+  }
+
+  function requireOnchainContracts() {
+    const contracts = getOnchainContracts();
+    if (!contracts) {
+      throw new Error("Connect a Starknet wallet before submitting escrow transactions.");
+    }
+    return contracts;
+  }
+
+  function requireEscrowId() {
+    if (!state.latestEscrowId) {
+      throw new Error("Create an onchain escrow before funding or settling.");
+    }
+    return state.latestEscrowId;
   }
 
   function escrowDepositComplete(key) {
@@ -174,12 +190,13 @@ export function createEscrowController({
     const title = isBuyer ? `Alice deposited ${amount}` : "Bob locked Rights Package NFT";
     const subtitle = isBuyer ? `${amount} locked in escrow.` : "Asset secured in escrow.";
     const submitted = await safeSubmit(
-      () => getVeilClient().recordEscrowStatus({
-        channelId: state.channelId,
-        status: "deposited",
-        details: subtitle,
-        sender: isBuyer ? "buyer" : "seller",
-      }),
+      () => {
+        const contracts = requireOnchainContracts();
+        const escrowId = requireEscrowId();
+        return isBuyer
+          ? contracts.confirmBuyerDeposit({ escrowId })
+          : contracts.confirmSellerDeposit({ escrowId });
+      },
       {
         type: "inline",
         title,
@@ -225,31 +242,33 @@ export function createEscrowController({
       return;
     }
     const isBuyer = key === "buyer";
-    const title = isBuyer ? "Alice approved release" : "Bob approved release";
+    const title = state.escrowActivated ? (isBuyer ? "Alice approved release" : "Bob approved release") : "Escrow activated";
     const submitted = await safeSubmit(
-      () => getVeilClient().recordEscrowStatus({
-        channelId: state.channelId,
-        status: "deposited",
-        details: `${title}.`,
-        sender: isBuyer ? "buyer" : "seller",
-      }),
+      () => state.escrowActivated
+        ? Promise.resolve({
+          transactionHash: "",
+          status: "confirmed",
+          timestamp: now(),
+        })
+        : requireOnchainContracts().activateEscrow({ escrowId: requireEscrowId() }),
       {
         type: "inline",
         title,
-        subtitle: "Release approval recorded",
+        subtitle: state.escrowActivated ? "Release approval recorded" : "Both deposits are active on VeilEscrow.",
         actor: isBuyer ? "Alice" : "Bob",
         time: now(),
         mode: chatDisplayMode,
       },
-      "Approval recorded.",
+      state.escrowActivated ? "Approval recorded." : "Escrow activated.",
       {
-        actionLabel: "Approving Release",
-        successTitle: "Release Approved",
-        successSubtitle: `${title}.`,
+        actionLabel: state.escrowActivated ? "Approving Release" : "Activating Escrow",
+        successTitle: state.escrowActivated ? "Release Approved" : "Escrow Activated",
+        successSubtitle: state.escrowActivated ? `${title}.` : "Escrow is active on Starknet Sepolia.",
       },
     );
     if (!submitted) return;
-    state.escrowConfirmations[key] = true;
+    state.escrowActivated = true;
+    state.escrowConfirmations = { buyer: true, seller: true };
     currentChannel().status = "Escrow Active";
     currentChannel().last = title;
     renderEscrow();
@@ -267,17 +286,13 @@ export function createEscrowController({
       renderEscrow();
       return;
     }
+    const amount = currentDealOfferAmount();
     const submitted = await safeSubmit(
-      () => getVeilClient().recordEscrowStatus({
-        channelId: state.channelId,
-        status: "settled",
-        details: "Assets released. 450 STRK to Bob. NFT to Alice.",
-        sender: "system",
-      }),
+      () => requireOnchainContracts().settleEscrow({ escrowId: requireEscrowId() }),
       {
         type: "inline",
         title: "Assets released",
-        subtitle: "450 STRK to Bob. NFT to Alice.",
+        subtitle: `${amount} to Bob. NFT to Alice.`,
         actor: "System",
         time: now(),
       },
@@ -285,7 +300,7 @@ export function createEscrowController({
       {
         actionLabel: "Releasing Assets",
         successTitle: "Assets Released",
-        successSubtitle: "450 STRK to Bob. NFT to Alice.",
+        successSubtitle: `${amount} to Bob. NFT to Alice.`,
       },
     );
     if (!submitted) return;
@@ -324,6 +339,36 @@ export function createEscrowController({
     renderEscrow();
     renderWorkflowProgress();
     showScreen("settlement");
+  }
+
+  async function cancelEscrow() {
+    if (state.escrowReleased) {
+      showToast("Escrow is already settled.");
+      return;
+    }
+    const submitted = await safeSubmit(
+      () => requireOnchainContracts().cancelEscrow({ escrowId: requireEscrowId() }),
+      {
+        type: "inline",
+        title: "Escrow cancelled",
+        subtitle: "Escrow cancellation recorded on VeilEscrow.",
+        actor: "System",
+        time: now(),
+      },
+      "Escrow cancelled.",
+      {
+        actionLabel: "Cancelling Escrow",
+        successTitle: "Escrow Cancelled",
+        successSubtitle: "Cancellation recorded on Starknet Sepolia.",
+      },
+    );
+    if (!submitted) return;
+    state.escrowDisputeOpened = true;
+    state.escrowReleased = false;
+    currentChannel().status = "Cancelled";
+    currentChannel().last = "Escrow cancelled";
+    renderEscrow();
+    renderWorkflowProgress();
   }
 
   function continueCompletedChannel() {
@@ -392,6 +437,7 @@ export function createEscrowController({
     submitEscrowDeposit,
     approveEscrowRelease,
     releaseEscrow,
+    cancelEscrow,
     continueCompletedChannel,
     startNewEscrowInCurrentChannel,
     closeCurrentDeal,

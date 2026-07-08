@@ -125,6 +125,17 @@ export {
   buildStarknetPrivacySdkAction,
 } from "./starknet_privacy_sdk";
 export {
+  VeilOnchainContracts,
+  createVeilDealCommitments,
+  createVeilOnchainContracts,
+  type VeilDealCommitmentInput,
+  type VeilDealCommitments,
+  type VeilEscrowTransactionResult,
+  type VeilOfferTransactionResult,
+  type VeilOnchainContractsConfig,
+  type VeilOnchainTransactionResult,
+} from "./onchain_contracts";
+export {
   decodeChannelEvent,
   decodeInvokeExternalEvent,
   decodeNoteEvent,

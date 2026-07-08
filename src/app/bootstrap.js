@@ -9,7 +9,7 @@ import { createAppStore, createDefaultWalletAssetBalances } from "../state/app-s
 import { createDemoData, knownVeilCounterparties } from "../state/demo-data.js";
 import { createVeilLogger } from "../services/logging/log-service.js";
 import { resolveChannelKeyConfig } from "../services/encryption/channel-key-service.js";
-import { createVeilClientFactory } from "../services/veil-client-service.js";
+import { createVeilClientFactory, createVeilOnchainContracts } from "../services/veil-client-service.js";
 import { createDealStorage } from "../services/storage/deal-storage.js";
 import { readJsonStorage, writeJsonStorage } from "../services/storage-service.js";
 import { createPrivyBridgeAdapter, getPrivyBridge } from "../services/wallet/privy-bridge.js";
@@ -44,10 +44,12 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
   const toastUi = createToastUi(dom.toast);
   const veilClientFactory = createVeilClientFactory({ config, channelKeyConfig, logger });
   let directTransport;
+  let onchainContracts;
   let veilClient = veilClientFactory.createClient();
 
   const api = {
     getVeilClient: () => veilClient,
+    getOnchainContracts: () => onchainContracts,
     setElementText: (selector, value) => setElementText(dom.document, selector, value),
     setLucideIcon,
     transactionExplorerUrl,
@@ -59,6 +61,7 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
     settlementProofMeta: (channel = store.currentChannel()) => registry.createSettlementProofMeta(channel),
     resetClientConnection: () => {
       directTransport = undefined;
+      onchainContracts = undefined;
       starkZapAdapter?.resetStarkZap();
       veilClient = veilClientFactory.createClient();
     },
@@ -170,9 +173,19 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
       veilClient = nextClient;
     },
     createClient: veilClientFactory.createClient,
+    createOnchainContracts: ({ account, provider }) => createVeilOnchainContracts({
+      offerAddress: config.offerAddress,
+      escrowAddress: config.escrowAddress,
+      settlementHelperAddress: config.settlementHelperAddress,
+      account,
+      ...(provider ? { provider } : {}),
+    }),
     getDirectTransport: () => directTransport,
     setDirectTransport: (nextTransport) => {
       directTransport = nextTransport;
+    },
+    setOnchainContracts: (nextContracts) => {
+      onchainContracts = nextContracts;
     },
     currentChannelId: () => store.state.channelId,
     ensurePrivyAuthenticated: privyBridgeAdapter.ensurePrivyAuthenticated,

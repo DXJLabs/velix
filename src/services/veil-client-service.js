@@ -1,6 +1,11 @@
-import { ChannelEncryptionAdapter, DirectHelperTransport, VeilClient } from "../../packages/veil-sdk/src/index.ts";
+import {
+  ChannelEncryptionAdapter,
+  DirectHelperTransport,
+  VeilClient,
+  createVeilOnchainContracts,
+} from "../../packages/veil-sdk/src/index.ts";
 
-export { DirectHelperTransport };
+export { DirectHelperTransport, createVeilOnchainContracts };
 
 export function createVeilClientFactory({
   config,

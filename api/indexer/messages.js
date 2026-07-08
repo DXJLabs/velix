@@ -1,4 +1,6 @@
 const FELT_MODULUS = 2n ** 251n + 17n * 2n ** 192n + 1n;
+const DEPLOYED_SEPOLIA_RPC_URL = "https://api.zan.top/public/starknet-sepolia/rpc/v0_9";
+const DEPLOYED_CHANNEL_HELPER_ADDRESS = "0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23";
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -8,8 +10,8 @@ function env(name, fallback = "") {
 
 function rpcConfig() {
   return {
-    rpcUrl: env("STARKNET_RPC_URL", env("VITE_STARKNET_RPC_URL")),
-    helperAddress: env("VEIL_CHANNEL_HELPER_ADDRESS", env("VITE_VEIL_CHANNEL_HELPER_ADDRESS")),
+    rpcUrl: env("STARKNET_RPC_URL", env("VITE_STARKNET_RPC_URL", DEPLOYED_SEPOLIA_RPC_URL)),
+    helperAddress: env("VEIL_CHANNEL_HELPER_ADDRESS", env("VITE_VEIL_CHANNEL_HELPER_ADDRESS", DEPLOYED_CHANNEL_HELPER_ADDRESS)),
     fromBlock: Number(env("VEIL_INDEXER_FROM_BLOCK", "0")),
   };
 }

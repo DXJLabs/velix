@@ -32,8 +32,8 @@ export function normalizeChainId(value) {
 
 export function defaultStarknetRpcUrl(chainId) {
   return normalizeChainId(chainId) === "SN_MAIN"
-    ? "https://api.zan.top/public/starknet-mainnet/rpc/v0_8"
-    : "https://api.zan.top/public/starknet-sepolia/rpc/v0_8";
+    ? "https://api.zan.top/public/starknet-mainnet/rpc/v0_9"
+    : "https://api.zan.top/public/starknet-sepolia/rpc/v0_9";
 }
 
 export function reliableRpcUrl(url, fallback) {
@@ -88,12 +88,13 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
     escrowAddress: env.VITE_VEIL_ESCROW_ADDRESS || DEPLOYED_ESCROW_ADDRESS,
     settlementHelperAddress: env.VITE_VEIL_SETTLEMENT_HELPER_ADDRESS || DEPLOYED_SETTLEMENT_HELPER_ADDRESS,
     privacyPoolAddress: env.VITE_PRIVACY_POOL_ADDRESS || DEPLOYED_PRIVACY_POOL_ADDRESS,
+    demoCounterpartyAddress: env.VITE_DEMO_COUNTERPARTY_ADDRESS || "",
     rpcUrl,
     configuredChannelKey: env.VITE_VEIL_CHANNEL_KEY || "",
     onchainPayloads: (env.VITE_VEIL_ONCHAIN_PAYLOADS || "false").toLowerCase() === "true"
       || helperAddress.toLowerCase() === DEPLOYED_CHANNEL_HELPER_ADDRESS,
     privyStarknetRpcUrl: reliableRpcUrl(
-      configuredPrivyStarknetRpcUrl || rpcUrl.replace("/v0_10", "/v0_8"),
+      configuredPrivyStarknetRpcUrl || rpcUrl.replace("/v0_10", "/v0_9"),
       defaultStarknetRpcUrl(expectedChainId),
     ),
     veilInviteBaseUrl: env.VITE_VEIL_INVITE_URL || "https://veil.app/invite",

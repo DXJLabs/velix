@@ -240,9 +240,7 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
 
     if (event.target.closest("[data-escrow-dispute]")) {
       if (state.escrowDisputeOpened) return;
-      state.escrowDisputeOpened = true;
-      api.renderEscrow();
-      api.showToast("Dispute started.");
+      api.cancelEscrow();
       return;
     }
 

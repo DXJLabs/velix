@@ -66,7 +66,12 @@ export function createInviteController({
     state.escrowDeposits = { buyer: false, seller: false };
     state.escrowConfirmations = { buyer: false, seller: false };
     state.escrowReleased = false;
+    state.escrowActivated = false;
     state.escrowDisputeOpened = false;
+    state.latestOfferId = "";
+    state.latestOfferCommitments = null;
+    state.latestOfferSellerAddress = "";
+    state.latestEscrowId = "";
     state.negotiationStep = "draft";
     state.initialOfferAmount = "500 STRK";
     state.latestOfferAmount = defaultOfferAmount;
