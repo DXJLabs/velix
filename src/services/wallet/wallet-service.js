@@ -45,7 +45,7 @@ export function createWalletService({
     });
     beginWalletInitialization(traceId);
 
-    if (config.timelineMode !== "direct-helper") {
+    if (config.timelineMode !== "direct-helper-dev") {
       if (config.privyAppId) {
         try {
           const bridge = await ensurePrivyAuthenticated(traceId);

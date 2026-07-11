@@ -1,4 +1,4 @@
-import { networkLabel, normalizeChainId } from "../../app/runtime-config.js";
+import { isDirectHelperTimelineMode, networkLabel, normalizeChainId } from "../../app/runtime-config.js";
 
 export function createHomeUi({
   document,
@@ -19,7 +19,7 @@ export function createHomeUi({
   }
 
   function homeHelperContractLabel() {
-    if (config.timelineMode !== "direct-helper") return "Local demo";
+    if (!isDirectHelperTimelineMode(config.timelineMode)) return "Privacy Pool";
     if (!config.helperAddress) return "Network unavailable";
     if (state.walletInitState === "failed" && walletFailureCategory() === "Network unavailable") return "Network unavailable";
     return "Verified";

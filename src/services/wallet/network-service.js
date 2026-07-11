@@ -65,7 +65,7 @@ export function createNetworkService({
   }
 
   async function ensureExpectedNetwork(wallet, provider) {
-    if (config.timelineMode !== "direct-helper") return true;
+    if (config.timelineMode !== "direct-helper-dev") return true;
 
     const detected = await resolveWalletChain(wallet, provider);
     if (detected) state.walletNetwork = detected;
@@ -77,7 +77,7 @@ export function createNetworkService({
   }
 
   async function verifyHelperDeployment({ veilClient, channelId }) {
-    if (config.timelineMode !== "direct-helper") return true;
+    if (config.timelineMode !== "direct-helper-dev") return true;
     if (!config.helperAddress) return false;
 
     try {

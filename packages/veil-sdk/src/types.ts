@@ -107,6 +107,20 @@ export interface ProofPayload extends BasePayload {
   label?: string;
 }
 
+export interface ShieldedChannelBootstrapMetadata {
+  senderAddress: string;
+  senderPublicKey: string;
+  recipientAddress: string;
+  recipientPublicKey: string;
+  channelIndex: string;
+  channelMarker: string;
+  encChannelInfo: {
+    ephemeralPubkey: string;
+    encChannelKey: string;
+    encSenderAddr: string;
+  };
+}
+
 export interface EncryptedPayload {
   encryptedPayload: string;
   /** Local ciphertext envelope integrity hash. Kept as payloadHash for backwards compatibility. */
@@ -114,6 +128,8 @@ export interface EncryptedPayload {
   envelopeHash?: string;
   nonce?: string;
   payloadChunks?: string[];
+  privacyPool?: BuildPrivacyPoolMessageActionsInput;
+  channelBootstrap?: ShieldedChannelBootstrapMetadata;
 }
 
 export interface EncryptionContext {

@@ -117,6 +117,7 @@ describe("VEIL transport confirmation and direct helper", () => {
 
   it("submits unshield helper messages and returns confirmed chain metadata", async () => {
     let submittedCallback;
+    const submittedTimestamp = 1700000000000;
     const transport = new DirectHelperTransport({
       helperAddress: "0x123",
       account: {
@@ -159,7 +160,7 @@ describe("VEIL transport confirmation and direct helper", () => {
         encryptedPayload: "111",
         payloadHash: "222",
         nonce: "nonce",
-        timestamp: Date.now(),
+        timestamp: submittedTimestamp,
       },
     });
 
@@ -170,7 +171,7 @@ describe("VEIL transport confirmation and direct helper", () => {
     assert.equal(item.status, "confirmed");
     assert.equal(item.optimistic, false);
     assert.equal(item.blockNumber, 1234);
-    assert.equal(item.timestamp, 1700000000000);
+    assert.equal(item.timestamp, submittedTimestamp);
   });
 
   it("uses caller-provided canonical calldata for direct invoke submissions", async () => {

@@ -49,6 +49,22 @@ export function networkLabel(chainId) {
   return normalized || "Not detected";
 }
 
+export function isDirectHelperTimelineMode(timelineMode) {
+  return timelineMode === "direct-helper-dev";
+}
+
+export function normalizeTimelineMode(value, env = {}) {
+  const requested = String(value || "").trim();
+  if (!requested) return "privacy-pool";
+  if (requested !== "direct-helper" && requested !== "direct-helper-dev") return requested;
+
+  const allowDirectHelperDev =
+    env.DEV === true ||
+    env.MODE === "development" ||
+    String(env.VITE_VEIL_ALLOW_DIRECT_HELPER_DEV || "").toLowerCase() === "true";
+  return allowDirectHelperDev ? "direct-helper-dev" : "privacy-pool";
+}
+
 export function readAssetDecimals(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
@@ -77,7 +93,7 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
   return {
     demoRuntimeMode,
     debugLogsEnabled: (env.VITE_VEIL_DEBUG_LOGS || "false").toLowerCase() === "true",
-    timelineMode: demoRuntimeMode ? "mock" : env.VITE_VEIL_TIMELINE_MODE || "direct-helper",
+    timelineMode: demoRuntimeMode ? "mock" : normalizeTimelineMode(env.VITE_VEIL_TIMELINE_MODE, env),
     privyAppId,
     expectedChainId,
     configuredPrivyLoginMethods,

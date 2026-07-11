@@ -47,6 +47,37 @@ import {
 } from "./types";
 
 const DEFAULT_CHANNEL_ID = "1";
+type MessagePrivacyPoolInput = SendMessageInput["privacyPool"];
+const PRIVACY_POOL_MESSAGE_ACTION_KEYS = [
+  "setViewingKey",
+  "openChannel",
+  "openSubchannel",
+  "deposit",
+  "useNote",
+  "createEncNote",
+  "createOpenNote",
+  "withdraw",
+] as const;
+
+function mergePrivacyPoolInputs(
+  generated: MessagePrivacyPoolInput | undefined,
+  supplied: MessagePrivacyPoolInput | undefined,
+): MessagePrivacyPoolInput | undefined {
+  if (!generated) return supplied;
+  if (!supplied) return generated;
+
+  const merged: Record<string, unknown> = { ...generated };
+  for (const key of PRIVACY_POOL_MESSAGE_ACTION_KEYS) {
+    const value = supplied[key];
+    if (value === undefined) continue;
+    if (merged[key] !== undefined) {
+      throw new Error(`Privacy Pool action ${key} was supplied by both encryption bootstrap and caller input.`);
+    }
+    merged[key] = value;
+  }
+
+  return merged as NonNullable<MessagePrivacyPoolInput>;
+}
 
 export class VeilClient {
   readonly privacyPoolAddress: string;
@@ -116,11 +147,14 @@ export class VeilClient {
   }
 
   async sendMessage(input: SendMessageInput): Promise<TimelineItem> {
+    if (input.mode === "unshield") {
+      throw new Error("Chat messages are shielded-only. Unshielded chat transport is obsolete.");
+    }
     return this.#storeEvent(VeilEventType.CHAT, input.channelId, {
       kind: "chat",
       message: input.message,
       sender: input.sender ?? "you",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, "shield", input.privacyPool);
   }
 
   async sendShieldedMessage(input: Omit<SendMessageInput, "mode">): Promise<TimelineItem> {
@@ -128,7 +162,8 @@ export class VeilClient {
   }
 
   async sendUnshieldedMessage(input: Omit<SendMessageInput, "mode">): Promise<TimelineItem> {
-    return this.sendMessage({ ...input, mode: "unshield" });
+    void input;
+    throw new Error("sendUnshieldedMessage is disabled: VEIL chat/message is shielded-only.");
   }
 
   async sendPaymentMemo(input: SendPaymentMemoInput): Promise<TimelineItem> {
@@ -411,6 +446,7 @@ export class VeilClient {
   ): Promise<TimelineItem> {
     const session = await this.#requirePermission(this.#permissionForEvent(eventType), channelId);
     const encrypted = await this.encryption.encryptPayload(payload, { channelId, eventType });
+    const privacyPoolInput = mergePrivacyPoolInputs(encrypted.privacyPool, privacyPool);
     const payloadChunks = encrypted.payloadChunks ?? [];
     const conversationTag = this.#conversationTag(channelId);
     const timelinePayloadHash = computeTimelinePayloadHash({
@@ -444,8 +480,8 @@ export class VeilClient {
       item,
       mode,
     };
-    if (privacyPool) {
-      invokeInput.privacyPool = privacyPool;
+    if (privacyPoolInput) {
+      invokeInput.privacyPool = privacyPoolInput;
     }
     if (session) {
       invokeInput.session = session;

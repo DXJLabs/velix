@@ -58,7 +58,7 @@ export function createWalletController({
       ? state.walletInitMessage
       : failed
         ? "Retry"
-        : timelineMode === "direct-helper"
+        : timelineMode === "direct-helper-dev"
           ? state.privyAccount && !state.privyAccountDeployed
             ? "Account funding needed"
             : state.helperVerified ? "Verified" : "Check required"
@@ -206,7 +206,7 @@ export function createWalletController({
       await connectWallet({ goToInbox: false });
       return;
     }
-    if (timelineMode === "direct-helper") await verifyHelperDeployment();
+    if (timelineMode === "direct-helper-dev") await verifyHelperDeployment();
     await refreshWalletAssets({ force: true });
     renderWallet();
     showToast("Connection refreshed.");

@@ -47,8 +47,9 @@ export interface DeriveSharedSecretInput {
    *
    * This must be the output of the canonical Cairo protocol path, such as the
    * shared x-coordinate from `_compute_shared_x()` or a recovered Privacy Pool
-   * channel key. The SDK intentionally does not compute Stark-curve ECDH,
-   * channel keys, note ids, nullifiers, or Poseidon hashes.
+   * channel key. Use the Stark/Privacy Pool primitives exported from
+   * `privacy_pool_ecdh.ts` to derive compatible public keys, shared_x values,
+   * channel keys, and EncChannelInfo before calling this HKDF step.
    */
   privacyPoolSharedSecret?: PrivacyPoolSecretMaterial;
   /**

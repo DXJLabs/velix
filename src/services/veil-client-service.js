@@ -46,7 +46,9 @@ export function createVeilClientFactory({
 function createFailClosedEncryptionAdapter() {
   return {
     async encryptPayload() {
-      throw new Error("Production messaging requires Privacy Pool-derived encryption before submitting onchain messages.");
+      throw new Error(
+        "Production messaging requires Privacy Pool-derived channel bootstrap material, recipient public key resolution, and a Starknet Privacy SDK action builder before submitting onchain messages.",
+      );
     },
     async decryptPayload() {
       return null;
@@ -55,9 +57,12 @@ function createFailClosedEncryptionAdapter() {
 }
 
 function createFailClosedTransport() {
-  const error = () => new Error("Connect a Starknet account before submitting or reading production onchain messages.");
+  const error = () =>
+    new Error(
+      "Production shielded messaging requires a Starknet Privacy Pool transport configured with a Privacy SDK action builder before submitting or reading onchain messages.",
+    );
   return {
-    supportedModes: ["unshield"],
+    supportedModes: ["shield"],
     async invokeExternal() {
       throw error();
     },
@@ -74,13 +79,13 @@ function createFailClosedTransport() {
 }
 
 function emitEncryptionWarning(config, channelKeyConfig, logger) {
-  if (channelKeyConfig.channelKeySource === "browser-testnet-fallback") {
-    logger.veilLog("warn", "encryption.browser_testnet_fallback.enabled", {
+  if (channelKeyConfig.channelKeySource === "legacy-env-ignored") {
+    logger.veilLog("warn", "encryption.legacy_env_channel_key.ignored", {
       where: "createClient",
       timelineMode: config.timelineMode,
       helperAddress: config.helperAddress,
-      why: "VITE_VEIL_CHANNEL_KEY is not configured, so this browser generated a local direct-helper testnet encryption key.",
-      howToFix: "Configure Privacy Pool-derived encryption for Shield mode, or set VITE_VEIL_CHANNEL_KEY when a shared direct-helper testnet key is required.",
+      why: "A configured VITE_VEIL_CHANNEL_KEY was ignored because static keys are not real Privacy Pool channel material.",
+      howToFix: "Use Privacy Pool EncChannelInfo/channel_key recovery before enabling production shielded messaging.",
     });
     return;
   }
@@ -88,7 +93,7 @@ function emitEncryptionWarning(config, channelKeyConfig, logger) {
   if (!channelKeyConfig.channelKey) {
     logger.veilLog("warn", "encryption.config.missing", {
       where: "createClient",
-      howToFix: "Configure Privacy Pool-derived message encryption in production. VITE_VEIL_CHANNEL_KEY remains a legacy testnet fallback only.",
+      howToFix: "Configure Privacy Pool channel bootstrap material, recipient public key resolution, and a Starknet Privacy SDK action builder before submitting production shielded messages.",
     });
   }
 }

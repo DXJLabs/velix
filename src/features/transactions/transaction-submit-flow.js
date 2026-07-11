@@ -39,7 +39,7 @@ export function createTransactionSubmitService({
     };
     addLocalItem(pendingItem);
     try {
-      if (config.timelineMode === "direct-helper" && !hasDirectTransport()) {
+      if (config.timelineMode === "direct-helper-dev" && !hasDirectTransport()) {
         const connected = await connectWallet();
         if (!connected) {
           updateLocalItem(pendingItem, {
@@ -58,7 +58,7 @@ export function createTransactionSubmitService({
       }
       updateTransactionModalStage("network");
       setAppLoading("transaction", "Checking network...");
-      if (config.timelineMode === "direct-helper" && !(await verifyHelperDeployment({
+      if (config.timelineMode === "direct-helper-dev" && !(await verifyHelperDeployment({
         veilClient: getVeilClient(),
         channelId: state.channelId,
       }))) {
@@ -142,13 +142,17 @@ export function createTransactionSubmitService({
 
   function classifyTransactionError(error) {
     const message = error?.message || String(error);
-    if (message.includes("Privacy Pool-derived encryption")) {
+    if (
+      message.includes("Privacy Pool-derived encryption") ||
+      message.includes("Privacy Pool-derived channel bootstrap") ||
+      message.includes("Privacy Pool transport")
+    ) {
       return {
         code: "ENCRYPTION_NOT_CONFIGURED",
         label: "Failed",
         toast: "Message encryption key is not configured.",
         why: message,
-        howToFix: "Configure Privacy Pool-derived encryption or the direct-helper testnet encryption fallback before retrying.",
+        howToFix: "Configure Privacy Pool-derived channel bootstrap material and a Starknet Privacy SDK action builder before retrying.",
       };
     }
 
@@ -186,7 +190,7 @@ export function createTransactionSubmitService({
     return {
       code: "ONCHAIN_SUBMIT_FAILED",
       label: "Failed",
-      toast: config.timelineMode === "direct-helper" ? "Onchain action failed. Check Sepolia." : "Action failed.",
+      toast: config.timelineMode === "direct-helper-dev" ? "Onchain action failed. Check Sepolia." : "Action failed.",
       why: message,
       howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
     };
