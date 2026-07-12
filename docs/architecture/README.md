@@ -32,7 +32,7 @@ flowchart TD
 
 ## Product Subsystems
 
-- Deal Room.
+- Deal Channel.
 - Messaging.
 - Payment Memo.
 - Negotiation.
