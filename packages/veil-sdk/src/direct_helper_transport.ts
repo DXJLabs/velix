@@ -142,7 +142,7 @@ export function channelIdToFelt(channelId: string): string {
 }
 
 export class DirectHelperTransport implements VeilTransport {
-  readonly supportedModes = ["unshield"] as const;
+  readonly supportedModes = ["encrypted-direct", "unshield"] as const;
   readonly #helperAddress: string;
   readonly #entrypoint: string;
   readonly #account: StarknetAccountLike | undefined;
@@ -188,8 +188,8 @@ export class DirectHelperTransport implements VeilTransport {
   }
 
   async invokeExternal(input: InvokeExternalInput): Promise<TimelineItem> {
-    if (input.mode !== "unshield") {
-      throw new Error("DirectHelperTransport only supports unshield messages. Use a Privacy Pool transport for shield mode.");
+    if (input.mode !== "encrypted-direct" && input.mode !== "unshield") {
+      throw new Error("DirectHelperTransport only supports Encrypted On-chain messages.");
     }
 
     const account = this.#sessionAccountResolver?.(input.session) ?? this.#account;
@@ -284,7 +284,7 @@ export class DirectHelperTransport implements VeilTransport {
       payloadHash: toFeltString(result[4] as FeltLike, "payload_hash"),
       ...payloadChunkFields,
       timestamp: timestampFromChain(result[hasPayloadChunkCount ? 6 : 5] as FeltLike),
-      mode: "unshield",
+      mode: "encrypted-direct",
       status: "confirmed",
       optimistic: false,
     };

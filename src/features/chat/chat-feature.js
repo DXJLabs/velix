@@ -1,9 +1,9 @@
 export function chatTransportMode(timelineMode, directHelperMode, defaultMode) {
-  void timelineMode;
-  void directHelperMode;
+  if (timelineMode === "encrypted-direct") return directHelperMode;
+  if (timelineMode === "strk20-shielded") return "strk20-shielded";
   return defaultMode;
 }
 
 export function transactionTransportMode(timelineMode, requestedMode, directHelperMode) {
-  return timelineMode === "direct-helper-dev" ? directHelperMode : requestedMode;
+  return timelineMode === "encrypted-direct" ? directHelperMode : requestedMode;
 }

@@ -59,6 +59,12 @@ const PRIVACY_POOL_MESSAGE_ACTION_KEYS = [
   "withdraw",
 ] as const;
 
+export function createStrk20RuntimeUnavailableError(): Error & { code: "STRK20_RUNTIME_UNAVAILABLE" } {
+  return Object.assign(new Error("Shielded messaging via STRK20 is coming soon."), {
+    code: "STRK20_RUNTIME_UNAVAILABLE" as const,
+  });
+}
+
 function mergePrivacyPoolInputs(
   generated: MessagePrivacyPoolInput | undefined,
   supplied: MessagePrivacyPoolInput | undefined,
@@ -147,23 +153,23 @@ export class VeilClient {
   }
 
   async sendMessage(input: SendMessageInput): Promise<TimelineItem> {
-    if (input.mode === "unshield") {
-      throw new Error("Chat messages are shielded-only. Unshielded chat transport is obsolete.");
+    const mode = input.mode ?? "encrypted-direct";
+    if (mode === "strk20-shielded" && !this.transport.supportedModes?.some((value) => value === mode || value === "shield")) {
+      throw createStrk20RuntimeUnavailableError();
     }
     return this.#storeEvent(VeilEventType.CHAT, input.channelId, {
       kind: "chat",
       message: input.message,
       sender: input.sender ?? "you",
-    }, "shield", input.privacyPool);
+    }, mode, input.privacyPool);
   }
 
   async sendShieldedMessage(input: Omit<SendMessageInput, "mode">): Promise<TimelineItem> {
-    return this.sendMessage({ ...input, mode: "shield" });
+    return this.sendMessage({ ...input, mode: "strk20-shielded" });
   }
 
   async sendUnshieldedMessage(input: Omit<SendMessageInput, "mode">): Promise<TimelineItem> {
-    void input;
-    throw new Error("sendUnshieldedMessage is disabled: VEIL chat/message is shielded-only.");
+    return this.sendMessage({ ...input, mode: "encrypted-direct" });
   }
 
   async sendPaymentMemo(input: SendPaymentMemoInput): Promise<TimelineItem> {

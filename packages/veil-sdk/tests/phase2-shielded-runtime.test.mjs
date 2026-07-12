@@ -210,6 +210,7 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
       channelId: CONTEXT.channelId,
       sender: "alice",
       message: "wired through privacy pool",
+      mode: "shield",
     });
 
     assert.equal(item.transactionHash, "0xphase2");
@@ -284,23 +285,25 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
     );
   });
 
-  it("disables unshielded chat even when callers request the legacy mode", async () => {
+  it("maps the legacy direct chat API onto encrypted-direct transport", async () => {
+    let submitted;
     const client = new VeilClient({
       privacyPoolAddress: "0xpool",
       helperAddress: "0xhelper",
       rpcUrl: "http://localhost",
       encryption: {
         async encryptPayload() {
-          throw new Error("encryption should not run for rejected unshield chat");
+          return { encryptedPayload: "111", payloadHash: "222" };
         },
         async decryptPayload() {
           return null;
         },
       },
       transport: {
-        supportedModes: ["unshield"],
-        async invokeExternal() {
-          throw new Error("transport should not run for rejected unshield chat");
+        supportedModes: ["encrypted-direct", "unshield"],
+        async invokeExternal(input) {
+          submitted = input;
+          return { ...input.item, transactionHash: "0xdirect", status: "confirmed" };
         },
         async getEventCount() {
           return 0;
@@ -314,20 +317,14 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
       },
     });
 
-    await assert.rejects(
-      () => client.sendMessage({ channelId: CONTEXT.channelId, message: "legacy", mode: "unshield" }),
-      /shielded-only/i,
-    );
-    await assert.rejects(
-      () => client.sendUnshieldedMessage({ channelId: CONTEXT.channelId, message: "legacy" }),
-      /disabled/i,
-    );
+    await client.sendUnshieldedMessage({ channelId: CONTEXT.channelId, message: "legacy" });
+    assert.equal(submitted.mode, "encrypted-direct");
   });
 
-  it("normalizes production runtime away from direct-helper unless explicit dev mode is enabled", () => {
-    assert.equal(normalizeTimelineMode("", {}), "privacy-pool");
-    assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production", DEV: false }), "privacy-pool");
-    assert.equal(normalizeTimelineMode("direct-helper-dev", { MODE: "development", DEV: true }), "direct-helper-dev");
+  it("normalizes production runtime to encrypted-direct by default", () => {
+    assert.equal(normalizeTimelineMode("", {}), "encrypted-direct");
+    assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production", DEV: false }), "encrypted-direct");
+    assert.equal(normalizeTimelineMode("privacy-pool", { MODE: "development", DEV: true }), "strk20-shielded");
 
     const productionConfig = createRuntimeConfig(
       {
@@ -338,6 +335,6 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
       },
       "",
     );
-    assert.equal(productionConfig.timelineMode, "privacy-pool");
+    assert.equal(productionConfig.timelineMode, "encrypted-direct");
   });
 });

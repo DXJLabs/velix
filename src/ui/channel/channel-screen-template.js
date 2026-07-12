@@ -19,14 +19,15 @@
           <section class="channel-security-banner">
             <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
             <div class="min-w-0">
-              <strong>Shielded Chat</strong>
-              <small>ECDH encrypted channel</small>
+              <strong>Encrypted On-chain</strong>
+              <small>Available</small>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
               <div class="channel-security-badges" aria-label="Encryption status">
-                <span>ECDH Encrypted</span>
-                <span>End-to-End</span>
-                <span>STRK20 Privacy</span>
+                <span>Encrypted locally</span>
+                <span>Ciphertext on-chain</span>
+                <span>Metadata public</span>
               </div>
+              <p>Shielded via STRK20: Coming Soon</p>
             </div>
             <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
           </section>

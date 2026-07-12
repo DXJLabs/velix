@@ -1,6 +1,6 @@
 # VEIL SDK Developer Reference
 
-This SDK provides VEIL application-layer APIs for encrypted timelines, direct helper transport, session keys, fee estimation, and a prepared Starknet Privacy SDK integration boundary.
+This SDK provides VEIL application-layer APIs for encrypted timelines, Encrypted On-chain helper transport, session keys, fee estimation, and a prepared STRK20 Privacy SDK integration boundary.
 
 It does not implement STRK20 Privacy Pool cryptography, Poseidon, official proof generation, or official note handling.
 
@@ -25,8 +25,8 @@ Production clients should supply both `encryption` and `transport`. The mock def
 | `createChannel()` | Create or prepare a channel record/action. | `CreateChannelInput` | `CreateChannelResult` | Implemented for mock/direct helper. Shield requires `privacyPool` actions and external SDK. |
 | `openSubchannel()` | Prepare and submit an `OpenSubchannel` flow through Privacy Pool transport. | `OpenSubchannelInput` | `OpenSubchannelResult` | Prepared; production Shield execution depends on external SDK/prover. |
 | `sendMessage()` | Encrypt and submit a chat payload. | `SendMessageInput` | `TimelineItem` | Implemented for direct helper. Shield requires replay-protected Privacy Pool actions and external SDK. |
-| `sendShieldedMessage()` | Send a message through Shield transport. | `SendMessageInput` without `mode` | `TimelineItem` | Integration point only unless `privacySdk` is supplied. |
-| `sendUnshieldedMessage()` | Send a message through direct helper transport. | `SendMessageInput` without `mode` | `TimelineItem` | Implemented when a direct helper transport/account is configured. |
+| `sendShieldedMessage()` | Request Shielded via STRK20 transport. | `SendMessageInput` without `mode` | `TimelineItem` | Coming Soon in the product; integration/research boundary only unless an official runtime is supplied. |
+| `sendUnshieldedMessage()` | Legacy alias for Encrypted On-chain helper transport. | `SendMessageInput` without `mode` | `TimelineItem` | Implemented when direct transport and real channel material are configured. |
 | `sendPaymentMemo()` | Encrypt and submit a payment memo payload. | `SendPaymentMemoInput` | `TimelineItem` | Same transport status as messages. |
 | `createOffer()` | Encrypt and submit an offer payload. | `OfferInput` | `TimelineItem` | Same transport status as messages. |
 | `counterOffer()` | Encrypt and submit a counter-offer payload. | `OfferInput` | `TimelineItem` | Same transport status as messages. |
@@ -47,7 +47,7 @@ Production clients should supply both `encryption` and `transport`. The mock def
 | `estimateTransactionFee()` | Estimate/surface gas fee. | fee input | gas estimate | Implemented for supported fee modes. |
 | `estimateTotalCost()` | Combine gas and pool fee estimates. | fee input | total estimate | Implemented; direct helper transaction type has no pool fee. |
 
-## Shield Transport Boundary
+## Shielded via STRK20 Boundary
 
 `StarknetPrivacyPoolTransport` accepts:
 
@@ -58,11 +58,11 @@ Production clients should supply both `encryption` and `transport`. The mock def
 
 VEIL constructs application payloads and ClientAction inputs, but the external SDK/prover owns Privacy Pool proof generation and official transaction construction.
 
-## Direct Helper Transport
+## Encrypted On-chain Transport
 
 `DirectHelperTransport` is implemented. It submits `invoke` directly to `VeilChannelHelper`, waits for confirmation by default, reads helper events, and returns confirmed timeline metadata.
 
-Direct helper mode does not provide Privacy Pool anonymity.
+Encrypted On-chain mode stores ciphertext through the helper and does not provide Privacy Pool metadata protection.
 
 ## Fees
 

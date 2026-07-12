@@ -1,93 +1,45 @@
 # VEIL
 
-VEIL is a private communication, negotiation, payment memo, and escrow platform built on Starknet Privacy Pool.
+VEIL provides encrypted on-chain messaging, offers, payment memos, and escrow negotiation on Starknet. Payloads are encrypted locally and only ciphertext is stored through the VEIL helper contract.
 
-It gives users a Deal Room where they can coordinate sensitive payments, offers, memos, proofs, and escrow milestones without turning the public chain into the product conversation.
+## Current Product
 
-## 1. What Is VEIL?
+**Encrypted On-chain** is the available messaging mode.
 
-VEIL is a product for private deal coordination on Starknet.
+- Message content is encrypted on the sender's device.
+- The VEIL helper receives and stores ciphertext, never plaintext.
+- The recipient decrypts on their own device using shared channel material.
+- Starknet transaction metadata, sender activity, timing, and ciphertext size remain public.
+- Settlement and asset-transfer metadata remain public unless a separate shielded asset path is explicitly available.
 
-Users open private channels, exchange encrypted messages, attach payment memos, negotiate offers, track escrow milestones, and choose whether an action should use Shield or Unshield mode.
+Offers, payment memos, and escrow coordination can use the same encrypted conversation. Current asset movement and escrow settlement are public on-chain operations and are not described as shielded.
 
-Everything else in this repository exists to support that product experience.
+## Coming Soon
 
-## 2. What Problem Does VEIL Solve?
+**Shielded via STRK20** is coming soon. Metadata-resistant messaging and settlement through STRK20 and the Starknet Privacy Pool will be enabled only when the official privacy proving runtime is publicly available and passes VEIL's live acceptance criteria.
 
-Onchain payments and settlement are transparent, but real deals often need context that should not be public by default:
+VEIL never silently downgrades a requested STRK20 operation to direct transport. Production requests fail closed with `STRK20_RUNTIME_UNAVAILABLE` when the official runtime is absent.
 
-- who is negotiating with whom,
-- what a payment is for,
-- what terms were proposed,
-- which proofs or references support the deal,
-- whether escrow is waiting, active, released, or cancelled.
+## Technical Progress
 
-Without VEIL, teams either leak sensitive metadata onchain or move the discussion into disconnected offchain tools. VEIL keeps the deal workflow together while reducing metadata exposure.
+The repository preserves an **Experimental STWO PoC** using the public Starknet transaction prover. It generated a real STWO proof and proof facts, recovered Privacy Pool server actions, built a final proof-bearing Invoke V3, and passed Privacy Pool simulation. No live transaction was broadcast.
 
-## 3. Why Privacy Pool Is Important
+Local proving took approximately 41 minutes while the deployed pool accepted proofs for only 450 blocks, so the fresh proof later failed with `PROOF_EXPIRED`. The PoC is retained as completed protocol research and is not the default frontend or production transport.
 
-Starknet Privacy Pool gives VEIL a privacy-preserving foundation for shielded actions and metadata-resistant communication.
+See [Experimental STWO Prover](docs/experimental-stwo-prover.md) and [STRK20 Integration TODO](docs/strk20-integration-todo.md).
 
-For the STRK20 Privacy Pool RFP, the product value is encrypted onchain messaging, private payment memos, escrow negotiation, and deal coordination that can use Privacy Pool as the privacy layer.
+## Runtime Modes
 
-## 4. What Can Users Do With VEIL?
-
-- Create private deal channels.
-- Send encrypted messages inside a Deal Room.
-- Prepare and sign payment memos.
-- Negotiate offers, counter-offers, acceptances, and rejections.
-- Track escrow states from creation through release or cancellation.
-- Attach proof references to a channel.
-- Choose Shield mode for privacy-preserving flows when available.
-- Choose Unshield mode for explicit public/testnet flows.
-- Review wallet status, channel activity, and privacy settings.
-
-## 5. Main Features
-
-- **Deal Room:** one place for messages, offers, payment context, proofs, and escrow state.
-- **Private Messaging:** encrypted channel communication for sensitive deal context.
-- **Payment Memo:** structured payment notes tied to a deal channel.
-- **Escrow Workflow:** buyer/seller milestones for deposits, activation, release, and cancellation.
-- **Negotiation:** offers, counter-offers, acceptance, rejection, and channel history.
-- **Shield / Unshield Modes:** clear user-facing privacy choices before sensitive actions.
-- **Wallet:** Starknet wallet connection, account status, and asset readiness.
-- **Activity:** pending actions and history across channels.
-- **Settings:** privacy defaults, memo requirements, notifications, and account controls.
-
-## 6. Product Architecture
-
-```mermaid
-flowchart TD
-  User["User"]
-  App["VEIL Application"]
-  Protocol["VEIL Protocol"]
-  Privacy["Starknet Privacy Pool"]
-  Starknet["Starknet"]
-
-  User --> App
-  App --> Protocol
-  Protocol --> Privacy
-  Privacy --> Starknet
+```text
+VEIL_MESSAGE_MODE=encrypted-direct
+VEIL_MESSAGE_MODE=strk20-shielded
 ```
 
-At a high level, VEIL is the product surface users interact with. The VEIL Protocol coordinates private deal metadata. Privacy Pool provides the privacy layer for shielded flows. Starknet provides settlement and availability.
+The browser build reads `VITE_VEIL_MESSAGE_MODE`; the default is `encrypted-direct`. Legacy timeline-mode values are normalized for compatibility.
 
-## 7. Current Status
+Encrypted direct messaging still requires real participant channel material. Missing material fails closed; VEIL does not generate a local-only fallback key or label a static key as secure channel bootstrap.
 
-VEIL is an active product prototype with implemented application flows for channels, messages, payment memos, negotiation, wallet status, activity, settings, and escrow workflow state.
-
-Current implementation status:
-
-- Product UI and Deal Room workflows are present.
-- Unshield testnet messaging through the VEIL helper path is implemented.
-- Encrypted timeline references are supported.
-- Escrow workflow contracts exist for application-layer deal state.
-- Shield mode is prepared as an integration boundary.
-- Production Shield execution requires the official Starknet Privacy SDK/prover or an equivalent Privacy Pool integration.
-
-VEIL does not claim production Privacy Pool proof generation inside this repository.
-
-## 8. Quick Start
+## Quick Start
 
 ```bash
 npm install
@@ -95,18 +47,14 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Then open the local Vite URL printed by the dev server.
+## Documentation
 
-For local review, use mock or direct-helper configuration. Full Shield mode requires a real Privacy Pool integration.
-
-## 9. Documentation Index
-
-Start with the product documents before reading implementation details.
-
-- [Product](docs/product/README.md): vision, problem, solution, features, use cases, user journey, screenshots, FAQ, and roadmap.
-- [Product Guides](docs/guides/README.md): user behavior for messaging, payment memo, escrow, negotiation, Shield, Unshield, wallet, channels, activity, and settings.
-- [Architecture](docs/architecture/README.md): high-level product architecture only.
-- [Technical Documentation](docs/technical/README.md): SDK, transport, encryption, session keys, contracts, Privacy Pool integration, helper contract, indexer, and research references.
+- [Product](docs/product/README.md)
+- [Product Guides](docs/guides/README.md)
+- [Architecture](docs/architecture/README.md)
+- [Technical Documentation](docs/technical/README.md)
+- [Experimental STWO Prover](docs/experimental-stwo-prover.md)
+- [STRK20 Integration TODO](docs/strk20-integration-todo.md)
 
 ## License
 

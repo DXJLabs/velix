@@ -229,6 +229,7 @@ describe("VEIL Phase 3 channel lifecycle", () => {
       channelId: CONTEXT.channelId,
       sender: "alice",
       message: "existing channel",
+      mode: "shield",
     });
 
     assert.equal(item.transactionHash, "0xphase3");
@@ -288,7 +289,7 @@ describe("VEIL Phase 3 channel lifecycle", () => {
     );
   });
 
-  it("production runtime config does not silently enable direct helper", () => {
+  it("production runtime config defaults to encrypted direct", () => {
     const config = createRuntimeConfig(
       {
         MODE: "production",
@@ -299,7 +300,7 @@ describe("VEIL Phase 3 channel lifecycle", () => {
       "",
     );
 
-    assert.equal(config.timelineMode, "privacy-pool");
+    assert.equal(config.timelineMode, "encrypted-direct");
     assert.equal(config.expectedChainId, "SN_SEPOLIA");
     assert.notEqual(config.privacyPoolAddress, "mock-privacy-pool");
     assert.notEqual(config.helperAddress, "mock-veil-helper");

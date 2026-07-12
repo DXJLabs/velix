@@ -30,7 +30,7 @@ export function createChainMetaUi({ explorerUrl, transactionExplorerUrl }) {
     const warning = statusInfo.kind === "failed"
       ? `<span class="shield-warning" aria-label="Failed">!</span>`
       : "";
-    return `<span class="shield-badge">Shielded${warning}</span>`;
+    return `<span class="shield-badge">Encrypted On-chain${warning}</span>`;
   }
 
   function renderFailureActions(item, statusInfo) {

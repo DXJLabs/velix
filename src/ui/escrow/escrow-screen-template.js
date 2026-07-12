@@ -39,7 +39,7 @@
                   <div class="deposit-card-details">
                     <span><em>Deposit</em><b id="escrow-buyer-deposit-amount">450 STRK</b></span>
                     <span><em>Protocol Fee</em><b id="escrow-buyer-protocol-fee">2.250 STRK</b></span>
-                    <span><em>STRK20 Privacy Fee</em><b id="escrow-buyer-privacy-fee">0.010 STRK</b></span>
+                    <span><em>Shielded escrow settlement</em><b id="escrow-buyer-privacy-fee">Coming Soon</b></span>
                     <span><em>Network Fee</em><b id="escrow-buyer-network-fee">0.003 STRK</b></span>
                     <span><em>Reward Points</em><b id="escrow-buyer-reward">+450 VEIL Points</b></span>
                     <span><em>Status</em><b id="escrow-buyer-deposit-detail">Waiting</b></span>

@@ -10,7 +10,7 @@ export const VEIL_REWARD_POINTS = Object.freeze({
 });
 
 export const VEIL_REWARD_LABELS = Object.freeze({
-  sendMessage: "Shielded Message",
+  sendMessage: "Encrypted On-chain Message",
   createOffer: "Alice created an offer",
   counterOffer: "Bob created a counter offer",
   acceptProposal: "Accept Proposal",

@@ -9,20 +9,28 @@
           <div class="content-with-nav settings-page">
             <section class="settings-list" aria-labelledby="settings-privacy-heading">
               <h2 id="settings-privacy-heading">Privacy</h2>
+              <div class="setting-row">
+                <span class="setting-copy"><strong>Encrypted On-chain</strong><small>Messages are encrypted on your device and stored on-chain as ciphertext. Message content remains private, while transaction metadata remains public.</small></span>
+                <span class="status-pill public">Available</span>
+              </div>
+              <div class="setting-row">
+                <span class="setting-copy"><strong>Shielded via STRK20</strong><small>Metadata-resistant messaging through the Starknet Privacy Pool. This mode will be enabled when the official STRK20 privacy runtime becomes publicly available.</small></span>
+                <span class="status-pill waiting-deposit">Coming Soon</span>
+              </div>
               <div class="wallet-setting-row">
                 <span>
-                  <strong>Default Privacy Mode</strong>
-                  <small>Choose the default mode for payments and deal actions</small>
+                  <strong>Default Messaging Mode</strong>
+                  <small>Messages are encrypted locally; STRK20 metadata privacy is not yet available</small>
                 </span>
                 <div class="segmented compact">
-                  <button class="active" type="button" data-default-privacy="shield">Shield</button>
-                  <button type="button" data-default-privacy="unshield">Unshield</button>
+                  <button class="active" type="button" data-default-privacy="encrypted-direct">Encrypted On-chain</button>
+                  <button type="button" data-default-privacy="strk20-shielded" disabled title="Coming Soon">Shielded via STRK20 - Coming Soon</button>
                 </div>
               </div>
               <label class="setting-row">
                 <span class="setting-copy">
-                  <strong>Always ask before Unshield</strong>
-                  <small>Confirm before any public-mode action</small>
+                  <strong>Confirm public settlement</strong>
+                  <small>Message content stays encrypted while settlement metadata is public</small>
                 </span>
                 <input class="switch-input" type="checkbox" checked data-setting-toggle="ask-unshield" />
               </label>
@@ -74,7 +82,7 @@
             <section class="settings-list" aria-labelledby="settings-about-heading">
               <h2 id="settings-about-heading">About</h2>
               <div class="setting-row"><span class="setting-copy"><strong>VEIL Version</strong><small>0.1.0 prototype</small></span><span class="status-pill public">Testnet</span></div>
-              <div class="setting-row"><span class="setting-copy"><strong>Privacy Pool Status</strong><small>Starknet Privacy Pool integration boundary</small></span><span class="status-pill waiting-deposit">Research</span></div>
+              <div class="setting-row"><span class="setting-copy"><strong>Shielded via STRK20</strong><small>Awaiting the official privacy runtime</small></span><span class="status-pill waiting-deposit">Coming Soon</span></div>
               <button class="wallet-action-row" type="button" data-settings-info="terms"><span><i data-lucide="file-text" class="size-5"></i></span><strong>Terms of Service</strong><i data-lucide="chevron-right" class="size-5"></i></button>
               <button class="wallet-action-row" type="button" data-settings-info="privacy"><span><i data-lucide="lock-keyhole" class="size-5"></i></span><strong>Privacy Policy</strong><i data-lucide="chevron-right" class="size-5"></i></button>
             </section>

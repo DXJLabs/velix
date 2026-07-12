@@ -1,5 +1,7 @@
-export const CHAT_DISPLAY_MODE = "shield";
-export const DIRECT_HELPER_MESSAGE_MODE = "unshield";
+export const ENCRYPTED_DIRECT_MESSAGE_MODE = "encrypted-direct";
+export const STRK20_SHIELDED_MESSAGE_MODE = "strk20-shielded";
+export const CHAT_DISPLAY_MODE = ENCRYPTED_DIRECT_MESSAGE_MODE;
+export const DIRECT_HELPER_MESSAGE_MODE = ENCRYPTED_DIRECT_MESSAGE_MODE;
 export const DEAL_OFFER_AMOUNT = "450 STRK";
 export const ACTIVE_DEAL_LABEL = "Deal #381";
 export const PAYMENT_RECIPIENT = "Bob";
@@ -50,19 +52,17 @@ export function networkLabel(chainId) {
 }
 
 export function isDirectHelperTimelineMode(timelineMode) {
-  return timelineMode === "direct-helper-dev";
+  return timelineMode === ENCRYPTED_DIRECT_MESSAGE_MODE;
 }
 
 export function normalizeTimelineMode(value, env = {}) {
   const requested = String(value || "").trim();
-  if (!requested) return "privacy-pool";
-  if (requested !== "direct-helper" && requested !== "direct-helper-dev") return requested;
-
-  const allowDirectHelperDev =
-    env.DEV === true ||
-    env.MODE === "development" ||
-    String(env.VITE_VEIL_ALLOW_DIRECT_HELPER_DEV || "").toLowerCase() === "true";
-  return allowDirectHelperDev ? "direct-helper-dev" : "privacy-pool";
+  void env;
+  if (!requested) return ENCRYPTED_DIRECT_MESSAGE_MODE;
+  if (["direct-helper", "direct-helper-dev", "unshield"].includes(requested)) return ENCRYPTED_DIRECT_MESSAGE_MODE;
+  if (["privacy-pool", "shield"].includes(requested)) return STRK20_SHIELDED_MESSAGE_MODE;
+  if ([ENCRYPTED_DIRECT_MESSAGE_MODE, STRK20_SHIELDED_MESSAGE_MODE].includes(requested)) return requested;
+  return ENCRYPTED_DIRECT_MESSAGE_MODE;
 }
 
 export function readAssetDecimals(value, fallback) {
@@ -93,7 +93,9 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
   return {
     demoRuntimeMode,
     debugLogsEnabled: (env.VITE_VEIL_DEBUG_LOGS || "false").toLowerCase() === "true",
-    timelineMode: demoRuntimeMode ? "mock" : normalizeTimelineMode(env.VITE_VEIL_TIMELINE_MODE, env),
+    timelineMode: demoRuntimeMode
+      ? "mock"
+      : normalizeTimelineMode(env.VITE_VEIL_MESSAGE_MODE || env.VEIL_MESSAGE_MODE || env.VITE_VEIL_TIMELINE_MODE, env),
     privyAppId,
     expectedChainId,
     configuredPrivyLoginMethods,

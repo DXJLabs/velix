@@ -40,7 +40,7 @@ import type {
 } from "../types";
 
 export class StarknetPrivacyPoolTransport implements VeilTransport {
-  readonly supportedModes = ["shield"] as const;
+  readonly supportedModes = ["strk20-shielded", "shield"] as const;
   readonly #privacyPoolAddress: string;
   readonly #helperAddress: string;
   readonly #privacySdk: StarknetPrivacyPoolTransportConfig["privacySdk"];
@@ -172,7 +172,7 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
   }
 
   async invokeExternal(input: InvokeExternalInput): Promise<TimelineItem> {
-    if (input.mode !== "shield") {
+    if (input.mode !== "shield" && input.mode !== "strk20-shielded") {
       throw new Error(
         "StarknetPrivacyPoolTransport only supports shield messages. Use DirectHelperTransport for unshield mode.",
       );

@@ -56,7 +56,7 @@ export function createDealRoomController({
   }
 
   async function loadIndexedChannelTimeline(channelId) {
-    if (timelineMode !== "direct-helper-dev" || !helperAddress) return;
+    if (timelineMode !== "encrypted-direct" || !helperAddress) return;
 
     try {
       const response = await fetch(`/api/indexer/messages?channelId=${encodeURIComponent(channelId)}`);

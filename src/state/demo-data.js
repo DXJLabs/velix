@@ -94,7 +94,7 @@ export function createDemoData({ now = Date.now(), demoTxHash }) {
       {
         type: "event",
         title: "Secure channel established",
-        subtitle: "ECDH key exchange completed. Shielded messaging enabled.",
+        subtitle: "Encrypted channel established. Transaction metadata remains public.",
         actor: "System",
         time: now - 51 * minute,
         ...confirmedTimelineMeta("ecdh-session-established", 1),
@@ -185,7 +185,7 @@ export function createDemoData({ now = Date.now(), demoTxHash }) {
       { points: 50, label: "Escrow Completed", time: now - 2 * 60 * minute },
       { points: 20, label: "Direct Payment", time: now - 5 * 60 * minute },
       { points: 5, label: "Alice created an offer", time: now - 24 * 60 * minute },
-      { points: 1, label: "Shielded Message", time: now - 26 * 60 * minute },
+      { points: 1, label: "Encrypted On-chain Message", time: now - 26 * 60 * minute },
     ],
     confirmedTimelineMeta,
   };

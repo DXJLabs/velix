@@ -33,7 +33,7 @@ export function bindGlobalEvents({
     const detail = event.detail || {};
     state.privyReady = Boolean(detail.ready);
     state.privyAuthenticated = Boolean(detail.authenticated);
-    if (config.timelineMode !== "direct-helper-dev") {
+    if (config.timelineMode !== "encrypted-direct") {
       state.walletConnected ||= state.privyAuthenticated;
     }
     state.walletSource = config.privyAppId ? "Privy" : state.walletSource;

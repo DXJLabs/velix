@@ -1,4 +1,5 @@
 export { VeilClient } from "./client";
+export { createStrk20RuntimeUnavailableError } from "./client";
 export {
   ChannelEncryptionAdapter,
   exportChannelKey,

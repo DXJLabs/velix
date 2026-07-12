@@ -234,7 +234,7 @@ describe("VEIL transport confirmation and direct helper", () => {
             timestamp: Date.now(),
           },
         }),
-      /only supports unshield/i,
+      /only supports Encrypted On-chain/i,
     );
   });
 });

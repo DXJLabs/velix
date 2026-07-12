@@ -4,16 +4,16 @@ export function inferTransactionOverlayCopy(localItem = {}, success = "", fallba
 
   if (localItem.type === "message") {
     return {
-      actionLabel: "Sending Shielded Message",
-      successTitle: "Shielded Message Sent",
-      successSubtitle: "ECDH encrypted message stored.",
+      actionLabel: "Encrypting locally",
+      successTitle: "Encrypted On-chain",
+      successSubtitle: "Encrypted ciphertext confirmed on-chain.",
     };
   }
 
   if (label.includes("alice deposited")) {
     return {
       actionLabel: "Locking Funds",
-      successTitle: "Shielded Deposit Successful",
+      successTitle: "Public Escrow Deposit Confirmed",
       successSubtitle: `${amount} locked in escrow.`,
     };
   }
@@ -21,7 +21,7 @@ export function inferTransactionOverlayCopy(localItem = {}, success = "", fallba
   if (label.includes("bob locked") || label.includes("asset secured")) {
     return {
       actionLabel: "Locking Asset",
-      successTitle: "Shielded Asset Locked",
+      successTitle: "On-chain Asset Locked",
       successSubtitle: "Rights Package NFT locked in escrow.",
     };
   }
@@ -30,7 +30,7 @@ export function inferTransactionOverlayCopy(localItem = {}, success = "", fallba
     return {
       actionLabel: "Approving Release",
       successTitle: "Release Approved",
-      successSubtitle: "Approval recorded in the shielded channel.",
+      successSubtitle: "Approval recorded with encrypted negotiation context.",
     };
   }
 
@@ -69,8 +69,8 @@ export function inferTransactionOverlayCopy(localItem = {}, success = "", fallba
   if (label.includes("payment")) {
     return {
       actionLabel: "Sending Payment",
-      successTitle: "Shielded Payment Sent",
-      successSubtitle: "Payment memo stored in the private channel.",
+      successTitle: "Public Settlement Sent",
+      successSubtitle: "Encrypted memo stored in the channel.",
     };
   }
 

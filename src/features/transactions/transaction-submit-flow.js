@@ -39,7 +39,7 @@ export function createTransactionSubmitService({
     };
     addLocalItem(pendingItem);
     try {
-      if (config.timelineMode === "direct-helper-dev" && !hasDirectTransport()) {
+      if (config.timelineMode === "encrypted-direct" && !hasDirectTransport()) {
         const connected = await connectWallet();
         if (!connected) {
           updateLocalItem(pendingItem, {
@@ -58,7 +58,7 @@ export function createTransactionSubmitService({
       }
       updateTransactionModalStage("network");
       setAppLoading("transaction", "Checking network...");
-      if (config.timelineMode === "direct-helper-dev" && !(await verifyHelperDeployment({
+      if (config.timelineMode === "encrypted-direct" && !(await verifyHelperDeployment({
         veilClient: getVeilClient(),
         channelId: state.channelId,
       }))) {
@@ -142,6 +142,15 @@ export function createTransactionSubmitService({
 
   function classifyTransactionError(error) {
     const message = error?.message || String(error);
+    if (error?.code === "STRK20_RUNTIME_UNAVAILABLE") {
+      return {
+        code: "STRK20_RUNTIME_UNAVAILABLE",
+        label: "Coming Soon",
+        toast: "Shielded via STRK20 is coming soon.",
+        why: message,
+        howToFix: "Choose Encrypted On-chain for the currently available messaging path.",
+      };
+    }
     if (
       message.includes("Privacy Pool-derived encryption") ||
       message.includes("Privacy Pool-derived channel bootstrap") ||
@@ -190,7 +199,7 @@ export function createTransactionSubmitService({
     return {
       code: "ONCHAIN_SUBMIT_FAILED",
       label: "Failed",
-      toast: config.timelineMode === "direct-helper-dev" ? "Onchain action failed. Check Sepolia." : "Action failed.",
+      toast: config.timelineMode === "encrypted-direct" ? "Onchain action failed. Check Sepolia." : "Action failed.",
       why: message,
       howToFix: "Confirm wallet account deployment, Sepolia funds, Starknet RPC health, and helper contract deployment before retrying.",
     };

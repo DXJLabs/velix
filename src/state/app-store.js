@@ -20,10 +20,10 @@ export function createAppStore({
   const state = {
     screen: "unlock",
     channelId: activeDealId,
-    paymentMode: "shield",
+    paymentMode: "unshield",
     messageMode: CHAT_DISPLAY_MODE,
-    defaultPrivacyMode: "shield",
-    autoShield: true,
+    defaultPrivacyMode: "encrypted-direct",
+    autoShield: false,
     walletConnected: false,
     walletAddress: "",
     walletNetwork: config.expectedChainId,

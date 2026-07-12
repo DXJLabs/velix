@@ -27,7 +27,7 @@ export enum VeilEventType {
 
 export type VeilEventGroup = "messages" | "events";
 export type VeilActor = "buyer" | "seller" | "you" | "assistant" | "system";
-export type VeilMessageMode = "shield" | "unshield";
+export type VeilMessageMode = "encrypted-direct" | "strk20-shielded" | "shield" | "unshield";
 export type VeilMessageStatus = "encrypting" | "signing" | "pending" | "confirmed" | "failed";
 
 export interface VeilChannelParticipant {

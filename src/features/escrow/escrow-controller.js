@@ -208,7 +208,7 @@ export function createEscrowController({
       isBuyer ? "Buyer deposit recorded." : "Seller asset locked.",
       {
         actionLabel: isBuyer ? "Locking Funds" : "Locking Asset",
-        successTitle: isBuyer ? "Shielded Deposit Successful" : "Shielded Asset Locked",
+        successTitle: isBuyer ? "Public Escrow Deposit Confirmed" : "On-chain Asset Locked",
         successSubtitle: isBuyer ? `${amount} locked in escrow.` : "Rights Package NFT locked in escrow.",
       },
     );

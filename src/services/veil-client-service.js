@@ -47,7 +47,7 @@ function createFailClosedEncryptionAdapter() {
   return {
     async encryptPayload() {
       throw new Error(
-        "Production messaging requires Privacy Pool-derived channel bootstrap material, recipient public key resolution, and a Starknet Privacy SDK action builder before submitting onchain messages.",
+        "Encrypted On-chain messaging requires channel key material shared by the intended participants.",
       );
     },
     async decryptPayload() {
@@ -57,12 +57,12 @@ function createFailClosedEncryptionAdapter() {
 }
 
 function createFailClosedTransport() {
-  const error = () =>
-    new Error(
-      "Production shielded messaging requires a Starknet Privacy Pool transport configured with a Privacy SDK action builder before submitting or reading onchain messages.",
-    );
+  const error = () => Object.assign(
+    new Error("Shielded messaging via STRK20 is coming soon."),
+    { code: "STRK20_RUNTIME_UNAVAILABLE" },
+  );
   return {
-    supportedModes: ["shield"],
+    supportedModes: [],
     async invokeExternal() {
       throw error();
     },
@@ -93,7 +93,7 @@ function emitEncryptionWarning(config, channelKeyConfig, logger) {
   if (!channelKeyConfig.channelKey) {
     logger.veilLog("warn", "encryption.config.missing", {
       where: "createClient",
-      howToFix: "Configure Privacy Pool channel bootstrap material, recipient public key resolution, and a Starknet Privacy SDK action builder before submitting production shielded messages.",
+      howToFix: "Complete encrypted channel bootstrap before submitting Encrypted On-chain messages.",
     });
   }
 }

@@ -262,7 +262,7 @@ export function createInviteController({
       await transactionDelay(360);
       setTransactionModal({
         subtitle: "Creating secure channel.",
-        detail: "Enabling shielded messaging...",
+        detail: "Preparing encrypted on-chain messaging...",
       });
       await transactionDelay(520);
       channel.pendingJoin = false;
@@ -285,7 +285,7 @@ export function createInviteController({
       messages[channel.id].push({
         type: "event",
         title: "Secure channel established",
-        subtitle: "ECDH key exchange completed. Shielded messaging enabled.",
+        subtitle: "Encrypted channel established. Transaction metadata remains public.",
         time: Date.now() + 1,
         offchain: true,
         actor: "System",

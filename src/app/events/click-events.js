@@ -143,6 +143,10 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
 
     const paymentMode = event.target.closest("[data-payment-mode]");
     if (paymentMode) {
+      if (paymentMode.disabled || paymentMode.dataset.paymentMode === "shield") {
+        api.showToast("Shielded payment via STRK20 is coming soon.");
+        return;
+      }
       state.paymentMode = paymentMode.dataset.paymentMode;
       api.renderPayment();
       return;
@@ -150,12 +154,16 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
 
     const defaultPrivacy = event.target.closest("[data-default-privacy]");
     if (defaultPrivacy) {
+      if (defaultPrivacy.disabled || defaultPrivacy.dataset.defaultPrivacy === "strk20-shielded") {
+        api.showToast("Shielded messaging via STRK20 is coming soon.");
+        return;
+      }
       state.defaultPrivacyMode = defaultPrivacy.dataset.defaultPrivacy;
       state.paymentMode = state.defaultPrivacyMode;
       api.renderWallet();
       api.renderPayment();
       api.renderDeal();
-      api.showToast(`${state.defaultPrivacyMode === "shield" ? "Shield" : "Unshield"} set as default.`);
+      api.showToast("Encrypted On-chain set as default.");
       return;
     }
 

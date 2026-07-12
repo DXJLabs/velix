@@ -39,10 +39,10 @@
             <input id="payment-asset" type="hidden" value="STRK" />
             <input id="payment-amount" type="hidden" value="450" />
             <div>
-              <span class="field-label">Privacy</span>
+              <span class="field-label">Asset transfer</span>
               <div class="segmented">
-                <button class="active" type="button" data-payment-mode="shield">Shield</button>
-                <button type="button" data-payment-mode="unshield">Unshield</button>
+                <button type="button" data-payment-mode="shield" disabled title="Coming Soon">Shielded payment - Coming Soon</button>
+                <button class="active" type="button" data-payment-mode="unshield">Public settlement</button>
               </div>
             </div>
             <label class="field"><span>AI Note</span><textarea id="payment-memo" rows="4">Final settlement for rights transfer.</textarea></label>

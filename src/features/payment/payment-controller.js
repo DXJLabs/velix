@@ -93,7 +93,7 @@ export function createPaymentController({
       "Payment sent.",
       {
         actionLabel: "Sending Payment",
-        successTitle: "Shielded Payment Sent",
+        successTitle: "Public Settlement Sent",
         successSubtitle: `${amount} ${asset} payment recorded in the private channel.`,
       },
     );

@@ -61,9 +61,9 @@ export function createChatController({
       },
       "Message sent.",
       {
-        actionLabel: "Sending Shielded Message",
-        successTitle: "Shielded Message Sent",
-        successSubtitle: "ECDH encrypted message stored.",
+        actionLabel: "Encrypting locally",
+        successTitle: "Encrypted On-chain",
+        successSubtitle: "Encrypted ciphertext confirmed on-chain.",
       },
     );
     if (submitted) awardReward("sendMessage");
