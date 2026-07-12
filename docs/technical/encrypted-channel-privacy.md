@@ -4,7 +4,7 @@ VEIL encrypts application payloads before writing timeline references onchain. T
 
 ## Implemented
 
-- `ChannelEncryptionAdapter` supports AES-GCM with supplied key material.
+- `ChannelEncryptionAdapter` supports AES-GCM after channel material is derived locally. The intended sequence is Stark-curve ECDH shared-secret agreement, a domain-separated message KDF, then on-device AES-GCM encryption before ciphertext submission.
 - `PrivacyPoolChannelEncryptionAdapter` derives an application encryption key from supplied Privacy Pool secret material using HKDF.
 - `encryptMessage()` and `decryptMessage()` support AES-GCM payload envelopes.
 - Payload chunks can store ciphertext envelopes as felts for helper transport.

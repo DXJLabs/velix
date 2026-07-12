@@ -9,7 +9,14 @@ import { createAppStore, createDefaultWalletAssetBalances } from "../state/app-s
 import { createDemoData, knownVeilCounterparties } from "../state/demo-data.js";
 import { createVeilLogger } from "../services/logging/log-service.js";
 import { resolveChannelKeyConfig } from "../services/encryption/channel-key-service.js";
-import { createVeilClientFactory, createVeilOnchainContracts } from "../services/veil-client-service.js";
+import {
+  BrowserEncryptionIdentityStore,
+  DirectEcdhEncryptionAdapter,
+  EncryptionPublicKeyRegistryService,
+  VeilEncryptionIdentityService,
+  createVeilClientFactory,
+  createVeilOnchainContracts,
+} from "../services/veil-client-service.js";
 import { createDealStorage } from "../services/storage/deal-storage.js";
 import { readJsonStorage, writeJsonStorage } from "../services/storage-service.js";
 import { createPrivyBridgeAdapter, getPrivyBridge } from "../services/wallet/privy-bridge.js";
@@ -43,6 +50,7 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
   const dom = getAppDom(documentRef);
   const toastUi = createToastUi(dom.toast);
   const veilClientFactory = createVeilClientFactory({ config, channelKeyConfig, logger });
+  const encryptionIdentity = new VeilEncryptionIdentityService(new BrowserEncryptionIdentityStore());
   let directTransport;
   let onchainContracts;
   let veilClient = veilClientFactory.createClient();
@@ -173,6 +181,47 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
       veilClient = nextClient;
     },
     createClient: veilClientFactory.createClient,
+    createEncryptionAdapter: async ({ accountAddress, provider }) => {
+      await encryptionIdentity.getOrCreateIdentity();
+      if (!accountAddress || !provider || !config.encryptionKeyRegistryAddress) {
+        return {
+          registry: null,
+          adapter: {
+            async encryptPayload() {
+              throw Object.assign(new Error("Encryption key registry is not configured."), {
+                code: "ENCRYPTION_KEY_REGISTRY_UNAVAILABLE",
+              });
+            },
+            async decryptPayload() { return null; },
+          },
+        };
+      }
+      const keyRegistry = new EncryptionPublicKeyRegistryService({
+        registryAddress: config.encryptionKeyRegistryAddress,
+        provider,
+        identity: encryptionIdentity,
+      });
+      return { registry: keyRegistry, adapter: new DirectEcdhEncryptionAdapter({
+        identity: encryptionIdentity,
+        registry: keyRegistry,
+        resolveContext: (channelId) => {
+          const channel = store.channels.find((candidate) => candidate.id === channelId);
+          const recipientAccountAddress = channel?.counterpartyAddress || config.demoCounterpartyAddress;
+          if (!recipientAccountAddress) {
+            throw Object.assign(new Error("The recipient has not set up an encryption identity yet."), {
+              code: "RECIPIENT_ENCRYPTION_KEY_NOT_FOUND",
+            });
+          }
+          return {
+            localAccountAddress: accountAddress,
+            recipientAccountAddress,
+            channelId,
+            chainId: config.expectedChainId,
+            helperAddress: config.helperAddress,
+          };
+        },
+      }) };
+    },
     createOnchainContracts: ({ account, provider }) => createVeilOnchainContracts({
       offerAddress: config.offerAddress,
       escrowAddress: config.escrowAddress,
@@ -245,6 +294,7 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
     dom,
     store,
     logger,
+    registerEncryptionKey: () => walletService.registerEncryptionKey(),
   }));
 
   const router = createRouter({

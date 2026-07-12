@@ -9,6 +9,7 @@ export function createWalletService({
   getVeilClient,
   setVeilClient,
   createClient,
+  createEncryptionAdapter,
   createOnchainContracts,
   getDirectTransport,
   setDirectTransport,
@@ -26,6 +27,8 @@ export function createWalletService({
   failWalletInitialization,
   handleTransactionSubmitted,
 }) {
+  let encryptionKeyRegistry;
+  let encryptionRegistrationAccount;
   function getWallet() {
     return state.privyAccount
       || window.veilDemoWallet
@@ -175,8 +178,14 @@ export function createWalletService({
       storePayloadChunks: config.onchainPayloads,
       onTransactionSubmitted: handleTransactionSubmitted,
     });
+    const encryptionSetup = await createEncryptionAdapter({
+      accountAddress: account.address,
+      provider: readProvider,
+    });
+    encryptionKeyRegistry = encryptionSetup.registry;
+    encryptionRegistrationAccount = account;
     setDirectTransport(directTransport);
-    setVeilClient(createClient(directTransport));
+    setVeilClient(createClient(directTransport, encryptionSetup.adapter));
     setOnchainContracts(createOnchainContracts({
       account,
       provider: readProvider,
@@ -206,6 +215,14 @@ export function createWalletService({
   return {
     connectWallet,
     getWallet,
+    async registerEncryptionKey() {
+      if (!encryptionKeyRegistry || !encryptionRegistrationAccount) {
+        throw Object.assign(new Error("Encryption key registry is not configured."), {
+          code: "ENCRYPTION_KEY_REGISTRY_UNAVAILABLE",
+        });
+      }
+      return encryptionKeyRegistry.registerCurrentUserKey(encryptionRegistrationAccount);
+    },
     hasDirectTransport: () => Boolean(getDirectTransport()),
   };
 }

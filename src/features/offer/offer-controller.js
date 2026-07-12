@@ -38,11 +38,11 @@ export function createOfferController({
   }
 
   function offerPrivacyMode() {
-    return "shield";
+    return "encrypted-direct";
   }
 
   function offerPrivacyLabel() {
-    return "Shielded";
+    return "Encrypted negotiation";
   }
 
   function normalizeOfferAmount(value) {
@@ -108,7 +108,7 @@ export function createOfferController({
 
   function renderDealTransactionSummary() {
     const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-      shielded: offerPrivacyMode() === "shield",
+      shielded: false,
     });
     setElementText("#deal-price", currentDealOfferAmount());
     setElementText("#offer-review-amount", currentDealOfferAmount());

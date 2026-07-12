@@ -45,6 +45,7 @@ export {
   computePrivacyPoolSubchannelMarker,
   decryptChannelInfo,
   deriveMessageKey,
+  generatePrivacyScalar,
   derivePrivacyPublicKey,
   deriveReceiverSharedX,
   deriveSenderSharedX,
@@ -61,6 +62,24 @@ export {
   type SenderSharedXResult,
   type StarkEphemeralKeyPair,
 } from "./privacy_pool_ecdh";
+export {
+  BrowserEncryptionIdentityStore,
+  MemoryEncryptionIdentityStore,
+  VeilEncryptionIdentityService,
+  identityError,
+  type EncryptionIdentityRecord,
+  type EncryptionIdentityStore,
+} from "./encryption-identity";
+export {
+  EncryptionPublicKeyRegistryService,
+  validatePublicKey,
+  type ResolvedEncryptionPublicKey,
+} from "./encryption-key-registry";
+export {
+  DirectEcdhEncryptionAdapter,
+  canonicalKdfContext,
+  type DirectEncryptionPeerContext,
+} from "./direct-message-encryption";
 export {
   PrivacyPoolChannelBootstrapEncryptionAdapter,
   assertShieldedChannelBootstrapMetadata,

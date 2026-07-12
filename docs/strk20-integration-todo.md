@@ -42,3 +42,14 @@ Shielded mode may only be enabled when:
 6. Tests pass on two independent devices.
 
 Until all criteria pass, `strk20-shielded` remains disabled and returns `STRK20_RUNTIME_UNAVAILABLE`. It must never silently fall back to `encrypted-direct`.
+
+## Future Anonymizer Architecture
+
+```text
+Privacy Pool
+  -> SubAccountAnonymizer
+  -> pseudonymous sub-account
+  -> VEIL Helper
+```
+
+This proposed boundary can reduce direct account correlation at the helper, but it still requires a valid Privacy Pool proof. It does not generate proofs, extend the deployed proof-validity window, or replace the official STRK20 Privacy SDK/wallet runtime.

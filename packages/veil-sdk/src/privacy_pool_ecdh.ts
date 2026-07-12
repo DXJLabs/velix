@@ -14,6 +14,18 @@ export const STARK_FIELD_PRIME = FIELD.toString();
 export const STARK_CURVE_ORDER = CURVE_ORDER.toString();
 export const STARK_CURVE_HALF_ORDER = HALF_ORDER.toString();
 
+export function generatePrivacyScalar(): string {
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error("Secure random generation requires Web Crypto.");
+  }
+  const bytes = new Uint8Array(32);
+  for (;;) {
+    globalThis.crypto.getRandomValues(bytes);
+    const candidate = BigInt(`0x${[...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`);
+    if (candidate > 0n && candidate < HALF_ORDER) return candidate.toString();
+  }
+}
+
 export const PRIVACY_POOL_CHANNEL_MARKER_TAG = shortString.encodeShortString("CHANNEL_MARKER_TAG:V1");
 export const PRIVACY_POOL_CHANNEL_KEY_TAG = shortString.encodeShortString("CHANNEL_KEY_TAG:V1");
 export const PRIVACY_POOL_SUBCHANNEL_MARKER_TAG = shortString.encodeShortString("SUBCHANNEL_MARKER_TAG:V1");

@@ -89,6 +89,14 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
   const configuredRpcUrl = env.VITE_STARKNET_RPC_URL || "";
   const rpcUrl = reliableRpcUrl(configuredRpcUrl, defaultStarknetRpcUrl(expectedChainId));
   const configuredPrivyStarknetRpcUrl = env.VITE_PRIVY_STARKNET_RPC_URL || "";
+  const configuredRegistryChainId = normalizeChainId(env.VITE_VEIL_KEY_REGISTRY_CHAIN_ID || "");
+  const configuredRegistryAddress = String(env.VITE_VEIL_KEY_REGISTRY_ADDRESS || "").trim();
+  const registryAddressIsValid = /^0x[0-9a-fA-F]{1,64}$/.test(configuredRegistryAddress)
+    && BigInt(configuredRegistryAddress) > 0n;
+  const encryptionKeyRegistryAddress = registryAddressIsValid
+    && configuredRegistryChainId === expectedChainId
+    ? configuredRegistryAddress
+    : "";
 
   return {
     demoRuntimeMode,
@@ -106,6 +114,7 @@ export function createRuntimeConfig(env = import.meta.env, search = window.locat
     escrowAddress: env.VITE_VEIL_ESCROW_ADDRESS || DEPLOYED_ESCROW_ADDRESS,
     settlementHelperAddress: env.VITE_VEIL_SETTLEMENT_HELPER_ADDRESS || DEPLOYED_SETTLEMENT_HELPER_ADDRESS,
     privacyPoolAddress: env.VITE_PRIVACY_POOL_ADDRESS || DEPLOYED_PRIVACY_POOL_ADDRESS,
+    encryptionKeyRegistryAddress,
     demoCounterpartyAddress: env.VITE_DEMO_COUNTERPARTY_ADDRESS || "",
     rpcUrl,
     configuredChannelKey: env.VITE_VEIL_CHANNEL_KEY || "",
@@ -156,7 +165,7 @@ function createWalletAssetConfig(env) {
       id: "strkbtc",
       symbol: "STRKBTC",
       name: "Starknet BTC",
-      detail: "Private settlement asset",
+      detail: "Settlement asset",
       contractAddress: env.VITE_VEIL_STRKBTC_TOKEN_ADDRESS || env.VITE_STRKBTC_TOKEN_ADDRESS || "",
       decimals: readAssetDecimals(env.VITE_VEIL_STRKBTC_DECIMALS || env.VITE_STRKBTC_DECIMALS, 8),
       defaultDisplay: "0.00000000",

@@ -86,6 +86,7 @@ export function createInviteController({
     pendingJoin = false,
     counterpartyOnVeil = true,
     dealId = "",
+    counterpartyAddress = "",
   } = {}) {
     const channelNumber = channels.length + 1;
     const channelId = `channel-${Date.now().toString(36)}`;
@@ -101,6 +102,7 @@ export function createInviteController({
       last,
       channelNumber,
       dealId,
+      counterpartyAddress,
       inviteLink: invited ? createDealInviteLink() : "",
       invited,
       pendingJoin,
@@ -188,6 +190,7 @@ export function createInviteController({
         pendingJoin: true,
         counterpartyOnVeil: !requiresInvite,
         dealId,
+        counterpartyAddress: /^0x[0-9a-fA-F]{1,64}$/.test(rawCounterparty) ? rawCounterparty : "",
       });
       channels.unshift(channel);
       messages[channel.id] = seedDealTimeline(channel);

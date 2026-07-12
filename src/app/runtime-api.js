@@ -11,9 +11,11 @@ export function buildRuntimeApi({
   dom,
   store,
   logger,
+  registerEncryptionKey,
 }) {
   return {
     connectWallet,
+    registerEncryptionKey,
     refreshWalletAssets,
     verifyHelperDeployment,
     safeSubmit: submitService.safeSubmit,

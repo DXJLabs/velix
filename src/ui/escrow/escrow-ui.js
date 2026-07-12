@@ -70,7 +70,7 @@ export function renderEscrowView({
       : "Step 1 of 2. Waiting for Alice and Bob deposits.";
 
   renderEscrowTransactionSummary();
-  const escrowFee = estimateVeilFee("escrow", currentDealOfferAmount(), { shielded: true });
+  const escrowFee = estimateVeilFee("escrow", currentDealOfferAmount(), { shielded: false });
 
   setElementText("#escrow-page-eyebrow", fundingComplete ? "Escrow Confirmation" : "Escrow Funding");
   setElementText("#escrow-page-title", title);

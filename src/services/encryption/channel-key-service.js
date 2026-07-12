@@ -5,13 +5,11 @@ export function resolveChannelKeyConfig({ configuredChannelKey, timelineMode, he
       timelineMode,
       helperAddress,
       why: "VITE_VEIL_CHANNEL_KEY is a legacy static key and is not Privacy Pool-derived channel material.",
-      howToFix: "Bootstrap channel material through Privacy Pool Stark ECDH before enabling production shielded messaging.",
+      howToFix: "Resolve participant public keys and derive channel material locally with Stark-curve ECDH.",
     });
   }
 
   return {
-    channelKey: "",
     channelKeySource: configuredChannelKey ? "legacy-env-ignored" : "missing",
-    channelKeyId: undefined,
   };
 }

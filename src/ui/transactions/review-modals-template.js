@@ -28,7 +28,7 @@
         <h2 id="offer-review-title">Accept Proposal</h2>
         <div class="review-summary-list">
           <div><span>Amount</span><strong id="offer-review-amount">450 STRK</strong></div>
-          <div><span>Privacy</span><strong id="offer-review-privacy">Shielded</strong></div>
+          <div><span>Negotiation</span><strong id="offer-review-privacy">Encrypted negotiation</strong></div>
           <div><span>Total Fee</span><strong id="offer-review-fee">2.263 STRK</strong></div>
           <div><span>Rewards</span><strong id="offer-review-reward">+10 VEIL Points</strong></div>
           <div class="summary-total"><span>Total</span><strong id="offer-review-total">452.263 STRK</strong></div>

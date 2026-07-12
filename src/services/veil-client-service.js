@@ -1,11 +1,21 @@
 import {
-  ChannelEncryptionAdapter,
+  BrowserEncryptionIdentityStore,
+  DirectEcdhEncryptionAdapter,
   DirectHelperTransport,
+  EncryptionPublicKeyRegistryService,
+  VeilEncryptionIdentityService,
   VeilClient,
   createVeilOnchainContracts,
 } from "../../packages/veil-sdk/src/index.ts";
 
-export { DirectHelperTransport, createVeilOnchainContracts };
+export {
+  BrowserEncryptionIdentityStore,
+  DirectEcdhEncryptionAdapter,
+  DirectHelperTransport,
+  EncryptionPublicKeyRegistryService,
+  VeilEncryptionIdentityService,
+  createVeilOnchainContracts,
+};
 
 export function createVeilClientFactory({
   config,
@@ -14,15 +24,10 @@ export function createVeilClientFactory({
 }) {
   let encryptionConfigWarningShown = false;
 
-  function createClient(transport) {
-    const encryption = channelKeyConfig.channelKey
-      ? new ChannelEncryptionAdapter({
-          channelKey: channelKeyConfig.channelKey,
-          keyId: channelKeyConfig.channelKeyId,
-        })
-      : config.timelineMode === "mock"
+  function createClient(transport, encryptionOverride) {
+    const encryption = encryptionOverride || (config.timelineMode === "mock"
         ? undefined
-        : createFailClosedEncryptionAdapter();
+        : createFailClosedEncryptionAdapter());
     const activeTransport = transport || (config.timelineMode === "mock" ? undefined : createFailClosedTransport());
 
     if (config.timelineMode !== "mock" && !encryptionConfigWarningShown) {
@@ -85,12 +90,12 @@ function emitEncryptionWarning(config, channelKeyConfig, logger) {
       timelineMode: config.timelineMode,
       helperAddress: config.helperAddress,
       why: "A configured VITE_VEIL_CHANNEL_KEY was ignored because static keys are not real Privacy Pool channel material.",
-      howToFix: "Use Privacy Pool EncChannelInfo/channel_key recovery before enabling production shielded messaging.",
+      howToFix: "Resolve participant public keys and derive channel material locally with Stark-curve ECDH.",
     });
     return;
   }
 
-  if (!channelKeyConfig.channelKey) {
+  if (channelKeyConfig.channelKeySource === "missing") {
     logger.veilLog("warn", "encryption.config.missing", {
       where: "createClient",
       howToFix: "Complete encrypted channel bootstrap before submitting Encrypted On-chain messages.",

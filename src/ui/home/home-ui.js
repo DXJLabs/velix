@@ -26,8 +26,8 @@ export function createHomeUi({
   }
 
   function homePrivacyPoolLabel() {
-    if (config.privacyPoolAddress && config.privacyPoolAddress !== "mock-privacy-pool") return "Connected";
-    return config.timelineMode === "mock" ? "Demo" : "Connected";
+    if (config.timelineMode === "mock") return "Demo";
+    return config.timelineMode === "strk20-shielded" ? "Coming Soon" : "Not used";
   }
 
   function renderHomeStatus() {

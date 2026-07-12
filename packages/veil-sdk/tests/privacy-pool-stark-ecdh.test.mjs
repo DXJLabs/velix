@@ -233,9 +233,7 @@ describe("runtime channel key authority", () => {
         { veilLog: (...args) => logs.push(args) },
       );
       assert.deepEqual(result, {
-        channelKey: "",
         channelKeySource: "missing",
-        channelKeyId: undefined,
       });
       assert.equal(localStorageTouched, false);
     } finally {
@@ -254,9 +252,7 @@ describe("runtime channel key authority", () => {
       { veilLog: (...args) => logs.push(args) },
     );
     assert.deepEqual(result, {
-      channelKey: "",
       channelKeySource: "legacy-env-ignored",
-      channelKeyId: undefined,
     });
     assert.equal(logs[0][1], "encryption.legacy_env_channel_key.ignored");
   });

@@ -177,6 +177,13 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       return;
     }
 
+    if (event.target.closest("[data-register-encryption-key]")) {
+      api.registerEncryptionKey()
+        .then(() => api.showToast("Encryption public key registration submitted."))
+        .catch((error) => api.showToast(error?.message || "Encryption key registration failed."));
+      return;
+    }
+
     if (event.target.closest("[data-backup-recovery]")) {
       if (api.requireConnectedWallet()) api.showToast("Recovery backup ready.");
       return;

@@ -50,7 +50,7 @@ export function createTransactionModalController({
       subtitle: "Please approve the request in your wallet.",
       detail: "Waiting for signature...",
       successTitle: "Wallet Connected",
-      successSubtitle: "Opening secure channel...",
+      successSubtitle: "Opening encrypted channel...",
       txHash: "",
     });
   }
@@ -104,9 +104,9 @@ export function createTransactionModalController({
       actionLabel: title,
       title,
       subtitle: accepting ? `${person} is joining the private deal.` : `Closing the request from ${person}.`,
-      detail: accepting ? "Verifying shielded identity..." : "Updating deal status...",
+      detail: accepting ? "Verifying counterparty..." : "Updating deal status...",
       successTitle: accepting ? "Invitation Accepted" : "Request Declined",
-      successSubtitle: accepting ? "Secure channel established." : "Deal request closed.",
+      successSubtitle: accepting ? "Encrypted channel established." : "Deal request closed.",
       txHash: "",
     });
   }
@@ -146,7 +146,7 @@ export function createTransactionModalController({
   function finishWalletModal() {
     updateTransactionModalStage("success", {
       title: "Wallet Connected",
-      subtitle: "Opening secure channel...",
+      subtitle: "Opening encrypted channel...",
       detail: "",
       txHash: "",
     });

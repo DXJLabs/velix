@@ -1,12 +1,12 @@
 # VEIL
 
-VEIL provides encrypted on-chain messaging, offers, payment memos, and escrow negotiation on Starknet. Payloads are encrypted locally and only ciphertext is stored through the VEIL helper contract.
+VEIL provides an encrypted on-chain messaging transport, offers, payment memos, and escrow negotiation on Starknet. The SDK implements the intended cryptographic sequence: channel keys are derived locally using Stark-curve ECDH, then message payloads are encrypted on the user's device using AES-GCM before ciphertext is submitted on-chain. Transaction metadata remains public.
 
 ## Current Product
 
-**Encrypted On-chain** is the available messaging mode.
+**Encrypted On-chain** is the selected production transport. Final browser readiness still requires the frontend to resolve each participant's public encryption key and supply recovered channel material to the encryption adapter; missing material fails closed.
 
-- Message content is encrypted on the sender's device.
+- When participant channel material is available, message content is encrypted on the sender's device.
 - The VEIL helper receives and stores ciphertext, never plaintext.
 - The recipient decrypts on their own device using shared channel material.
 - Starknet transaction metadata, sender activity, timing, and ciphertext size remain public.
@@ -37,7 +37,8 @@ VEIL_MESSAGE_MODE=strk20-shielded
 
 The browser build reads `VITE_VEIL_MESSAGE_MODE`; the default is `encrypted-direct`. Legacy timeline-mode values are normalized for compatibility.
 
-Encrypted direct messaging still requires real participant channel material. Missing material fails closed; VEIL does not generate a local-only fallback key or label a static key as secure channel bootstrap.
+Encrypted direct messaging requires real participant channel material. The frontend creates a separate encrypted device identity, resolves recipient public keys through `VeilEncryptionKeyRegistry`, and derives the shared key locally. Missing material fails closed; VEIL does not generate a local-only fallback key or label a static key as secure channel bootstrap.
+Production deployment must deploy the reviewed registry and configure `VITE_VEIL_KEY_REGISTRY_ADDRESS`; messaging fails closed until both participants explicitly register their public keys.
 
 ## Quick Start
 

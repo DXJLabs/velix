@@ -61,6 +61,7 @@
 
             <section class="settings-list" aria-labelledby="settings-security-heading">
               <h2 id="settings-security-heading">Security</h2>
+              <div class="setting-row"><span class="setting-copy"><strong>Set up encryption identity</strong><small>Create a device encryption key and register its public key so other VEIL users can send you encrypted messages.</small></span><button class="secondary-action" type="button" data-register-encryption-key>Register encryption key</button></div>
               <button class="wallet-action-row" type="button" data-export-viewing-key><span><i data-lucide="key-round" class="size-5"></i></span><strong>Export Viewing Key</strong><i data-lucide="chevron-right" class="size-5"></i></button>
               <button class="wallet-action-row" type="button" data-backup-recovery><span><i data-lucide="shield-check" class="size-5"></i></span><strong>Recovery Kit</strong><i data-lucide="chevron-right" class="size-5"></i></button>
               <button class="wallet-action-row" type="button" data-session-management><span><i data-lucide="monitor-check" class="size-5"></i></span><strong>Active Sessions</strong><i data-lucide="chevron-right" class="size-5"></i></button>

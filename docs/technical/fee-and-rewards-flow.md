@@ -1,6 +1,6 @@
 # Fee And Rewards Flow
 
-This document defines the initial VEIL fee and rewards model for Deal, Shielded Chat, Escrow, and Direct Payment flows.
+This document defines the initial VEIL fee and rewards model for deals, Encrypted On-chain messaging, on-chain escrow, and public settlement flows. Shielded STRK20 fees are future-only.
 
 The user interface shows only `Total Fee`. Fee components remain internal accounting and routing details.
 
@@ -93,7 +93,7 @@ flowchart TD
 
 ## Product Flow
 
-### Shielded Chat
+### Shielded via STRK20 (Coming Soon)
 
 ```mermaid
 flowchart TD
@@ -104,7 +104,7 @@ flowchart TD
   E --> F["Wallet Rewards history updates"]
 ```
 
-Shielded Chat does not have to expose a transaction fee row when the action is not a paid settlement action. If the message path requires an onchain transaction, the UI may show `Total Fee` only.
+This future mode must not expose a live fee row until an official runtime is configured. Encrypted On-chain messaging may show the direct Starknet transaction fee while clearly identifying public metadata.
 
 ### Deal / Offer
 

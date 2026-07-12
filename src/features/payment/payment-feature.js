@@ -7,7 +7,7 @@ export function paymentAmountLabel(amount, asset) {
 }
 
 export function paymentPrivacyLabel(mode) {
-  return mode === "shield" ? "Shield" : "Unshield";
+  return mode === "shield" ? "Shielded payment - Coming Soon" : "Public settlement with encrypted memo";
 }
 
 export function paymentMemoValue(value, fallback = DEFAULT_PAYMENT_MEMO) {

@@ -8,6 +8,8 @@ pub mod messaging_types;
 pub mod messaging_validation;
 #[path("../contracts/messaging/veil_channel_helper.cairo")]
 pub mod veil_channel_helper;
+#[path("../contracts/veil_encryption_key_registry.cairo")]
+pub mod veil_encryption_key_registry;
 
 pub mod messaging {
     pub use crate::messaging_events;

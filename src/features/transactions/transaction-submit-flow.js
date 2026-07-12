@@ -142,6 +142,25 @@ export function createTransactionSubmitService({
 
   function classifyTransactionError(error) {
     const message = error?.message || String(error);
+    const encryptionErrorCopy = {
+      LOCAL_ENCRYPTION_IDENTITY_MISSING: "Create a local encryption identity before sending messages.",
+      ENCRYPTION_KEY_REGISTRY_UNAVAILABLE: "Configure and verify the encryption key registry.",
+      RECIPIENT_ENCRYPTION_KEY_NOT_FOUND: "The recipient must register an encryption public key first.",
+      RECIPIENT_ENCRYPTION_KEY_INVALID: "The registry returned an invalid recipient encryption key.",
+      CHANNEL_KEY_DERIVATION_FAILED: "Retry after reloading verified participant encryption keys.",
+      ENCRYPTION_IDENTITY_REGISTRATION_REQUIRED: "Register the current device encryption public key first.",
+    };
+    if (error?.code in encryptionErrorCopy) {
+      return {
+        code: error.code,
+        label: "Encryption unavailable",
+        toast: error.code === "RECIPIENT_ENCRYPTION_KEY_NOT_FOUND"
+          ? "Recipient encryption unavailable."
+          : "Encryption identity setup required.",
+        why: message,
+        howToFix: encryptionErrorCopy[error.code],
+      };
+    }
     if (error?.code === "STRK20_RUNTIME_UNAVAILABLE") {
       return {
         code: "STRK20_RUNTIME_UNAVAILABLE",

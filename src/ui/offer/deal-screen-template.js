@@ -66,7 +66,7 @@
                 <textarea id="create-offer-terms" rows="3">Buyer deposits funds, seller deposits the asset. Both remain locked until release.</textarea>
               </label>
               <div class="create-offer-meta">
-                <span><i data-lucide="shield" class="size-4"></i> Shielded</span>
+                <span><i data-lucide="lock-keyhole" class="size-4"></i> Encrypted negotiation</span>
                 <small>Total fee shown before signing</small>
               </div>
               <div class="offer-form-actions">

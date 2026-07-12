@@ -48,7 +48,7 @@ export function createEscrowController({
 }) {
   function renderEscrowTransactionSummary() {
     const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
-      shielded: true,
+      shielded: false,
     });
     setElementText("#escrow-fee-amount", currentDealOfferAmount());
     setElementText("#escrow-total-fee", fee.feeLabel);
