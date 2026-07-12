@@ -71,6 +71,7 @@ export {
   type EncryptionIdentityStore,
 } from "./encryption-identity";
 export {
+  addRegistrationSafetyMargin,
   EncryptionPublicKeyRegistryService,
   validatePublicKey,
   type ResolvedEncryptionPublicKey,

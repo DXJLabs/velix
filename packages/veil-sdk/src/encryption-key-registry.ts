@@ -1,4 +1,4 @@
-import type { StarknetAccountLike, StarknetProviderLike } from "./types";
+import type { StarknetAccountLike, StarknetProviderLike, StarknetResourceBounds } from "./types";
 import { deriveReceiverSharedX } from "./privacy_pool_ecdh";
 import { identityError, type VeilEncryptionIdentityService } from "./encryption-identity";
 
@@ -45,7 +45,10 @@ export class EncryptionPublicKeyRegistryService {
   }
   async registerCurrentUserKey(account: StarknetAccountLike) {
     const local = await this.getLocalPublicKey();
-    return account.execute(this.buildRegistrationCall(local.publicKey));
+    const call = this.buildRegistrationCall(local.publicKey);
+    if (!account.estimateInvokeFee) return account.execute(call);
+    const estimate = await account.estimateInvokeFee(call, { skipValidate: false });
+    return account.execute(call, { resourceBounds: addRegistrationSafetyMargin(estimate.resourceBounds) });
   }
   async rotateCurrentUserKey() {
     const identity = await this.#identity.rotateIdentity();
@@ -81,6 +84,13 @@ export class EncryptionPublicKeyRegistryService {
       throw identityError("ENCRYPTION_KEY_REGISTRY_UNAVAILABLE", "Encryption key registry could not be read.");
     }
   }
+}
+
+export function addRegistrationSafetyMargin(resourceBounds: StarknetResourceBounds): StarknetResourceBounds {
+  return Object.fromEntries(Object.entries(resourceBounds).map(([resource, bound]) => [resource, {
+    max_amount: bound.max_amount * 2n,
+    max_price_per_unit: bound.max_price_per_unit * 2n,
+  }]));
 }
 
 function firstResult(result: unknown): string {

@@ -193,9 +193,28 @@ export interface StarknetExecuteResult {
   transactionHash?: string;
 }
 
+export interface StarknetResourceBound {
+  max_amount: bigint;
+  max_price_per_unit: bigint;
+}
+
+export type StarknetResourceBounds = Record<string, StarknetResourceBound>;
+
+export interface StarknetInvokeFeeEstimate {
+  resourceBounds: StarknetResourceBounds;
+  overall_fee?: bigint;
+}
+
 export interface StarknetAccountLike {
   address?: string;
-  execute(call: StarknetContractCall | StarknetContractCall[]): Promise<StarknetExecuteResult | string>;
+  estimateInvokeFee?(
+    call: StarknetContractCall | StarknetContractCall[],
+    details?: { skipValidate?: boolean },
+  ): Promise<StarknetInvokeFeeEstimate>;
+  execute(
+    call: StarknetContractCall | StarknetContractCall[],
+    details?: { resourceBounds?: StarknetResourceBounds },
+  ): Promise<StarknetExecuteResult | string>;
 }
 
 export interface StarknetCallResult {

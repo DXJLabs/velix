@@ -1,3 +1,12 @@
+export function encryptionRegistrationErrorMessage(error) {
+  const message = String(error?.message || error || "");
+  if (/out of gas|resource bounds|insufficient max/i.test(message)) {
+    return "Wallet gas estimate was too low. Please retry registration.";
+  }
+  if (/rejected|declined|cancel/i.test(message)) return "Encryption key registration was cancelled.";
+  return "Encryption key registration failed. Check the wallet and Sepolia balance.";
+}
+
 export function bindClickEvents({ documentRef = document, state, dom, api }) {
   documentRef.addEventListener("click", (event) => {
     if (event.target.closest("[data-transaction-loading-close]")) {
@@ -177,10 +186,15 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       return;
     }
 
-    if (event.target.closest("[data-register-encryption-key]")) {
+    const registrationButton = event.target.closest("[data-register-encryption-key]");
+    if (registrationButton) {
+      if (registrationButton.disabled) return;
+      registrationButton.disabled = true;
+      api.showToast("Preparing encryption key registration...");
       api.registerEncryptionKey()
         .then(() => api.showToast("Encryption public key registration submitted."))
-        .catch((error) => api.showToast(error?.message || "Encryption key registration failed."));
+        .catch((error) => api.showToast(encryptionRegistrationErrorMessage(error)))
+        .finally(() => { registrationButton.disabled = false; });
       return;
     }
 

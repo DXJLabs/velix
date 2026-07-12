@@ -8,6 +8,7 @@ const {
   VeilEncryptionIdentityService,
   VeilClient,
   canonicalKdfContext,
+  addRegistrationSafetyMargin,
   derivePrivacyPublicKey,
 } = sdk;
 
@@ -67,6 +68,34 @@ describe("VEIL encryption identity and key registry boundary", () => {
       contractAddress: REGISTRY,
       entrypoint: "register_public_key",
       calldata: [local.publicKey],
+    });
+  });
+
+  it("includes account validation and doubles registration resource bounds", async () => {
+    const identity = new VeilEncryptionIdentityService(new MemoryEncryptionIdentityStore());
+    const { service } = registryFixture(new Map(), identity);
+    let estimateDetails;
+    let executeDetails;
+    const account = {
+      async estimateInvokeFee(_call, details) {
+        estimateDetails = details;
+        return { resourceBounds: {
+          l1_gas: { max_amount: 1n, max_price_per_unit: 2n },
+          l2_gas: { max_amount: 3n, max_price_per_unit: 4n },
+          l1_data_gas: { max_amount: 5n, max_price_per_unit: 6n },
+        } };
+      },
+      async execute(_call, details) { executeDetails = details; return { transaction_hash: "0x1" }; },
+    };
+    await service.registerCurrentUserKey(account);
+    assert.deepEqual(estimateDetails, { skipValidate: false });
+    assert.deepEqual(executeDetails.resourceBounds, {
+      l1_gas: { max_amount: 2n, max_price_per_unit: 4n },
+      l2_gas: { max_amount: 6n, max_price_per_unit: 8n },
+      l1_data_gas: { max_amount: 10n, max_price_per_unit: 12n },
+    });
+    assert.deepEqual(addRegistrationSafetyMargin({ custom: { max_amount: 7n, max_price_per_unit: 11n } }), {
+      custom: { max_amount: 14n, max_price_per_unit: 22n },
     });
   });
 

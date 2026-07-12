@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import { createRuntimeConfig, normalizeTimelineMode } from "../../../src/app/runtime-config.js";
+import { encryptionRegistrationErrorMessage } from "../../../src/app/events/click-events.js";
 import { createDealStorage } from "../../../src/services/storage/deal-storage.js";
 import { assert, sdk } from "./production-messaging.helpers.mjs";
 
@@ -18,6 +19,13 @@ const {
 } = sdk;
 
 describe("production-safe VEIL message modes", () => {
+  it("sanitizes raw registration RPC errors before showing them in Settings", () => {
+    const raw = 'RPC: starknet_addInvokeTransaction {"invoke_transaction":{"signature":["secret-sized-payload"]}} Out of gas';
+    const message = encryptionRegistrationErrorMessage(new Error(raw));
+    assert.equal(message, "Wallet gas estimate was too low. Please retry registration.");
+    assert.equal(message.includes("invoke_transaction"), false);
+  });
+
   it("defaults production messaging to encrypted-direct", () => {
     assert.equal(normalizeTimelineMode("", { MODE: "production" }), "encrypted-direct");
     assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production" }), "encrypted-direct");
