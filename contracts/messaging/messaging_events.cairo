@@ -1,18 +1,24 @@
-/// Minimal public event emitted for indexer discovery.
+/// Minimal public event emitted when one encrypted VEIL message is stored.
 ///
-/// The event exposes only the opaque conversation tag, monotonic event id, and
-/// payload commitment. Ciphertext chunks are stored in contract storage and are
-/// not duplicated into logs, reducing avoidable public metadata expansion.
+/// PRIVACY:
+/// - `message_locator` must be unique to one message.
+/// - It must never be reused as a conversation, channel, deal, sender, or
+///   recipient identifier.
+/// - Message type, private sequence, participants, and content remain inside
+///   authenticated ciphertext.
+///
+/// PUBLIC METADATA:
+/// - one helper invocation occurred;
+/// - the one-time message locator;
+/// - the encrypted-envelope commitment;
+/// - transaction and block timing.
 #[derive(Drop, starknet::Event)]
-pub struct TimelineCommitmentStored {
-    /// Opaque tag chosen by the application/SDK.
+pub struct MessageCommitted {
+    /// One-time opaque locator used by clients and indexers to retrieve the
+    /// encrypted message record and its ciphertext chunks.
     #[key]
-    pub conversation_tag: felt252,
+    pub message_locator: felt252,
 
-    /// Monotonic event id under the tag.
-    #[key]
-    pub event_id: felt252,
-
-    /// Domain-separated commitment to the encrypted payload.
-    pub payload_hash: felt252,
+    /// Domain-separated Poseidon commitment to the complete encrypted envelope.
+    pub payload_commitment: felt252,
 }
