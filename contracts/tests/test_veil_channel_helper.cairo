@@ -20,11 +20,29 @@ use veilc::utils::constants::{
     VEIL_MESSAGE_ENVELOPE_VERSION,
 };
 
+/// TEST SUITE SCOPE
+///
 /// These tests prove the local Cairo behavior of `VeilChannelHelper`.
 ///
-/// They do not prove the real Privacy Pool transaction flow, zero-value
-/// encrypted-note creation, proof generation, relaying, or recipient-side
-/// decryption. Those require a separate SDK and Sepolia E2E test.
+/// PROVEN HERE:
+/// - constructor configuration;
+/// - Privacy Pool-only authorization;
+/// - message-envelope validation;
+/// - Poseidon commitment validation;
+/// - one-time locator replay protection;
+/// - ciphertext storage and guarded reads;
+/// - minimal discovery event shape;
+/// - empty `OpenNoteDeposit` return.
+///
+/// NOT PROVEN HERE:
+/// - `CreateEncNote(amount = 0)` construction by the official Privacy SDK;
+/// - real transaction proof generation;
+/// - Invoke Transaction V3 and Outside Execution V2 submission;
+/// - execution against the deployed Sepolia Privacy Pool;
+/// - recipient discovery and local decryption;
+/// - Alice-to-Bob and Bob-to-Alice end-to-end messaging.
+///
+/// Those properties require separate SDK, prover, integration, and Sepolia E2E tests.
 const PRIVACY_POOL: felt252 = 0x123;
 const OTHER_CALLER: felt252 = 0x456;
 
@@ -148,6 +166,9 @@ fn make_sequential_chunks(count: u64) -> Array<felt252> {
 // Constructor and commitment primitives
 // -----------------------------------------------------------------------------
 
+/// TEST PURPOSE:
+/// Proves that deployment stores the configured Privacy Pool address exactly.
+/// This address becomes the sole authorized caller of `privacy_invoke`.
 #[test]
 fn constructor_stores_privacy_pool() {
     let contract_address = deploy_contract();
@@ -159,6 +180,9 @@ fn constructor_stores_privacy_pool() {
     );
 }
 
+/// TEST PURPOSE:
+/// Proves that the helper cannot be deployed without a valid Privacy Pool.
+/// A zero pool address would permanently break or weaken caller authorization.
 #[test]
 fn constructor_rejects_zero_privacy_pool() {
     let contract = declare("VeilChannelHelper")
@@ -173,6 +197,9 @@ fn constructor_rejects_zero_privacy_pool() {
     }
 }
 
+/// TEST PURPOSE:
+/// Proves that identical envelope fields and ciphertext chunks produce the same Poseidon commitment.
+/// SDK and contract implementations require deterministic hashing for compatibility.
 #[test]
 fn message_commitment_is_deterministic() {
     let chunks = array![111, 222, 333];
@@ -192,6 +219,9 @@ fn message_commitment_is_deterministic() {
     assert(first == second, 'commitment mismatch');
 }
 
+/// TEST PURPOSE:
+/// Proves that changing only the one-time message locator changes the commitment.
+/// A commitment therefore cannot be silently moved to another locator.
 #[test]
 fn message_commitment_binds_locator() {
     let chunks = array![111, 222];
@@ -211,6 +241,9 @@ fn message_commitment_binds_locator() {
     assert(first != second, 'locator not bound');
 }
 
+/// TEST PURPOSE:
+/// Proves that ciphertext chunk ordering is part of the commitment.
+/// Reordering encrypted fields must invalidate the claimed envelope commitment.
 #[test]
 fn message_commitment_binds_ciphertext_order() {
     let first_chunks = array![111, 222];
@@ -231,6 +264,9 @@ fn message_commitment_binds_ciphertext_order() {
     assert(first != second, 'order not bound');
 }
 
+/// TEST PURPOSE:
+/// Proves that the envelope format version is part of the commitment.
+/// A payload from another format version cannot reuse the same commitment.
 #[test]
 fn message_commitment_binds_envelope_version() {
     let chunks = array![111];
@@ -254,6 +290,10 @@ fn message_commitment_binds_envelope_version() {
 // Successful Privacy Pool message writes
 // -----------------------------------------------------------------------------
 
+/// TEST PURPOSE:
+/// Proves the complete successful local contract path for one encrypted message.
+/// It checks pool authorization, empty deposit return, record persistence, chunk persistence, and commitment status.
+/// This is a Cairo unit/integration test and does not prove real Privacy Pool proof generation.
 #[test]
 fn privacy_pool_stores_encrypted_message() {
     let contract_address = deploy_contract();
@@ -318,6 +358,9 @@ fn privacy_pool_stores_encrypted_message() {
     );
 }
 
+/// TEST PURPOSE:
+/// Proves that two one-time locators create two independent message records.
+/// The test also verifies that ciphertext chunks are not mixed between messages.
 #[test]
 fn different_locators_store_independent_messages() {
     let contract_address = deploy_contract();
@@ -349,6 +392,9 @@ fn different_locators_store_independent_messages() {
     );
 }
 
+/// TEST PURPOSE:
+/// Proves that a ciphertext felt equal to zero is treated as opaque encrypted data.
+/// The helper must not reject valid ciphertext based on plaintext-like assumptions.
 #[test]
 fn zero_valued_ciphertext_chunk_is_accepted() {
     let contract_address = deploy_contract();
@@ -371,6 +417,9 @@ fn zero_valued_ciphertext_chunk_is_accepted() {
     );
 }
 
+/// TEST PURPOSE:
+/// Proves that exactly `MAX_PAYLOAD_CHUNKS` ciphertext chunks are accepted.
+/// This confirms the inclusive upper boundary of the storage and execution limit.
 #[test]
 fn maximum_ciphertext_boundary_is_accepted() {
     let contract_address = deploy_contract();
@@ -404,6 +453,9 @@ fn maximum_ciphertext_boundary_is_accepted() {
     );
 }
 
+/// TEST PURPOSE:
+/// Proves that discovery emits only the event selector, one-time locator, and commitment.
+/// It guards against accidentally reintroducing conversation tags, event counters, or plaintext metadata.
 #[test]
 fn message_committed_event_has_minimal_shape() {
     let contract_address = deploy_contract();
@@ -438,6 +490,9 @@ fn message_committed_event_has_minimal_shape() {
 // Authorization
 // -----------------------------------------------------------------------------
 
+/// TEST PURPOSE:
+/// Proves that wallets and arbitrary contracts cannot store messages directly.
+/// Only the Privacy Pool address fixed during deployment may call `privacy_invoke`.
 #[test]
 #[should_panic(expected: 'NOT_PRIVACY_POOL')]
 fn privacy_invoke_rejects_non_pool_caller() {
@@ -459,6 +514,9 @@ fn privacy_invoke_rejects_non_pool_caller() {
 // Envelope and calldata validation
 // -----------------------------------------------------------------------------
 
+/// TEST PURPOSE:
+/// Proves that calldata shorter than the fixed four-felt envelope header is rejected.
+/// This prevents unsafe reads and ambiguous envelope decoding.
 #[test]
 #[should_panic(expected: 'BAD_MESSAGE_DATA')]
 fn privacy_invoke_rejects_truncated_header() {
@@ -479,6 +537,9 @@ fn privacy_invoke_rejects_truncated_header() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that the public envelope version must be representable as `u8`.
+/// Malformed version values are rejected before application validation.
 #[test]
 #[should_panic(expected: 'BAD_ENVELOPE_VER')]
 fn privacy_invoke_rejects_version_that_does_not_fit_u8() {
@@ -501,6 +562,9 @@ fn privacy_invoke_rejects_version_that_does_not_fit_u8() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that structurally valid but unsupported envelope versions are rejected.
+/// This prevents old or future formats from being interpreted under the wrong commitment rules.
 #[test]
 #[should_panic(expected: 'UNSUPPORTED_VER')]
 fn privacy_invoke_rejects_unsupported_version() {
@@ -526,6 +590,9 @@ fn privacy_invoke_rejects_unsupported_version() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that zero cannot be used as a one-time message locator.
+/// Zero is reserved as an invalid/default storage value.
 #[test]
 #[should_panic(expected: 'ZERO_MSG_LOCATOR')]
 fn privacy_invoke_rejects_zero_message_locator() {
@@ -543,6 +610,9 @@ fn privacy_invoke_rejects_zero_message_locator() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that a zero claimed commitment is rejected before storage.
+/// A valid encrypted envelope must carry a non-zero commitment.
 #[test]
 #[should_panic(expected: 'ZERO_PAYLOAD_COMMIT')]
 fn privacy_invoke_rejects_zero_commitment() {
@@ -565,6 +635,9 @@ fn privacy_invoke_rejects_zero_commitment() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that every stored message contains at least one ciphertext chunk.
+/// The helper no longer supports the old separate compact payload field.
 #[test]
 #[should_panic(expected: 'EMPTY_CIPHERTEXT')]
 fn privacy_invoke_rejects_empty_ciphertext() {
@@ -586,6 +659,9 @@ fn privacy_invoke_rejects_empty_ciphertext() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that the helper recomputes Poseidon and rejects a false claimed commitment.
+/// A caller cannot store ciphertext under an unrelated commitment.
 #[test]
 #[should_panic(expected: 'COMMITMENT_MISMATCH')]
 fn privacy_invoke_rejects_invalid_commitment() {
@@ -608,6 +684,9 @@ fn privacy_invoke_rejects_invalid_commitment() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that chunk counts which cannot be decoded as `u64` are rejected.
+/// This protects length calculations and chunk iteration.
 #[test]
 #[should_panic(expected: 'BAD_CHUNK_COUNT')]
 fn privacy_invoke_rejects_chunk_count_above_u64() {
@@ -629,6 +708,9 @@ fn privacy_invoke_rejects_chunk_count_above_u64() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that a declared chunk count above `MAX_PAYLOAD_CHUNKS` is rejected.
+/// This is the contract-level protection against unbounded calldata and storage writes.
 #[test]
 #[should_panic(expected: 'TOO_MANY_CHUNKS')]
 fn privacy_invoke_rejects_oversized_ciphertext() {
@@ -652,6 +734,9 @@ fn privacy_invoke_rejects_oversized_ciphertext() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that declared chunk count must exactly match the provided ciphertext length.
+/// Missing chunks cannot be committed or stored.
 #[test]
 #[should_panic(expected: 'BAD_PAYLOAD_SIZE')]
 fn privacy_invoke_rejects_missing_ciphertext_chunk() {
@@ -674,6 +759,9 @@ fn privacy_invoke_rejects_missing_ciphertext_chunk() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that extra uncommitted calldata after the declared ciphertext is rejected.
+/// Every accepted felt must be covered by the exact envelope layout and commitment.
 #[test]
 #[should_panic(expected: 'BAD_PAYLOAD_SIZE')]
 fn privacy_invoke_rejects_trailing_calldata() {
@@ -701,6 +789,9 @@ fn privacy_invoke_rejects_trailing_calldata() {
 // Replay and one-time locator protection
 // -----------------------------------------------------------------------------
 
+/// TEST PURPOSE:
+/// Proves that an identical message cannot be stored twice under the same one-time locator.
+/// The second call must fail with `LOCATOR_ALREADY_USED`.
 #[test]
 #[should_panic(expected: 'LOCATOR_ALREADY_USED')]
 fn exact_message_replay_is_rejected() {
@@ -719,6 +810,9 @@ fn exact_message_replay_is_rejected() {
     dispatcher.privacy_invoke(calldata.span());
 }
 
+/// TEST PURPOSE:
+/// Proves that a used locator cannot be overwritten with different ciphertext.
+/// This protects one-time locator immutability, not only exact replay detection.
 #[test]
 #[should_panic(expected: 'LOCATOR_ALREADY_USED')]
 fn reused_locator_with_different_ciphertext_is_rejected() {
@@ -743,13 +837,16 @@ fn reused_locator_with_different_ciphertext_is_rejected() {
     );
 
     dispatcher.privacy_invoke(first_calldata.span());
-    dispatcher.priacy_invoke(second_calldata.span());
+    dispatcher.privacy_invoke(second_calldata.span());
 }
 
 // -----------------------------------------------------------------------------
 // Read protections
 // -----------------------------------------------------------------------------
 
+/// TEST PURPOSE:
+/// Proves that an unknown storage key does not return an all-zero record as if it existed.
+/// The explicit existence map must force `MESSAGE_NOT_FOUND`.
 #[test]
 #[should_panic(expected: 'MESSAGE_NOT_FOUND')]
 fn get_message_rejects_unknown_locator() {
@@ -759,6 +856,9 @@ fn get_message_rejects_unknown_locator() {
     dispatcher.get_message(8001);
 }
 
+/// TEST PURPOSE:
+/// Proves that ciphertext cannot be read for a message locator that was never stored.
+/// Existence is checked before reading the record or chunk map.
 #[test]
 #[should_panic(expected: 'MESSAGE_NOT_FOUND')]
 fn get_payload_chunk_rejects_unknown_locator() {
@@ -768,6 +868,9 @@ fn get_payload_chunk_rejects_unknown_locator() {
     dispatcher.get_payload_chunk(8002, 0);
 }
 
+/// TEST PURPOSE:
+/// Proves that chunk reads are restricted to the stored message's declared chunk count.
+/// Reading index equal to the count must fail with `CHUNK_OOB`.
 #[test]
 #[should_panic(expected: 'CHUNK_OOB')]
 fn get_payload_chunk_rejects_out_of_bounds_index() {
