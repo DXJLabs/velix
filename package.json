@@ -4,33 +4,45 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "npm@11.6.2",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "npm run typecheck && vite build",
     "build:sdk": "tsc -p packages/veil-sdk/tsconfig.json",
     "test:sdk": "npm run build:sdk && node --test packages/veil-sdk/tests/*.test.mjs",
+    "test:app": "node --test tests/*.test.mjs",
+    "test:api": "node --test api/tests/*.test.mjs",
+    "test:all": "npm run test:sdk && npm run test:app && npm run test:api",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "npm run build:sdk && tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.1",
-    "@types/react": "^19.2.17",
-    "tailwindcss": "^4.3.1",
-    "typescript": "^6.0.3",
-    "vite": "^7.0.0"
+    "@tailwindcss/vite": "4.3.1",
+    "@types/react": "19.2.17",
+    "tailwindcss": "4.3.1",
+    "typescript": "6.0.3",
+    "vite": "7.3.5"
   },
   "dependencies": {
-    "@privy-io/node": "^0.23.0",
-    "@privy-io/react-auth": "^3.32.2",
-    "@solana-program/memo": "^0.10.0",
-    "@solana-program/system": "^0.10.0",
-    "@solana-program/token": "^0.9.0",
-    "@solana/kit": "^5.5.1",
-    "ethers": "^6.17.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "starknet": "^9.4.2",
-    "starkzap": "^3.0.0",
-    "swr": "^2.4.2"
+    "@privy-io/node": "0.23.0",
+    "@privy-io/react-auth": "3.32.2",
+    "@starkware-libs/starknet-privacy-sdk": "file:vendor/starkware-libs-starknet-privacy-sdk-0.14.3-rc.2.tgz",
+    "ethers": "6.15.0",
+    "lucide": "1.24.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "starknet": "9.4.2",
+    "starkzap": "3.0.0",
+    "swr": "2.4.2"
+  },
+  "overrides": {
+    "@starkware-libs/starknet-privacy-sdk": {
+      "ohttp-ts": "0.3.0",
+      "starknet": "10.0.0-beta.6",
+      "zod": "3.25.76"
+    }
   }
 }

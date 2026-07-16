@@ -1,6 +1,13 @@
 use starknet::ContractAddress;
 use crate::offers::offer_types::OfferStatus;
 
+pub const SHIELDED_CREATE_ACTION: felt252 = 1;
+pub const SHIELDED_COUNTER_ACTION: felt252 = 2;
+pub const SHIELDED_ACCEPT_ACTION: felt252 = 3;
+pub const SHIELDED_REJECT_ACTION: felt252 = 4;
+pub const SHIELDED_EXPIRE_ACTION: felt252 = 5;
+pub const SHIELDED_CONVERT_ACTION: felt252 = 6;
+
 /// Assert that a felt252 value is non-zero.
 pub fn assert_non_zero(
     value: felt252,
@@ -188,6 +195,22 @@ pub fn assert_valid_expiry(
     assert(
         expires_at == 0 || expires_at > now,
         'Invalid expiry',
+    );
+}
+
+/// Assert that a Privacy Pool action uses one of the fixed offer operation
+/// identifiers. No target, selector, or nested calldata is accepted.
+pub fn assert_supported_shielded_action(
+    action_kind: felt252,
+) {
+    assert(
+        action_kind == SHIELDED_CREATE_ACTION
+            || action_kind == SHIELDED_COUNTER_ACTION
+            || action_kind == SHIELDED_ACCEPT_ACTION
+            || action_kind == SHIELDED_REJECT_ACTION
+            || action_kind == SHIELDED_EXPIRE_ACTION
+            || action_kind == SHIELDED_CONVERT_ACTION,
+        'Invalid offer action',
     );
 }
 

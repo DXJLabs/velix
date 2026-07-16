@@ -308,24 +308,13 @@ export function createEscrowController({
     state.escrowReleased = true;
     currentChannel().status = "Deal Completed";
     currentChannel().last = "Secure deal completed";
-    const proof = settlementProofMeta();
     addLocalItem({
       type: "inline",
-      title: "Settlement proof generated",
-      subtitle: "Proof attached to this private channel.",
-      proofId: proof.proofId,
-      settlementHash: proof.settlementHash,
+      title: "Settlement transaction confirmed",
+      subtitle: "No separate cryptographic settlement proof was generated.",
       actor: "System",
       time: now() + 1,
       ...confirmedTimelineMeta(`${state.channelId}-settlement-proof`, 39),
-    });
-    addLocalItem({
-      type: "inline",
-      title: "Settlement complete",
-      subtitle: "Deal settled and proof is ready.",
-      actor: "System",
-      time: now() + 2,
-      ...confirmedTimelineMeta(`${state.channelId}-settlement-complete`, 40),
     });
     addLocalItem({
       type: "inline",

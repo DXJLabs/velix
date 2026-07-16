@@ -36,8 +36,8 @@
               <div class="unlock-copy">
                 <p class="home-label">VEIL</p>
                 <h1>Private Deal Workspace</h1>
-                <p class="home-kicker">Private deal channels. Secure settlement. Built on Starknet.</p>
-                <p class="home-description">ECDH encrypted messages, offers, escrow, payments, AI notes, proofs, and settlement in one on-chain channel.</p>
+                <p class="home-kicker">Pre-production privacy architecture on Starknet Sepolia.</p>
+                <p class="home-description">Direct encrypted messaging is the fallback path. Private payments, offers, escrow, claims, and settlement remain disabled until their live E2E gates pass.</p>
                 <div class="unlock-actions">
                   <button class="primary-action" type="button" data-connect-wallet>
                     <i data-lucide="wallet-cards" class="size-5"></i>
@@ -46,7 +46,7 @@
                 </div>
                 <p class="home-trust-line">
                   <i data-lucide="shield-check" class="size-4"></i>
-                  Built on Starknet Privacy Pool
+                  Privacy Pool integration blocked on a screening-capable deployment
                 </p>
               </div>
 
@@ -71,17 +71,17 @@
               <article class="capability-card">
               <span class="capability-icon"><i data-lucide="network" class="size-5"></i></span>
               <h2>Encrypted Channels</h2>
-              <p>Each channel keeps private messages, offers, escrow, AI notes, proofs, and settlement together.</p>
+              <p>Direct encrypted fallback only; recipient bootstrap and live delivery still require verification.</p>
               </article>
               <article class="capability-card">
               <span class="capability-icon"><i data-lucide="shield" class="size-5"></i></span>
-              <h2>Private Escrow</h2>
-              <p>Create secure deals with Shield or Unshield transactions.</p>
+              <h2>Private Financial Flows</h2>
+              <p>Blocked until a compatible Pool, prover, discovery route, deployments, and two-account E2E are available.</p>
               </article>
               <article class="capability-card">
               <span class="capability-icon"><i data-lucide="badge-check" class="size-5"></i></span>
-              <h2>On-chain Proof</h2>
-              <p>Every action is recorded and verifiable on Starknet.</p>
+              <h2>Honest Evidence</h2>
+              <p>Only real confirmed transaction hashes receive explorer links; VEIL does not fabricate proofs or success states.</p>
               </article>
             </div>
 
@@ -94,11 +94,11 @@
                 </div>
                 <div>
                   <span>Privacy Pool</span>
-                  <strong id="home-privacy-pool">Connected</strong>
+                  <strong id="home-privacy-pool">Legacy — Shield blocked</strong>
                 </div>
                 <div>
                   <span>Helper Contract</span>
-                  <strong id="home-helper-contract">Verified</strong>
+                  <strong id="home-helper-contract">Unverified</strong>
                 </div>
                 <div>
                   <span>Environment</span>
@@ -135,7 +135,7 @@
             <footer class="home-footer">
               <strong>VEIL</strong>
               <span>Version v0.1.0</span>
-              <span>Built on Starknet Privacy Pool</span>
+              <span>Starknet Sepolia pre-production build</span>
               <a href="#" data-home-link="privacy">Privacy Policy</a>
               <a href="#" data-home-link="terms">Terms</a>
               <a href="#" data-home-link="license">License</a>

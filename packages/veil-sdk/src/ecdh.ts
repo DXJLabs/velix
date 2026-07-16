@@ -13,6 +13,7 @@ import type {
   TimelineItem,
   VeilTimelinePayload,
 } from "./types";
+import { deriveOpaqueConversationTag } from "./conversation-tag";
 
 const HKDF_ALGORITHM = "HKDF";
 const AES_GCM_ALGORITHM = "AES-GCM";
@@ -383,6 +384,20 @@ export class PrivacyPoolChannelEncryptionAdapter implements EncryptionAdapter {
     };
     if (context) input.context = context;
     return decryptMessage(input);
+  }
+
+  async deriveConversationTag(channelId: string): Promise<string> {
+    if (channelId !== this.#config.channelId) {
+      throw new Error("Conversation tag channel does not match the Privacy Pool encryption context.");
+    }
+    const sharedSecret = this.#config.privacyPoolSharedSecret ?? this.#config.channelKey;
+    if (sharedSecret === undefined) {
+      throw new Error("Conversation tag derivation requires recovered Privacy Pool channel material.");
+    }
+    return deriveOpaqueConversationTag({
+      sharedSecret,
+      context: `STRK20_PRIVACY_POOL|${channelId}`,
+    });
   }
 
   #key(): Promise<CryptoKey> {

@@ -1,3 +1,5 @@
+import { createWalletPrivacyCapabilityModel } from "../../domain/privacy-capabilities.js";
+
 export function createWalletController({
   state,
   document,
@@ -5,6 +7,8 @@ export function createWalletController({
   expectedChainId,
   privyAppId,
   timelineMode,
+  privacyRuntime,
+  privacyPoolCompatibility,
   nextRewardTier,
   rewardRowsMarkup,
   formatPoints,
@@ -104,6 +108,7 @@ export function createWalletController({
     if (walletConnectRow) walletConnectRow.hidden = connected;
     if (walletSettingsRow) walletSettingsRow.hidden = !connected;
     renderWalletAssets();
+    renderWalletPrivacy();
     renderWalletRewards();
     void refreshWalletAssets();
     document.querySelectorAll("[data-default-privacy]").forEach((button) => {
@@ -137,6 +142,38 @@ export function createWalletController({
           : "Connect wallet";
       }
     });
+  }
+
+  function renderWalletPrivacy() {
+    const model = state.walletPrivacyCapabilities;
+    const support = state.walletConnected ? model?.support || "unsupported" : "disconnected";
+    const capabilityLabel = support === "full"
+      ? "Supported"
+      : support === "partial"
+        ? `Partial${state.privacyWalletApiVersion ? ` · API ${state.privacyWalletApiVersion}` : ""}`
+        : support === "unsupported"
+          ? "Unsupported privacy wallet"
+          : "Connect wallet";
+    const registrationLabel = state.privacyRegistrationStatus === "registered"
+      ? "Private identity detected"
+      : state.privacyRegistrationStatus === "not-registered"
+        ? "Private identity not set up"
+        : "Unknown";
+    const total = state.privateBalances?.strk?.display;
+    setElementText("#wallet-privacy-capability", capabilityLabel);
+    setElementText("#wallet-private-identity", registrationLabel);
+    setElementText(
+      "#wallet-pool-status",
+      privacyRuntime.screening.capable
+        ? "Screening-capable"
+        : `${privacyPoolCompatibility} · Shield disabled`,
+    );
+    setElementText(
+      "#wallet-private-total",
+      total ?? (state.privateBalanceStatus === "failed" ? "Discovery failed" : "Unavailable"),
+    );
+    setElementText("#wallet-private-spendable", total ? "Not exposed by wallet" : "Unavailable");
+    setElementText("#wallet-private-maturing", total ? "Not exposed by wallet" : "Unavailable");
   }
 
   function renderWalletRewards() {
@@ -192,6 +229,11 @@ export function createWalletController({
     state.walletAssetBalances = createDefaultWalletAssetBalances();
     state.walletAssetSyncKey = "";
     state.walletAssetSyncStatus = "idle";
+    state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel();
+    state.privacyWalletApiVersion = "";
+    state.privacyRegistrationStatus = "unknown";
+    state.privateBalanceStatus = "unavailable";
+    state.privateBalances = {};
     setWalletInitializationState("idle", { message: "Connect Wallet" });
   }
 
@@ -232,6 +274,7 @@ export function createWalletController({
   return {
     renderWallet,
     renderWalletAssets,
+    renderWalletPrivacy,
     renderWalletRewards,
     renderSettings,
     walletAddressValue,

@@ -1,20 +1,33 @@
 use starknet::ContractAddress;
-use crate::offers::offer_types::{Offer, OfferStatus};
+use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
+use crate::offers::offer_types::{Offer, OfferStatus, ShieldedOfferAction};
 
 #[starknet::interface]
 pub trait IVeilOffer<TContractState> {
+    /// Append one fixed-schema encrypted offer action through the configured
+    /// Privacy Pool InvokeExternal path.
+    ///
+    /// Calldata is exactly:
+    /// `[action_kind, conversation_tag, encrypted_payload_commitment,
+    ///   valid_until, replay_nullifier, action_commitment]`.
+    ///
+    /// The action is commitment-only and does not mutate the account-authorized
+    /// direct Offer state. It returns an empty deposit span.
+    fn privacy_invoke(
+        ref self: TContractState,
+        calldata: Span<felt252>,
+    ) -> Span<OpenNoteDeposit>;
+
     /// Create a new stateful offer.
     ///
     /// IMPORTANT:
     /// This interface is intended for the direct/unshielded stateful path
     /// because authorization relies on ContractAddress participants.
     ///
-    /// Shielded negotiation should use:
-    /// Canonical Privacy Pool
-    ///   -> InvokeExternal
-    ///   -> VeilChannelHelper.privacy_invoke(...)
-    ///
-    /// until Veil has proof-backed anonymous authorization.
+    /// Shielded clients may append encrypted action commitments through this
+    /// contract's privacy_invoke entry point, but those entries remain a
+    /// non-authoritative journal until Veil has proof-backed anonymous
+    /// participant authorization.
     fn create_offer(
         ref self: TContractState,
 
@@ -154,6 +167,38 @@ pub trait IVeilOffer<TContractState> {
         offer_id: felt252,
     ) -> felt252;
 
+    /// Domain-separated commitment computed for a direct Offer record.
+    fn get_offer_commitment(
+        self: @TContractState,
+        offer_id: felt252,
+    ) -> felt252;
+
+    /// True after an opaque terms commitment has been consumed by a direct
+    /// create/counter operation. Exact ciphertext envelopes cannot be replayed.
+    fn is_terms_commitment_used(
+        self: @TContractState,
+        terms_hash: felt252,
+    ) -> bool;
+
+    fn get_shielded_action_count(
+        self: @TContractState,
+    ) -> u64;
+
+    fn get_shielded_action(
+        self: @TContractState,
+        action_index: u64,
+    ) -> ShieldedOfferAction;
+
+    fn is_shielded_action_committed(
+        self: @TContractState,
+        action_commitment: felt252,
+    ) -> bool;
+
+    fn is_shielded_nullifier_used(
+        self: @TContractState,
+        replay_nullifier: felt252,
+    ) -> bool;
+
     /// Total number of created offer records, including counter-offers.
     fn get_offer_count(
         self: @TContractState,
@@ -162,6 +207,10 @@ pub trait IVeilOffer<TContractState> {
     /// Trusted VeilEscrow contract allowed to call
     /// mark_converted_to_escrow().
     fn get_escrow_contract(
+        self: @TContractState,
+    ) -> ContractAddress;
+
+    fn get_privacy_pool(
         self: @TContractState,
     ) -> ContractAddress;
 

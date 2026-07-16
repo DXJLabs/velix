@@ -12,17 +12,24 @@ import {
   starknetWalletExternalId,
   stableIdempotencyKey,
 } from "../_lib/privy.js";
+import {
+  assertJsonBodyWithinLimit,
+  enforceRateLimit,
+  setPrivateResponseHeaders,
+} from "../_lib/security.js";
 
 export default async function handler(request, response) {
   const context = createRequestContext(request, "/api/wallet/starknet");
 
   try {
+    setPrivateResponseHeaders(response);
     logEvent("info", "wallet.starknet.request.received", context, {
       method: request.method,
       contentType: request.headers["content-type"],
-      authorizationPresent: Boolean(request.headers.authorization || request.headers.Authorization),
     });
     requirePost(request, response, context);
+    assertJsonBodyWithinLimit(request, context, 1_024);
+    enforceRateLimit(request, response, context, { limit: 10, windowMs: 60_000 });
 
     const auth = await authenticatePrivyRequest(request, context);
     const client = createPrivyClient(context);
@@ -38,13 +45,13 @@ export default async function handler(request, response) {
       logEvent("info", "wallet.starknet.lookup.hit", context, {
         userIdHash,
         walletMode: "server-managed",
-        walletId: existingWallet.id,
+        walletIdHash: hashForLog(existingWallet.id),
         address: existingWallet.address,
       });
       logEvent("info", "wallet.starknet.response.ready", context, {
         userIdHash,
         walletMode: "server-managed",
-        walletId: existingWallet.id,
+        walletIdHash: hashForLog(existingWallet.id),
         address: existingWallet.address,
         publicKeyPresent: Boolean(existingWallet.public_key || existingWallet.publicKey),
       });
@@ -67,14 +74,14 @@ export default async function handler(request, response) {
     logEvent("info", "wallet.starknet.create.success", context, {
       userIdHash,
       walletMode: "server-managed",
-      walletId: wallet.id,
+      walletIdHash: hashForLog(wallet.id),
       address: wallet.address,
       publicKeyPresent: Boolean(wallet.public_key || wallet.publicKey),
     });
     logEvent("info", "wallet.starknet.response.ready", context, {
       userIdHash,
       walletMode: "server-managed",
-      walletId: wallet.id,
+      walletIdHash: hashForLog(wallet.id),
       address: wallet.address,
       publicKeyPresent: Boolean(wallet.public_key || wallet.publicKey),
     });

@@ -4,6 +4,14 @@ import { OnboardStrategy } from "starkzap-onboard";
 import { currentOrigin } from "./privy-bridge.js";
 import { ensureHex } from "./wallet-format.js";
 
+const SILENT_SDK_LOGGER = Object.freeze({
+  debug() {},
+  error() {},
+  info() {},
+  log() {},
+  warn() {},
+});
+
 export function createStarkZapAdapter({
   config,
   state,
@@ -33,8 +41,8 @@ export function createStarkZapAdapter({
       chainId: getStarkZapChainId(),
       ...paymasterConfig,
       logging: {
-        logger: console,
-        logLevel: "info",
+        logger: SILENT_SDK_LOGGER,
+        logLevel: "error",
       },
     });
     logger.veilLog("info", "starkzap.sdk.created", {

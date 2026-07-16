@@ -43,18 +43,18 @@
         <button class="icon-button ghost review-modal-close" type="button" data-payment-review-close aria-label="Close review">
           <i data-lucide="x" class="size-5"></i>
         </button>
-        <p class="eyebrow">Review Transaction</p>
-        <h2 id="payment-review-title">Send Payment</h2>
+        <p class="eyebrow">Review Memo</p>
+        <h2 id="payment-review-title">Send Direct encrypted memo</h2>
         <div class="review-summary-list">
           <div><span>Recipient</span><strong id="payment-review-recipient">Bob</strong></div>
-          <div><span>Amount</span><strong id="payment-review-amount">450 STRK</strong></div>
-          <div><span>Privacy</span><strong id="payment-review-privacy">Shield</strong></div>
-          <div><span>Total Fee</span><strong id="payment-review-fee">0.688 STRK</strong></div>
-          <div><span>Rewards</span><strong id="payment-review-reward">+20 VEIL Points</strong></div>
-          <div><span>AI Memo</span><strong id="payment-review-memo">Final settlement for rights transfer.</strong></div>
-          <div class="summary-total"><span>Total</span><strong id="payment-review-total">450.688 STRK</strong></div>
+          <div><span>Payment intent</span><strong id="payment-review-amount">450 STRK (not transferred)</strong></div>
+          <div><span>Delivery</span><strong id="payment-review-privacy">Direct encrypted memo - no asset transfer</strong></div>
+          <div><span>Estimated network fee</span><strong id="payment-review-fee">0.003 STRK</strong></div>
+          <div><span>Rewards</span><strong id="payment-review-reward">None - this is not a payment</strong></div>
+          <div><span>Memo</span><strong id="payment-review-memo">Payment intent for rights transfer.</strong></div>
+          <div class="summary-total"><span>Estimated amount charged</span><strong id="payment-review-total">0.003 STRK</strong></div>
         </div>
-        <button class="primary-action w-full" type="button" data-payment-review-sign>Sign Transaction</button>
+        <button class="primary-action w-full" type="button" data-payment-review-sign>Send Memo</button>
         <button class="secondary-action w-full" type="button" data-payment-review-close>Cancel</button>
       </section>
     </div>

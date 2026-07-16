@@ -4,6 +4,7 @@ import {
   DEAL_OFFER_AMOUNT,
 } from "../app/runtime-config.js";
 import { activeDealId } from "./demo-data.js";
+import { createWalletPrivacyCapabilityModel } from "../domain/privacy-capabilities.js";
 
 export function createDefaultWalletAssetBalances(walletAssetConfig) {
   return Object.fromEntries(
@@ -17,9 +18,11 @@ export function createAppStore({
   messages,
   initialRewardHistory,
 }) {
+  const demoRuntimeMode = Boolean(config.demoRuntimeMode);
   const state = {
+    demoRuntimeMode,
     screen: "unlock",
-    channelId: activeDealId,
+    channelId: demoRuntimeMode ? activeDealId : channels[0]?.id || "",
     paymentMode: "unshield",
     messageMode: CHAT_DISPLAY_MODE,
     defaultPrivacyMode: "encrypted-direct",
@@ -27,7 +30,7 @@ export function createAppStore({
     walletConnected: false,
     walletAddress: "",
     walletNetwork: config.expectedChainId,
-    walletSource: config.privyAppId ? "Privy" : "Demo",
+    walletSource: config.privyAppId ? "Privy" : demoRuntimeMode ? "Demo" : "",
     helperVerified: false,
     privyReady: false,
     privyAuthenticated: false,
@@ -56,7 +59,12 @@ export function createAppStore({
     walletAssetBalances: createDefaultWalletAssetBalances(config.walletAssetConfig),
     walletAssetSyncKey: "",
     walletAssetSyncStatus: "idle",
-    rewardPoints: 4_580,
+    walletPrivacyCapabilities: createWalletPrivacyCapabilityModel(),
+    privacyWalletApiVersion: "",
+    privacyRegistrationStatus: "unknown",
+    privateBalanceStatus: "unavailable",
+    privateBalances: {},
+    rewardPoints: demoRuntimeMode ? 4_580 : 0,
     rewardHistory: [...initialRewardHistory],
     negotiationStep: "decision",
     initialOfferAmount: "500 STRK",
@@ -65,7 +73,7 @@ export function createAppStore({
     latestOfferCommitments: null,
     latestOfferSellerAddress: "",
     latestEscrowId: "",
-    offerAccepted: true,
+    offerAccepted: demoRuntimeMode,
     paymentSent: false,
     escrowDeposits: {
       buyer: false,
@@ -79,9 +87,9 @@ export function createAppStore({
     },
     escrowDisputeOpened: false,
     proofExported: false,
-    inviteCode: "8Hsj3K",
+    inviteCode: demoRuntimeMode ? "8Hsj3K" : "",
     inviteFormOpen: false,
-    dealSequence: 382,
+    dealSequence: demoRuntimeMode ? 382 : 1,
   };
 
   function currentChannel() {

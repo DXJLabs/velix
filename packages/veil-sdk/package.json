@@ -18,10 +18,15 @@
     "./session-key-hooks": {
       "types": "./dist/session-key-hooks.d.ts",
       "import": "./dist/session-key-hooks.js"
+    },
+    "./contract-discovery-dev": {
+      "types": "./dist/privacy/contract-discovery-compat.d.ts",
+      "import": "./dist/privacy/contract-discovery-compat.js"
     }
   },
   "dependencies": {
-    "starknet": "^9.4.2"
+    "@starkware-libs/starknet-privacy-sdk": "file:../../vendor/starkware-libs-starknet-privacy-sdk-0.14.3-rc.2.tgz",
+    "starknet": "9.4.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -62,7 +62,7 @@ export function createChatController({
       "Message sent.",
       {
         actionLabel: "Encrypting locally",
-        successTitle: "Encrypted On-chain",
+        successTitle: "Direct encrypted",
         successSubtitle: "Encrypted ciphertext confirmed on-chain.",
       },
     );

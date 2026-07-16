@@ -1,6 +1,12 @@
-import { DirectHelperTransport } from "../veil-client-service.js";
+import {
+  DirectHelperTransport,
+  Strk20WalletApiClient,
+  detectStrk20WalletCapabilities,
+} from "../veil-client-service.js";
 import { networkLabel } from "../../app/runtime-config.js";
+import { createWalletPrivacyCapabilityModel } from "../../domain/privacy-capabilities.js";
 import { getInjectedStarknetWallet, getWalletSourceLabel, waitForInjectedStarknetWallet } from "./injected-wallet.js";
+import { formatAssetBalance } from "./wallet-format.js";
 
 export function createWalletService({
   config,
@@ -29,6 +35,62 @@ export function createWalletService({
 }) {
   let encryptionKeyRegistry;
   let encryptionRegistrationAccount;
+
+  async function refreshPrivacyCapabilities(wallet, account) {
+    const detected = await detectStrk20WalletCapabilities(wallet);
+    state.privacyWalletApiVersion = detected.apiVersion || "";
+    state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel({
+      accountConnected: true,
+      signing: Boolean(account?.execute || wallet?.request),
+      strk20WalletApi: detected.supported,
+      registration: detected.registration,
+      shield: detected.shield && config.privacyRuntime.screening.capable,
+      privateTransfer: detected.privateTransfer,
+      withdraw: detected.withdraw,
+      customAnonymizerInvocation: detected.customInvoke,
+      walletProofManagement: detected.walletProofManagement,
+      screeningCapableDeposit: detected.screeningCapableDeposit && config.privacyRuntime.screening.capable,
+    });
+    state.privateBalances = {};
+    if (!detected.supported || !detected.balances) {
+      state.privateBalanceStatus = "unsupported";
+      state.privacyRegistrationStatus = "unknown";
+      return;
+    }
+
+    const assets = config.walletAssetConfig.filter((asset) => asset.contractAddress);
+    if (!assets.length) {
+      state.privateBalanceStatus = "unavailable";
+      state.privacyRegistrationStatus = "unknown";
+      return;
+    }
+    try {
+      const client = new Strk20WalletApiClient({
+        wallet,
+        allowedInvokeContracts: [config.helperAddress, config.offerAddress, config.escrowAddress].filter(Boolean),
+        ...(detected.apiVersion ? { apiVersion: detected.apiVersion } : {}),
+      });
+      const balances = await client.balances(assets.map((asset) => asset.contractAddress));
+      state.privateBalances = Object.fromEntries(balances.map((balance, index) => {
+        const asset = assets[index];
+        return [asset.id, { raw: balance.balance, display: formatAssetBalance(balance.balance, asset) }];
+      }));
+      state.privateBalanceStatus = "total-only";
+      state.privacyRegistrationStatus = "registered";
+    } catch (error) {
+      if (error?.code === "SENDER_NOT_REGISTERED") {
+        state.privateBalanceStatus = "unavailable";
+        state.privacyRegistrationStatus = "not-registered";
+        return;
+      }
+      state.privateBalanceStatus = "failed";
+      state.privacyRegistrationStatus = "unknown";
+      logger.veilError("wallet.privacy.discovery.failed", error, {
+        where: "refreshPrivacyCapabilities",
+        howToFix: "Retry from the wallet after confirming STRK20 Wallet API v0.10.3 support.",
+      });
+    }
+  }
   function getWallet() {
     return state.privyAccount
       || window.veilDemoWallet
@@ -171,16 +233,27 @@ export function createWalletService({
       });
     }
 
+    await refreshPrivacyCapabilities(wallet, account);
+
+    const encryptionSetup = await createEncryptionAdapter({
+      accountAddress: account.address,
+      provider: readProvider,
+    });
     const directTransport = new DirectHelperTransport({
       helperAddress: config.helperAddress,
       account,
       ...(readProvider ? { provider: readProvider } : {}),
       storePayloadChunks: config.onchainPayloads,
+      channelIdEncoder: async (channelId) => {
+        if (typeof encryptionSetup.adapter?.deriveConversationTag !== "function") {
+          throw Object.assign(
+            new Error("An opaque conversation tag cannot be derived until channel encryption setup is complete."),
+            { code: "CONVERSATION_TAG_UNAVAILABLE" },
+          );
+        }
+        return encryptionSetup.adapter.deriveConversationTag(channelId);
+      },
       onTransactionSubmitted: handleTransactionSubmitted,
-    });
-    const encryptionSetup = await createEncryptionAdapter({
-      accountAddress: account.address,
-      provider: readProvider,
     });
     encryptionKeyRegistry = encryptionSetup.registry;
     encryptionRegistrationAccount = account;

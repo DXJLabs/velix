@@ -48,5 +48,9 @@ reference/
 **/*viewing*scalar*
 **/*private*scalar*
 
-# Local instruction file; do not commit.
+# Local audit artifacts
+.audit/
+
+# Local engineering notes
+ENGINEERING.md
 ENGINEERING.md

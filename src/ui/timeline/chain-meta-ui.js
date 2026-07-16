@@ -10,7 +10,10 @@ export function createChainMetaUi({ explorerUrl, transactionExplorerUrl }) {
       return { kind: "failed", label: "!", ariaLabel: label, detail: label };
     }
     if (status === "read") return { kind: "read", label: "OK", ariaLabel: "Read" };
-    if (["encrypting", "signing", "pending"].includes(status) || !item.txHash) {
+    if (String(item.txHash || "").startsWith("demo-")) {
+      return { kind: "demo", label: "DEMO", ariaLabel: "Demo data" };
+    }
+    if (["encrypting", "signing", "pending"].includes(status) || !transactionExplorerUrl(item.txHash, explorerUrl)) {
       return { kind: "pending", label: "...", ariaLabel: "Processing" };
     }
     return { kind: "confirmed", label: "OK", ariaLabel: "Confirmed" };
@@ -21,7 +24,10 @@ export function createChainMetaUi({ explorerUrl, transactionExplorerUrl }) {
     const displayHash = displayTransactionHash(item.txHash);
     if (!txUrl) {
       const title = displayHash ? `Transaction hash: ${displayHash}` : "Transaction hash is not available yet";
-      return `<a class="tx-link" href="${explorerUrl}" target="_blank" rel="noreferrer" data-transaction-pending title="${escapeHtml(title)}">View Transaction</a>`;
+      const label = String(item.txHash || "").startsWith("demo-")
+        ? "Demo transaction - no explorer link"
+        : "Transaction hash unavailable";
+      return `<span class="tx-link" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
     }
     return `<a class="tx-link" href="${escapeHtml(txUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(displayHash)}">View Transaction</a>`;
   }
@@ -30,7 +36,7 @@ export function createChainMetaUi({ explorerUrl, transactionExplorerUrl }) {
     const warning = statusInfo.kind === "failed"
       ? `<span class="shield-warning" aria-label="Failed">!</span>`
       : "";
-    return `<span class="shield-badge">Encrypted On-chain${warning}</span>`;
+    return `<span class="shield-badge">Direct encrypted${warning}</span>`;
   }
 
   function renderFailureActions(item, statusInfo) {

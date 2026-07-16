@@ -140,6 +140,7 @@ export interface EncryptionContext {
 export interface EncryptionAdapter {
   encryptPayload(payload: VeilTimelinePayload, context?: EncryptionContext): Promise<EncryptedPayload>;
   decryptPayload(item: TimelineItem, context?: EncryptionContext): Promise<VeilTimelinePayload | null>;
+  deriveConversationTag?(channelId: string): Promise<string>;
 }
 
 export interface VeilClientConfig {
@@ -172,7 +173,7 @@ export interface InvokeExternalInput {
 
 export interface VeilTransport {
   supportedModes?: readonly VeilMessageMode[];
-  encodeConversationTag?(channelId: string): string;
+  encodeConversationTag?(channelId: string): string | Promise<string>;
   createChannel?(input: CreateChannelInput): Promise<CreateChannelResult>;
   invokeExternal(input: InvokeExternalInput): Promise<TimelineItem>;
   getEventCount(channelId: string): Promise<number>;
@@ -243,7 +244,7 @@ export interface DirectHelperTransportConfig {
   storePayloadChunks?: boolean;
   sessionAccountResolver?: (session: VeilSession | undefined) => StarknetAccountLike | undefined;
   now?: () => number;
-  channelIdEncoder?: (channelId: string) => string;
+  channelIdEncoder?: (channelId: string) => string | Promise<string>;
   onTransactionSubmitted?: (transactionHash: string, item: TimelineItem) => void;
   waitForConfirmation?: boolean;
   confirmationTimeoutMs?: number;
@@ -364,7 +365,7 @@ export interface StarknetPrivacyPoolTransportConfig {
   feeEstimator?: StarknetFeeEstimatorLike;
   gasEstimate?: FeltLike;
   now?: () => number;
-  channelIdEncoder?: (channelId: string) => string;
+  channelIdEncoder?: (channelId: string) => string | Promise<string>;
   waitForConfirmation?: boolean;
   confirmationTimeoutMs?: number;
   confirmationPollMs?: number;

@@ -41,6 +41,29 @@
               </div>
             </section>
 
+            <section class="wallet-section" aria-labelledby="wallet-private-heading">
+              <h2 id="wallet-private-heading">Private funds</h2>
+              <div class="plain-list wallet-readiness">
+                <div><span>Private total (STRK)</span><strong id="wallet-private-total">Unavailable</strong></div>
+                <div><span>Spendable private</span><strong id="wallet-private-spendable">Unavailable</strong></div>
+                <div><span>Maturing private</span><strong id="wallet-private-maturing">Unavailable</strong></div>
+                <div><span>Privacy Pool</span><strong id="wallet-pool-status">Checking</strong></div>
+                <div><span>Wallet privacy capability</span><strong id="wallet-privacy-capability">Connect wallet</strong></div>
+                <div><span>Private identity</span><strong id="wallet-private-identity">Unknown</strong></div>
+              </div>
+              <p class="wallet-reward-note">Unavailable is not a zero balance. VEIL never sends private balance or note data to its backend.</p>
+            </section>
+
+            <section class="wallet-section" aria-labelledby="wallet-private-actions-heading">
+              <h2 id="wallet-private-actions-heading">Private actions</h2>
+              <button class="wallet-action-row" type="button" disabled aria-disabled="true" title="Blocked until a screening-capable Pool route passes Sepolia E2E"><span><i data-lucide="shield" class="size-5"></i></span><strong>Shield</strong><span class="status-pill waiting-deposit">Blocked</span></button>
+              <button class="wallet-action-row" type="button" disabled aria-disabled="true" title="Blocked until recipient discovery and two-account E2E pass"><span><i data-lucide="send" class="size-5"></i></span><strong>Send Privately</strong><span class="status-pill waiting-deposit">Blocked</span></button>
+              <button class="wallet-action-row" type="button" disabled aria-disabled="true" title="Blocked until screened deposit E2E passes"><span><i data-lucide="badge-dollar-sign" class="size-5"></i></span><strong>Fund and Pay Privately</strong><span class="status-pill waiting-deposit">Blocked</span></button>
+              <button class="wallet-action-row" type="button" disabled aria-disabled="true" title="Wallet linkage warning UX is not E2E-verified"><span><i data-lucide="arrow-up-right" class="size-5"></i></span><strong>Withdraw to My Wallet</strong><span class="status-pill waiting-deposit">Unverified</span></button>
+              <button class="wallet-action-row" type="button" disabled aria-disabled="true" title="Public-address withdrawal is not E2E-verified"><span><i data-lucide="landmark" class="size-5"></i></span><strong>Pay Public Address</strong><span class="status-pill waiting-deposit">Unverified</span></button>
+              <button class="wallet-action-row" type="button" disabled aria-disabled="true" title="ClaimEscrow is not deployed on the locked Sepolia runtime"><span><i data-lucide="link" class="size-5"></i></span><strong>Private Claim Link</strong><span class="status-pill waiting-deposit">Blocked</span></button>
+            </section>
+
             <section class="wallet-section wallet-assets" aria-labelledby="wallet-assets-heading">
               <h2 id="wallet-assets-heading">Assets</h2>
               <div class="wallet-asset-row" data-wallet-asset="strk">
@@ -88,12 +111,12 @@
               <div class="wallet-rewards-summary">
                 <div>
                   <span>VEIL Points</span>
-                  <strong id="wallet-reward-points">4,580 pts</strong>
+                  <strong id="wallet-reward-points">0 pts</strong>
                 </div>
                 <div>
                   <span>Next Tier</span>
-                  <strong id="wallet-reward-tier">Gold</strong>
-                  <small id="wallet-reward-remaining">+420 pts remaining</small>
+                  <strong id="wallet-reward-tier">No activity</strong>
+                  <small id="wallet-reward-remaining">Local points only</small>
                 </div>
               </div>
               <p class="wallet-reward-note">Points are loyalty rewards. They are not tokens and are not tradable.</p>

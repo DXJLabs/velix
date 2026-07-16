@@ -6,6 +6,8 @@ import {
   VeilEncryptionIdentityService,
   VeilClient,
   createVeilOnchainContracts,
+  detectStrk20WalletCapabilities,
+  Strk20WalletApiClient,
 } from "../../packages/veil-sdk/src/index.ts";
 
 export {
@@ -14,6 +16,8 @@ export {
   DirectHelperTransport,
   EncryptionPublicKeyRegistryService,
   VeilEncryptionIdentityService,
+  detectStrk20WalletCapabilities,
+  Strk20WalletApiClient,
   createVeilOnchainContracts,
 };
 
@@ -52,7 +56,7 @@ function createFailClosedEncryptionAdapter() {
   return {
     async encryptPayload() {
       throw new Error(
-        "Encrypted On-chain messaging requires channel key material shared by the intended participants.",
+        "Direct encrypted messaging requires channel key material shared by the intended participants.",
       );
     },
     async decryptPayload() {
@@ -98,7 +102,7 @@ function emitEncryptionWarning(config, channelKeyConfig, logger) {
   if (channelKeyConfig.channelKeySource === "missing") {
     logger.veilLog("warn", "encryption.config.missing", {
       where: "createClient",
-      howToFix: "Complete encrypted channel bootstrap before submitting Encrypted On-chain messages.",
+      howToFix: "Complete encrypted channel bootstrap before submitting Direct encrypted messages.",
     });
   }
 }

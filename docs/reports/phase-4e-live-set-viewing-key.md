@@ -1,5 +1,7 @@
 # VEIL PHASE 4E LIVE SETVIEWINGKEY REPORT
 
+> **Historical, non-authoritative research record.** For current requirements and readiness, use [`../VEIL_ARCHITECTURE_LOCK.md`](../VEIL_ARCHITECTURE_LOCK.md) and [`../VEIL_PREPRODUCTION_STATUS.md`](../VEIL_PREPRODUCTION_STATUS.md).
+
 Date: 2026-07-11
 Network: Starknet Sepolia (`SN_SEPOLIA`)
 Privacy Pool: `0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5`

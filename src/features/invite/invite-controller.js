@@ -7,6 +7,7 @@ export function createInviteController({
   messages,
   document,
   conversationSearch,
+  dealCreationEnabled = false,
   knownVeilCounterparties,
   resolveCounterparty,
   shortHash,
@@ -164,6 +165,10 @@ export function createInviteController({
   }
 
   async function createDealChannel({ inviteOnly = false } = {}) {
+    if (!dealCreationEnabled) {
+      showToast("Deal and invite creation are unavailable until recipient discovery and live two-party E2E are verified.");
+      return false;
+    }
     if (!state.walletConnected) {
       const connected = await connectWallet({ goToInbox: false });
       if (!connected) return;
@@ -265,7 +270,7 @@ export function createInviteController({
       await transactionDelay(360);
       setTransactionModal({
         subtitle: "Creating secure channel.",
-        detail: "Preparing encrypted on-chain messaging...",
+        detail: "Preparing Direct encrypted messaging...",
       });
       await transactionDelay(520);
       channel.pendingJoin = false;
@@ -364,6 +369,30 @@ export function createInviteController({
     const query = newDealCounterpartyValue();
     const lookup = counterpartyLookup(query);
 
+    if (!dealCreationEnabled) {
+      if (resultName) resultName.textContent = query || "Counterparty";
+      if (resultDetail) resultDetail.textContent = "Recipient discovery is not E2E-verified.";
+      if (resultStatus) {
+        resultStatus.textContent = "Unavailable";
+        resultStatus.className = "status-pill waiting-deposit";
+      }
+      if (actionHint) actionHint.textContent = "No request, notification, or invite will be created in this build.";
+      if (primaryAction) {
+        primaryAction.disabled = true;
+        primaryAction.setAttribute("aria-disabled", "true");
+        primaryAction.removeAttribute("data-new-deal-action");
+        primaryAction.innerHTML = '<i data-lucide="lock" class="size-5"></i><span>Deal Creation Unavailable</span>';
+      }
+      if (inviteFormPanel) inviteFormPanel.hidden = true;
+      if (showInviteForm) {
+        showInviteForm.hidden = false;
+        showInviteForm.disabled = true;
+        showInviteForm.setAttribute("aria-disabled", "true");
+      }
+      iconRefresh();
+      return;
+    }
+
     if (resultName) resultName.textContent = lookup.displayName;
     if (resultDetail) resultDetail.textContent = lookup.detail;
     if (resultStatus) {
@@ -372,6 +401,8 @@ export function createInviteController({
     }
     if (actionHint) actionHint.textContent = lookup.hint;
     if (primaryAction) {
+      primaryAction.disabled = false;
+      primaryAction.removeAttribute("aria-disabled");
       primaryAction.dataset.newDealAction = lookup.status === "available" ? "existing" : "invite";
       primaryAction.innerHTML = lookup.status === "available"
         ? `<i data-lucide="plus" class="size-5"></i><span>${escapeHtml(lookup.action)}</span>`
@@ -380,6 +411,10 @@ export function createInviteController({
     if (inviteTarget && document.activeElement !== inviteTarget) inviteTarget.value = query;
     if (inviteFormPanel) inviteFormPanel.hidden = !state.inviteFormOpen;
     if (showInviteForm) showInviteForm.hidden = state.inviteFormOpen;
+    if (showInviteForm) {
+      showInviteForm.disabled = false;
+      showInviteForm.removeAttribute("aria-disabled");
+    }
     iconRefresh();
   }
 

@@ -151,7 +151,7 @@ export class DirectHelperTransport implements VeilTransport {
   readonly #sessionAccountResolver: DirectHelperTransportConfig["sessionAccountResolver"];
   readonly #onTransactionSubmitted: DirectHelperTransportConfig["onTransactionSubmitted"];
   readonly #now: () => number;
-  readonly #channelIdEncoder: (channelId: string) => string;
+  readonly #channelIdEncoder: (channelId: string) => string | Promise<string>;
   readonly #waitForConfirmation: boolean;
   readonly #confirmationTimeoutMs: number;
   readonly #confirmationPollMs: number;
@@ -171,7 +171,7 @@ export class DirectHelperTransport implements VeilTransport {
     this.#confirmationPollMs = config.confirmationPollMs ?? 2_500;
   }
 
-  encodeConversationTag(channelId: string): string {
+  async encodeConversationTag(channelId: string): Promise<string> {
     return this.#channelIdEncoder(channelId);
   }
 
@@ -189,7 +189,7 @@ export class DirectHelperTransport implements VeilTransport {
 
   async invokeExternal(input: InvokeExternalInput): Promise<TimelineItem> {
     if (input.mode !== "encrypted-direct" && input.mode !== "unshield") {
-      throw new Error("DirectHelperTransport only supports Encrypted On-chain messages.");
+      throw new Error("DirectHelperTransport only supports Direct encrypted messages.");
     }
 
     const account = this.#sessionAccountResolver?.(input.session) ?? this.#account;
@@ -200,7 +200,7 @@ export class DirectHelperTransport implements VeilTransport {
       throw new Error("DirectHelperTransport confirmation mode needs a Starknet provider.");
     }
 
-    const channelFelt = this.#channelIdEncoder(input.item.channelId);
+    const channelFelt = await this.#channelIdEncoder(input.item.channelId);
     if (!this.#storePayloadChunks && input.item.payloadChunks?.length) {
       throw new Error("DirectHelperTransport cannot omit payload chunks because payload_hash commits to them.");
     }
@@ -253,7 +253,7 @@ export class DirectHelperTransport implements VeilTransport {
   }
 
   async getEventCount(channelId: string): Promise<number> {
-    const result = await this.#callHelper("get_event_count", [this.#channelIdEncoder(channelId)]);
+    const result = await this.#callHelper("get_event_count", [await this.#channelIdEncoder(channelId)]);
     const count = result[0];
     if (count === undefined) {
       throw new Error("get_event_count returned no data.");
@@ -262,7 +262,7 @@ export class DirectHelperTransport implements VeilTransport {
   }
 
   async getEvent(channelId: string, index: number): Promise<TimelineItem> {
-    const result = await this.#callHelper("get_event", [this.#channelIdEncoder(channelId), String(index)]);
+    const result = await this.#callHelper("get_event", [await this.#channelIdEncoder(channelId), String(index)]);
     if (result.length < 6) {
       throw new Error("get_event returned an incomplete VeilTimelineEvent.");
     }
@@ -329,7 +329,7 @@ export class DirectHelperTransport implements VeilTransport {
 
   async #getPayloadChunk(channelId: string, eventIndex: number, chunkIndex: number): Promise<string> {
     const result = await this.#callHelper("get_payload_chunk", [
-      this.#channelIdEncoder(channelId),
+      await this.#channelIdEncoder(channelId),
       String(eventIndex),
       String(chunkIndex),
     ]);

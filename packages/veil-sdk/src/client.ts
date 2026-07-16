@@ -454,7 +454,7 @@ export class VeilClient {
     const encrypted = await this.encryption.encryptPayload(payload, { channelId, eventType });
     const privacyPoolInput = mergePrivacyPoolInputs(encrypted.privacyPool, privacyPool);
     const payloadChunks = encrypted.payloadChunks ?? [];
-    const conversationTag = this.#conversationTag(channelId);
+    const conversationTag = await this.#conversationTag(channelId);
     const timelinePayloadHash = computeTimelinePayloadHash({
       conversationTag,
       encryptedEventType: eventType,
@@ -496,8 +496,8 @@ export class VeilClient {
     return this.transport.invokeExternal(invokeInput);
   }
 
-  #conversationTag(channelId: string): string {
-    return this.transport.encodeConversationTag?.(channelId) ?? channelIdToFelt(channelId);
+  async #conversationTag(channelId: string): Promise<string> {
+    return await this.transport.encodeConversationTag?.(channelId) ?? channelIdToFelt(channelId);
   }
 
   async #withDecryptedPayload(item: TimelineItem): Promise<TimelineItem> {

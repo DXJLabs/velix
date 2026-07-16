@@ -1,4 +1,5 @@
 import { ChannelEncryptionAdapter } from "./channel-encryption";
+import { deriveOpaqueConversationTag } from "./conversation-tag";
 import { deriveMessageKey, deriveReceiverSharedX } from "./privacy_pool_ecdh";
 import type { EncryptionAdapter, EncryptionContext, TimelineItem, VeilTimelinePayload } from "./types";
 import type { EncryptionPublicKeyRegistryService, ResolvedEncryptionPublicKey } from "./encryption-key-registry";
@@ -49,15 +50,30 @@ export class DirectEcdhEncryptionAdapter implements EncryptionAdapter {
     return new ChannelEncryptionAdapter({ channelKey: key }).decryptPayload(item, context);
   }
 
+  async deriveConversationTag(channelId: string): Promise<string> {
+    const peer = await this.#resolveContext(channelId);
+    const local = await this.#identity.getOrCreateIdentity();
+    const recipient = await this.#registry.resolveRecipientPublicKey(peer.recipientAccountAddress);
+    const sharedX = await this.#sharedX(local.version, recipient.publicKey);
+    return deriveOpaqueConversationTag({
+      sharedSecret: sharedX,
+      context: canonicalKdfContext(peer),
+    });
+  }
+
   async #deriveKey(localVersion: number, remotePublicKey: string, peer: DirectEncryptionPeerContext) {
+    const sharedX = await this.#sharedX(localVersion, remotePublicKey);
+    return deriveMessageKey({
+      channelKey: sharedX,
+      channelId: canonicalKdfContext(peer),
+      info: "veil:encrypted-direct:channel-key:v1",
+    });
+  }
+
+  async #sharedX(localVersion: number, remotePublicKey: string): Promise<string> {
     return this.#identity.withPrivateScalar(localVersion, async (privateScalar) => {
       try {
-        const sharedX = deriveReceiverSharedX(privateScalar, remotePublicKey);
-        return deriveMessageKey({
-          channelKey: sharedX,
-          channelId: canonicalKdfContext(peer),
-          info: "veil:encrypted-direct:channel-key:v1",
-        });
+        return deriveReceiverSharedX(privateScalar, remotePublicKey);
       } catch {
         throw identityError("CHANNEL_KEY_DERIVATION_FAILED", "Encrypted channel key derivation failed.");
       }

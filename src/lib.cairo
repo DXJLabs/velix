@@ -19,6 +19,68 @@ pub mod messaging {
     pub use crate::veil_channel_helper;
 }
 
+#[path("../contracts/claim_escrow/claim_escrow_commitments.cairo")]
+pub mod claim_escrow_commitments;
+#[path("../contracts/claim_escrow/claim_escrow_errors.cairo")]
+pub mod claim_escrow_errors;
+#[path("../contracts/claim_escrow/claim_escrow_events.cairo")]
+pub mod claim_escrow_events;
+#[path("../contracts/claim_escrow/claim_escrow_interfaces.cairo")]
+pub mod claim_escrow_interfaces;
+#[path("../contracts/claim_escrow/claim_escrow_types.cairo")]
+pub mod claim_escrow_types;
+#[path("../contracts/claim_escrow/veil_claim_escrow.cairo")]
+pub mod veil_claim_escrow;
+#[path("../contracts/claim_escrow/test_mocks/mock_claim_erc20.cairo")]
+pub mod mock_claim_erc20;
+#[path("../contracts/claim_escrow/test_mocks/mock_claim_privacy_pool.cairo")]
+pub mod mock_claim_privacy_pool;
+
+pub mod claim_escrow {
+    pub use crate::claim_escrow_commitments;
+    pub use crate::claim_escrow_errors;
+    pub use crate::claim_escrow_events;
+    pub use crate::claim_escrow_interfaces;
+    pub use crate::claim_escrow_types;
+    pub use crate::veil_claim_escrow;
+
+    pub mod test_mocks {
+        pub use crate::mock_claim_erc20;
+        pub use crate::mock_claim_privacy_pool;
+    }
+}
+
+#[path("../contracts/deal_escrow/deal_escrow_errors.cairo")]
+pub mod deal_escrow_errors;
+#[path("../contracts/deal_escrow/deal_escrow_events.cairo")]
+pub mod deal_escrow_events;
+#[path("../contracts/deal_escrow/deal_escrow_interfaces.cairo")]
+pub mod deal_escrow_interfaces;
+#[path("../contracts/deal_escrow/deal_escrow_types.cairo")]
+pub mod deal_escrow_types;
+#[path("../contracts/deal_escrow/veil_deal_escrow.cairo")]
+pub mod veil_deal_escrow;
+#[path("../contracts/deal_escrow/test_mocks/mock_deal_erc20.cairo")]
+pub mod mock_deal_erc20;
+#[path("../contracts/deal_escrow/test_mocks/mock_deal_erc721.cairo")]
+pub mod mock_deal_erc721;
+#[path("../contracts/deal_escrow/test_mocks/mock_deal_privacy_pool.cairo")]
+pub mod mock_deal_privacy_pool;
+
+pub mod deal_escrow {
+    pub use crate::deal_escrow_errors;
+    pub use crate::deal_escrow_events;
+    pub use crate::deal_escrow_interfaces;
+    pub use crate::deal_escrow_types;
+    pub use crate::veil_deal_escrow;
+
+    pub mod test_mocks {
+        pub use crate::mock_deal_erc20;
+        pub use crate::mock_deal_erc721;
+        pub use crate::mock_deal_privacy_pool;
+    }
+}
+
 #[path("../contracts/offers/offer_commitments.cairo")]
 pub mod offer_commitments;
 #[path("../contracts/offers/offer_events.cairo")]

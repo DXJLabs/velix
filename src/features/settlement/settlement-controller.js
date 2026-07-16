@@ -1,14 +1,9 @@
 export function createSettlementController({
   state,
   document,
-  paymentRecipient,
   explorerUrl,
-  settlementProofMeta,
   currentDealId,
-  currentChannel,
   channelMessages,
-  paymentAmountLabel,
-  paymentPrivacyLabel,
   escrowReleaseProofItem,
   hasRealTransactionHash,
   directPaymentProofItemFromMessages,
@@ -21,10 +16,9 @@ export function createSettlementController({
   now = () => Date.now(),
 }) {
   function renderSettlement() {
-    const proof = settlementProofMeta();
-    setElementText("#settlement-complete-deal-id", currentDealId());
-    setElementText("#settlement-complete-proof-id", proof.proofId);
-    setElementText("#settlement-complete-hash", proof.settlementHash);
+    setElementText("#settlement-complete-deal-id", currentDealId() || "Unavailable");
+    setElementText("#settlement-complete-proof-id", "Unavailable");
+    setElementText("#settlement-complete-hash", "Unavailable");
   }
 
   function directPaymentProofItem() {
@@ -40,32 +34,39 @@ export function createSettlementController({
   }
 
   function directPaymentProofMarkup() {
-    return buildDirectPaymentProofMarkup({
-      recipient: paymentRecipient,
-      amountLabel: paymentAmountLabel(),
-      privacyLabel: paymentPrivacyLabel(),
-      escapeHtml,
-    });
+    return buildDirectPaymentProofMarkup({ escapeHtml });
   }
 
   function renderProof() {
-    const directPaymentProof = state.paymentSent && !state.escrowReleased;
-    const item = directPaymentProof ? directPaymentProofItem() : escrowReleaseProofItem();
+    const directPaymentRecord = state.paymentSent && !state.escrowReleased;
+    const item = directPaymentRecord ? directPaymentProofItem() : escrowReleaseProofItem();
     const txHash = hasRealTransactionHash(item) ? String(item.txHash) : "";
     const proofFlow = document.querySelector("#settlement-proof-flow");
     const proofLink = document.querySelector("#settlement-proof-link");
+    const exportButton = document.querySelector("[data-export-proof]");
 
-    setElementText("#settlement-proof-title", directPaymentProof ? "Trusted Transfer" : currentChannel().title || "Rights Transfer");
-    setElementText("#settlement-proof-parties", `${currentDealId()} · Alice <-> Bob`);
-    const proof = settlementProofMeta();
-    setElementText("#settlement-proof-id", proof.proofId);
-    setElementText("#settlement-proof-settlement-hash", proof.settlementHash);
-    if (proofFlow) proofFlow.innerHTML = directPaymentProof ? directPaymentProofMarkup() : escrowSettlementProofMarkup();
-    setElementText("#settlement-proof-hash", txHash || "Available after wallet confirmation");
+    setElementText("#settlement-proof-title", "No verified settlement proof");
+    setElementText("#settlement-proof-parties", `${currentDealId() || "Deal"} · chain evidence only`);
+    setElementText("#settlement-proof-id", "Unavailable");
+    setElementText("#settlement-proof-settlement-hash", "Unavailable");
+    if (proofFlow) {
+      proofFlow.innerHTML = directPaymentRecord
+        ? directPaymentProofMarkup()
+        : escrowSettlementProofMarkup();
+    }
+    setElementText("#settlement-proof-hash", txHash || "Unavailable");
+
     if (proofLink) {
-      proofLink.href = txHash ? transactionExplorerUrl(txHash, explorerUrl) : explorerUrl;
+      const txUrl = txHash ? transactionExplorerUrl(txHash, explorerUrl) : "";
+      proofLink.hidden = !txUrl;
+      if (txUrl) proofLink.href = txUrl;
+      else proofLink.removeAttribute("href");
       const label = proofLink.querySelector("span");
-      if (label) label.textContent = txHash ? "View Transaction" : "View on Voyager";
+      if (label) label.textContent = txUrl ? "View settlement transaction" : "Transaction unavailable";
+    }
+    if (exportButton) {
+      exportButton.disabled = true;
+      exportButton.setAttribute("aria-disabled", "true");
     }
     iconRefresh();
   }

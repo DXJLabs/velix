@@ -28,6 +28,7 @@ use crate::offers::offer_validation::{
     assert_expired,
     assert_maker,
     assert_non_zero,
+    assert_non_zero_address,
     assert_not_expired,
     assert_taker,
     assert_valid_status_transition,
@@ -234,6 +235,10 @@ use crate::offers::offer_validation::{
 
             let expected_escrow =
                 self.escrow_contract.read();
+
+            // A zero/unwired escrow address must never authorize conversion,
+            // even in execution contexts where caller address could be zero.
+            assert_non_zero_address(expected_escrow);
 
             assert(
                 caller == expected_escrow,

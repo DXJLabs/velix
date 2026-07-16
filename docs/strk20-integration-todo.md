@@ -1,5 +1,7 @@
 # STRK20 Shielded Messaging Integration
 
+> **Historical, non-authoritative planning record.** Its SDK-availability statement is stale. For current requirements and readiness, use [`VEIL_ARCHITECTURE_LOCK.md`](./VEIL_ARCHITECTURE_LOCK.md) and [`VEIL_PREPRODUCTION_STATUS.md`](./VEIL_PREPRODUCTION_STATUS.md).
+
 Status: **Coming Soon - awaiting official STRK20 Privacy SDK or wallet proving runtime.**
 
 ## Completed

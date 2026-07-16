@@ -20,12 +20,11 @@ export function createVeilLogger({ debugLogsEnabled, dev }) {
     const errorDetails = serializeError(error);
     veilLog("error", event, {
       where: details.where || "frontend",
-      why: errorDetails.errorMessage || String(error),
+      why: details.why || "The requested operation failed.",
       howToFix: details.howToFix || "Check the preceding VEIL structured logs and retry the failed action.",
       ...errorDetails,
       ...details,
     });
-    if (error instanceof Error) console.error(error);
   }
 
   function tracePrivyStarkZap(traceId, step, details = {}) {
@@ -55,30 +54,92 @@ export async function readResponsePayload(response) {
   try {
     return JSON.parse(text);
   } catch {
-    return { rawBody: text.slice(0, 1_000) };
+    return {
+      code: "NON_JSON_RESPONSE",
+      bodyBytes: new TextEncoder().encode(text).byteLength,
+    };
   }
 }
 
-function sanitizeLogDetails(details) {
+const SENSITIVE_LOG_KEY = /(?:authorization|cookie|token|secret|private.?key|signing.?key|viewing.?key|channel.?key|claim|registry|nullifier|note|private.?balance|proof|witness|calldata|signature|plaintext|decrypted|message|memo|terms|raw.?body|response.?body|payload|ciphertext)/i;
+
+export function sanitizeLogDetails(details) {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return {};
+
   return Object.fromEntries(
     Object.entries(details)
       .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => {
-        if (/token|secret|authorization/i.test(key)) return [key, "[redacted]"];
-        return [key, value];
-      }),
+      .slice(0, 50)
+      .map(([key, value]) => [safeLogKey(key), sanitizeForLog(value, key)]),
   );
+}
+
+export function sanitizeForLog(value, key = "", depth = 0, seen = new WeakSet()) {
+  if (SENSITIVE_LOG_KEY.test(key)) return "[redacted]";
+  if (value === null || value === undefined) return value;
+  if (depth > 5) return "[truncated]";
+  if (typeof value === "string") return sanitizeLogString(value);
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "function" || typeof value === "symbol") return `[${typeof value}]`;
+
+  if (value instanceof Error) {
+    return {
+      name: safeLogLabel(value.name, "Error"),
+      code: safeLogLabel(value.code, undefined),
+      causeName: safeLogLabel(value.cause?.name, undefined),
+      causeCode: safeLogLabel(value.cause?.code, undefined),
+    };
+  }
+
+  if (typeof value === "object") {
+    if (seen.has(value)) return "[circular]";
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      return value
+        .slice(0, 25)
+        .map((item) => sanitizeForLog(item, "arrayItem", depth + 1, seen));
+    }
+
+    return Object.fromEntries(
+      Object.entries(value)
+        .slice(0, 50)
+        .map(([nestedKey, nestedValue]) => [
+          safeLogKey(nestedKey),
+          sanitizeForLog(nestedValue, nestedKey, depth + 1, seen),
+        ]),
+    );
+  }
+
+  return "[unsupported]";
 }
 
 function serializeError(error) {
   if (!error) return {};
   const cause = error.cause;
   return {
-    errorName: error.name,
-    errorMessage: error.message || String(error),
-    errorStack: error.stack,
-    errorCauseName: cause?.name,
-    errorCauseMessage: cause?.message || (cause ? String(cause) : undefined),
-    errorCauseStack: cause?.stack,
+    errorName: safeLogLabel(error.name, "Error"),
+    errorCode: safeLogLabel(error.code, undefined),
+    errorCauseName: safeLogLabel(cause?.name, undefined),
+    errorCauseCode: safeLogLabel(cause?.code, undefined),
   };
+}
+
+function sanitizeLogString(value) {
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/([?&](?:token|secret|key|proof|signature|authorization)=)[^&#\s]+/gi, "$1[redacted]")
+    .replace(/(["']?(?:token|secret|privateKey|viewingKey|claimSecret|proof|signature)["']?\s*[:=]\s*["']?)[^,"'\s}]+/gi, "$1[redacted]")
+    .slice(0, 512);
+}
+
+function safeLogKey(value) {
+  return safeLogLabel(value, "field");
+}
+
+function safeLogLabel(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const normalized = String(value).trim();
+  return /^[A-Za-z0-9._:/-]{1,128}$/.test(normalized) ? normalized : fallback;
 }

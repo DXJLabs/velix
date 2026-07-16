@@ -164,7 +164,7 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     const defaultPrivacy = event.target.closest("[data-default-privacy]");
     if (defaultPrivacy) {
       if (defaultPrivacy.disabled || defaultPrivacy.dataset.defaultPrivacy === "strk20-shielded") {
-        api.showToast("Shielded messaging via STRK20 is coming soon.");
+        api.showToast("Shielded messaging is blocked until the live STRK20 E2E gates pass.");
         return;
       }
       state.defaultPrivacyMode = defaultPrivacy.dataset.defaultPrivacy;
@@ -172,7 +172,7 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       api.renderWallet();
       api.renderPayment();
       api.renderDeal();
-      api.showToast("Encrypted On-chain set as default.");
+      api.showToast("Direct encrypted set as default.");
       return;
     }
 
@@ -182,7 +182,7 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     }
 
     if (event.target.closest("[data-export-viewing-key]")) {
-      if (api.requireConnectedWallet()) api.showToast("Viewing key export ready.");
+      api.showToast("Viewing key export is unavailable. No key was exported.");
       return;
     }
 
@@ -199,12 +199,12 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     }
 
     if (event.target.closest("[data-backup-recovery]")) {
-      if (api.requireConnectedWallet()) api.showToast("Recovery backup ready.");
+      api.showToast("Recovery Kit is unavailable. No backup was created.");
       return;
     }
 
     if (event.target.closest("[data-session-management]")) {
-      if (api.requireConnectedWallet()) api.showToast("Session management ready.");
+      api.showToast("Active Sessions is unavailable in this build.");
       return;
     }
 
@@ -279,8 +279,8 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     }
 
     if (event.target.closest("[data-export-proof]")) {
-      state.proofExported = true;
-      api.showToast("Proof exported.");
+      state.proofExported = false;
+      api.showToast("Proof export is unavailable. No proof was generated.");
       return;
     }
 
@@ -332,7 +332,7 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     }
 
     if (event.target.closest("[data-qr-invite]")) {
-      api.showToast("QR code ready.");
+      api.showToast("QR code generation is unavailable. No QR code was created.");
       return;
     }
 

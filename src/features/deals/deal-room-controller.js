@@ -3,6 +3,8 @@ import { renderChannelHeader, channelFeedMarkup } from "../../ui/deals/channel-u
 import { inlineEventMarkup, messageMarkup, offerCardMarkup } from "../../ui/timeline-ui.js";
 import { workflowProgressMarkup } from "../../ui/workflow-ui.js";
 
+const INDEXER_CURSOR_PREFIX = "veil:indexer:cursor:v1";
+
 function isInviteMetadataEvent(item = {}) {
   const title = String(item.title || "").trim().toLowerCase();
   const subtitle = String(item.subtitle || "").trim().toLowerCase();
@@ -59,17 +61,45 @@ export function createDealRoomController({
     if (timelineMode !== "encrypted-direct" || !helperAddress) return;
 
     try {
-      const response = await fetch(`/api/indexer/messages?channelId=${encodeURIComponent(channelId)}`);
+      const client = getVeilClient();
+      if (typeof client.encryption?.deriveConversationTag !== "function") return;
+      const conversationTag = await client.encryption.deriveConversationTag(channelId);
+      if (!/^0x[0-9a-fA-F]{1,64}$/.test(conversationTag) || BigInt(conversationTag) === 0n) return;
+
+      const cursorKey = `${INDEXER_CURSOR_PREFIX}:${helperAddress.toLowerCase()}:${conversationTag.toLowerCase()}`;
+      const cursor = readIndexerCursor(cursorKey);
+      const params = new URLSearchParams({
+        conversationTag,
+        limit: "10",
+        pageBlocks: "5000",
+      });
+      if (cursor) params.set("cursor", cursor);
+
+      const response = await fetch(`/api/indexer/messages?${params.toString()}`, {
+        headers: { Accept: "application/json" },
+      });
       if (!response.ok) return;
       const payload = await response.json();
+      if (String(payload.conversationTag || "").toLowerCase() !== conversationTag.toLowerCase()) return;
+      if (typeof payload.nextCursor === "string" && payload.nextCursor) {
+        writeIndexerCursor(cursorKey, payload.nextCursor);
+      }
+
+      const rollbackFromBlock = Number(payload.reorg?.rollbackFromBlock);
+      if (payload.reorg?.detected && Number.isSafeInteger(rollbackFromBlock)) {
+        messages[channelId] = (messages[channelId] || []).filter((item) => (
+          !item.indexed || !Number.isSafeInteger(item.blockNumber) || item.blockNumber < rollbackFromBlock
+        ));
+      }
+
       const indexedItems = Array.isArray(payload.messages) ? payload.messages : [];
-      if (!indexedItems.length) return;
 
       const feedItems = [];
       for (const indexedItem of indexedItems) {
         const timelineItem = {
           ...indexedItem,
           channelId,
+          indexed: true,
           eventType: Number(indexedItem.eventType),
           timestamp: Number(indexedItem.timestamp || Date.now()),
         };
@@ -78,10 +108,11 @@ export function createDealRoomController({
         if (feedItem) feedItems.push(feedItem);
       }
 
-      if (!feedItems.length) return;
-      messages[channelId] = feedItems;
+      if (feedItems.length) {
+        messages[channelId] = mergeIndexedFeed(messages[channelId] || [], feedItems);
+      }
       const channel = channels.find((item) => item.id === channelId);
-      const lastItem = feedItems[feedItems.length - 1];
+      const lastItem = messages[channelId]?.[messages[channelId].length - 1];
       if (channel && lastItem) {
         channel.last = lastItem.type === "message" ? `${lastItem.sender}: ${lastItem.body}` : lastItem.title;
         channel.time = "now";
@@ -92,7 +123,7 @@ export function createDealRoomController({
     } catch (error) {
       veilError("indexer.timeline.load.failed", error, {
         where: "loadIndexedChannelTimeline",
-        howToFix: "Check /api/indexer/messages, VEIL_INDEXER_FROM_BLOCK, and the helper deployment address for this channel.",
+        howToFix: "Check the bounded indexer RPC, cursor secret, and verified helper deployment, then retry.",
       });
     }
   }
@@ -103,6 +134,8 @@ export function createDealRoomController({
       time: item.timestamp,
       txHash: item.transactionHash,
       blockNumber: item.blockNumber,
+      eventId: item.eventId,
+      indexed: Boolean(item.indexed),
       status: item.status || "confirmed",
       mode: item.mode || chatDisplayMode,
       actor: sender === "You" ? "Alice" : sender,
@@ -145,6 +178,33 @@ export function createDealRoomController({
       title: titles[payload.kind] || "Channel event",
       subtitle: payload.memo || payload.details || payload.label || payload.reason || "Encrypted event",
     };
+  }
+
+  function readIndexerCursor(key) {
+    try {
+      return globalThis.sessionStorage?.getItem(key) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function writeIndexerCursor(key, cursor) {
+    try {
+      globalThis.sessionStorage?.setItem(key, cursor);
+    } catch {
+      // A disabled session store only reduces incremental-scan efficiency.
+    }
+  }
+
+  function mergeIndexedFeed(existingItems, indexedItems) {
+    const merged = new Map();
+    for (const item of [...existingItems, ...indexedItems]) {
+      const key = item.txHash && item.eventId !== undefined
+        ? `${item.txHash}:${item.eventId}`
+        : `${item.type}:${item.time}:${item.title || item.body || "event"}`;
+      merged.set(key, item);
+    }
+    return [...merged.values()].sort((first, second) => Number(first.time || 0) - Number(second.time || 0));
   }
 
   function renderConversationList() {
@@ -222,11 +282,11 @@ export function createDealRoomController({
   }
 
   function workflowStageData() {
-    const directPaymentFlow = !state.escrowReleased && (state.screen === "payment" || state.paymentSent);
-    if (directPaymentFlow) {
+    const directMemoFlow = !state.escrowReleased && state.screen === "payment";
+    if (directMemoFlow) {
       return [
-        { id: "direct-payment", label: "Direct Pay", done: state.paymentSent, active: !state.paymentSent },
-        { id: "settlement", label: "Settlement", done: state.paymentSent, active: state.paymentSent },
+        { id: "direct-memo", label: "Direct encrypted memo", done: false, active: true },
+        { id: "settlement", label: "Asset settlement unavailable", done: false, active: false },
       ];
     }
 

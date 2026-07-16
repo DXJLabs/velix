@@ -1,4 +1,4 @@
-export const DEFAULT_PAYMENT_MEMO = "Final settlement for rights transfer.";
+export const DEFAULT_PAYMENT_MEMO = "Payment intent for rights transfer.";
 
 export function paymentAmountLabel(amount, asset) {
   const safeAmount = String(amount || "").trim() || "450";
@@ -7,7 +7,9 @@ export function paymentAmountLabel(amount, asset) {
 }
 
 export function paymentPrivacyLabel(mode) {
-  return mode === "shield" ? "Shielded payment - Coming Soon" : "Public settlement with encrypted memo";
+  return mode === "shield"
+    ? "Shielded payment - Coming Soon"
+    : "Direct encrypted memo - no asset transfer";
 }
 
 export function paymentMemoValue(value, fallback = DEFAULT_PAYMENT_MEMO) {
