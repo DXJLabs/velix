@@ -1,221 +1,128 @@
 use starknet::ContractAddress;
-use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
-use crate::offers::offer_types::{Offer, OfferStatus, ShieldedOfferAction};
 
+use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
+use crate::offers::offer_types::EncryptedOfferActionRecord;
+
+/// Interface for the VEIL encrypted Offer helper.
+///
+/// This contract is an application-specific helper invoked through the STRK20
+/// Privacy Pool `InvokeExternal` action.
+///
+/// IMPORTANT PROTOCOL BOUNDARY:
+///
+/// - InvokeExternal calldata is public on-chain.
+/// - VEIL must encrypt all Offer semantics before constructing this calldata.
+/// - This helper does not make calldata private.
+/// - This helper does not provide participant authorization by itself.
+/// - This helper does not make a standalone Offer-only pool transaction valid.
+/// - The containing Privacy Pool transaction must independently satisfy the
+///   pool's official WriteOnce replay-protection requirement.
+///
+/// Every Offer lifecycle action is represented as a separate encrypted payload:
+///
+/// - create offer;
+/// - counter offer;
+/// - accept offer;
+/// - reject offer;
+/// - cancel offer;
+/// - expire offer;
+/// - prepare deal escrow.
+///
+/// The action kind and negotiation relationships exist only inside ciphertext.
 #[starknet::interface]
-pub trait IVeilOffer<TContractState> {
-    /// Append one fixed-schema encrypted offer action through the configured
-    /// Privacy Pool InvokeExternal path.
+pub trait IVeilOfferHelper<TContractState> {
+    /// Store one encrypted Offer action through the configured Privacy Pool.
     ///
-    /// Calldata is exactly:
-    /// `[action_kind, conversation_tag, encrypted_payload_commitment,
-    ///   valid_until, replay_nullifier, action_commitment]`.
+    /// Only the pinned Privacy Pool may call this entrypoint.
     ///
-    /// The action is commitment-only and does not mutate the account-authorized
-    /// direct Offer state. It returns an empty deposit span.
+    /// Calldata layout:
+    ///
+    /// ```text
+    /// [0] envelope_version
+    /// [1] offer_action_locator
+    /// [2] claimed_payload_commitment
+    /// [3] payload_chunk_count
+    /// [4...] ciphertext_chunks
+    /// ```
+    ///
+    /// Public information:
+    ///
+    /// - helper contract address;
+    /// - envelope version;
+    /// - one-time action locator;
+    /// - payload commitment;
+    /// - ciphertext length;
+    /// - ciphertext chunks;
+    /// - transaction timing.
+    ///
+    /// Encrypted information:
+    ///
+    /// - action kind;
+    /// - maker and taker context;
+    /// - private offer nonce;
+    /// - root and parent offer relationships;
+    /// - asset;
+    /// - payment terms;
+    /// - price;
+    /// - conditions;
+    /// - expiry;
+    /// - accept or reject reason;
+    /// - deal commitment.
+    ///
+    /// The helper returns an empty deposit span because storing an encrypted
+    /// Offer action does not itself credit an output token to an open note.
     fn privacy_invoke(
         ref self: TContractState,
         calldata: Span<felt252>,
     ) -> Span<OpenNoteDeposit>;
 
-    /// Create a new stateful offer.
-    ///
-    /// IMPORTANT:
-    /// This interface is intended for the direct/unshielded stateful path
-    /// because authorization relies on ContractAddress participants.
-    ///
-    /// Shielded clients may append encrypted action commitments through this
-    /// contract's privacy_invoke entry point, but those entries remain a
-    /// non-authoritative journal until Veil has proof-backed anonymous
-    /// participant authorization.
-    fn create_offer(
-        ref self: TContractState,
-
-        /// Opaque Veil application-level conversation tag.
-        ///
-        /// This is NOT:
-        /// - a wallet address
-        /// - a recipient address
-        /// - a Canonical Privacy Pool channel id
-        conversation_tag: felt252,
-
-        /// Direct/unshielded counterparty.
-        taker: ContractAddress,
-
-        /// Commitment to the asset class/type.
-        ///
-        /// Do not pass plaintext values such as:
-        /// NFT / ERC20 / USDC / STRK as directly readable metadata
-        /// if privacy is expected.
-        asset_type_commitment: felt252,
-
-        /// Commitment to the concrete asset being negotiated.
-        asset_commitment: felt252,
-
-        /// Commitment to payment terms/reference.
-        payment_commitment: felt252,
-
-        /// Commitment to price/value.
-        price_commitment: felt252,
-
-        /// Hash/commitment of the complete negotiated terms.
-        terms_hash: felt252,
-
-        /// Unix timestamp after which this offer can no longer be accepted,
-        /// rejected, or countered.
-        expires_at: u64,
-    ) -> felt252;
-
-    /// Create a counter-offer.
-    ///
-    /// The implementation should create a NEW offer id rather than mutating
-    /// the previous offer terms in place.
-    ///
-    /// Expected behavior:
-    ///
-    /// previous offer:
-    ///   Open -> Countered
-    ///
-    /// new offer:
-    ///   Open
-    ///
-    /// The implementation should preserve the negotiation chain through
-    /// parent/counter references in Offer storage.
-    fn counter_offer(
-        ref self: TContractState,
-        offer_id: felt252,
-        price_commitment: felt252,
-        terms_hash: felt252,
-        expires_at: u64,
-    ) -> felt252;
-
-    /// Accept an open, non-expired offer.
-    ///
-    /// Direct/unshielded path:
-    /// only the current taker/counterparty should be authorized.
-    fn accept_offer(
-        ref self: TContractState,
-        offer_id: felt252,
-    );
-
-    /// Reject an open, non-expired offer.
-    ///
-    /// Direct/unshielded path:
-    /// only the current taker/counterparty should be authorized.
-    fn reject_offer(
-        ref self: TContractState,
-        offer_id: felt252,
-    );
-
-    /// Cancel an open offer.
-    ///
-    /// Direct/unshielded path:
-    /// only the current maker should be authorized.
-    fn cancel_offer(
-        ref self: TContractState,
-        offer_id: felt252,
-    );
-
-    /// Materialize expiry after the deadline.
-    ///
-    /// This may be permissionless because validity is determined by
-    /// block timestamp and current OfferStatus.
-    fn expire_offer(
-        ref self: TContractState,
-        offer_id: felt252,
-    );
-
-    /// Bind an accepted offer to a concrete escrow.
-    ///
-    /// SECURITY:
-    /// The implementation MUST authenticate the caller against the configured
-    /// VeilEscrow contract address.
-    ///
-    /// A wallet must not be able to directly mark an offer as converted.
-    fn mark_converted_to_escrow(
-        ref self: TContractState,
-        offer_id: felt252,
-        escrow_id: felt252,
-    );
-
-    /// Set the trusted VeilEscrow contract after a two-step deployment.
-    ///
-    /// This is restricted by the implementation and may only be used while the
-    /// escrow contract has not been configured yet.
-    fn set_escrow_contract(
-        ref self: TContractState,
-        escrow_contract: ContractAddress,
-    );
-
-    /// Return the complete offer state.
-    fn get_offer(
-        self: @TContractState,
-        offer_id: felt252,
-    ) -> Offer;
-
-    /// Return only the current lifecycle status.
-    fn get_offer_status(
-        self: @TContractState,
-        offer_id: felt252,
-    ) -> OfferStatus;
-
-    /// Return the escrow id bound to an accepted/converted offer.
-    ///
-    /// Returns zero when no escrow has been attached yet.
-    fn get_escrow_id(
-        self: @TContractState,
-        offer_id: felt252,
-    ) -> felt252;
-
-    /// Domain-separated commitment computed for a direct Offer record.
-    fn get_offer_commitment(
-        self: @TContractState,
-        offer_id: felt252,
-    ) -> felt252;
-
-    /// True after an opaque terms commitment has been consumed by a direct
-    /// create/counter operation. Exact ciphertext envelopes cannot be replayed.
-    fn is_terms_commitment_used(
-        self: @TContractState,
-        terms_hash: felt252,
-    ) -> bool;
-
-    fn get_shielded_action_count(
-        self: @TContractState,
-    ) -> u64;
-
-    fn get_shielded_action(
-        self: @TContractState,
-        action_index: u64,
-    ) -> ShieldedOfferAction;
-
-    fn is_shielded_action_committed(
-        self: @TContractState,
-        action_commitment: felt252,
-    ) -> bool;
-
-    fn is_shielded_nullifier_used(
-        self: @TContractState,
-        replay_nullifier: felt252,
-    ) -> bool;
-
-    /// Total number of created offer records, including counter-offers.
-    fn get_offer_count(
-        self: @TContractState,
-    ) -> u64;
-
-    /// Trusted VeilEscrow contract allowed to call
-    /// mark_converted_to_escrow().
-    fn get_escrow_contract(
-        self: @TContractState,
-    ) -> ContractAddress;
-
+    /// Return the only Privacy Pool authorized to call `privacy_invoke`.
     fn get_privacy_pool(
         self: @TContractState,
     ) -> ContractAddress;
 
-    /// Deployment owner allowed to finish two-step wiring.
-    fn get_owner(
+    /// Return true when this one-time action locator has already been stored.
+    ///
+    /// The locator identifies exactly one encrypted action. It must not be used
+    /// as a stable:
+    ///
+    /// - offer id;
+    /// - conversation id;
+    /// - deal-room id;
+    /// - channel id;
+    /// - participant id;
+    /// - escrow id.
+    fn has_offer_action(
         self: @TContractState,
-    ) -> ContractAddress;
+        offer_action_locator: felt252,
+    ) -> bool;
+
+    /// Return the structural public record for one encrypted Offer action.
+    ///
+    /// The implementation must revert when the locator does not exist.
+    fn get_offer_action(
+        self: @TContractState,
+        offer_action_locator: felt252,
+    ) -> EncryptedOfferActionRecord;
+
+    /// Return one ciphertext chunk belonging to an encrypted Offer action.
+    ///
+    /// The implementation must revert when:
+    ///
+    /// - the locator does not exist; or
+    /// - `chunk_index` is greater than or equal to the recorded chunk count.
+    fn get_offer_payload_chunk(
+        self: @TContractState,
+        offer_action_locator: felt252,
+        chunk_index: u64,
+    ) -> felt252;
+
+    /// Return true when the payload commitment has already been stored.
+    ///
+    /// This helper-level idempotency check is separate from the official
+    /// Privacy Pool replay-protection requirement.
+    fn is_offer_payload_committed(
+        self: @TContractState,
+        payload_commitment: felt252,
+    ) -> bool;
 }
