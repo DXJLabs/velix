@@ -1,43 +1,51 @@
 use starknet::ContractAddress;
+
 use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
-use crate::messaging::messaging_types::VeilTimelineEvent;
+use crate::messaging::messaging_types::VeilMessageRecord;
 
 #[starknet::interface]
 pub trait IVeilChannelHelper<TContractState> {
-    /// Shielded/private timeline append path.
+    /// Store one encrypted VEIL message through the pinned Privacy Pool.
     ///
-    /// This is the target expected by Privacy Pool `InvokeExternal`, where the
-    /// canonical Privacy Pool contract calls VEIL through `privacy_invoke`.
-    /// Implementations must reject direct wallet callers here so the UI/indexer
-    /// can distinguish shielded provenance from direct helper writes.
-    fn privacy_invoke(ref self: TContractState, calldata: Span<felt252>) -> Span<OpenNoteDeposit>;
+    /// The caller must be the Privacy Pool configured during deployment.
+    /// Successful messaging returns no open-note deposits.
+    fn privacy_invoke(
+        ref self: TContractState,
+        calldata: Span<felt252>,
+    ) -> Span<OpenNoteDeposit>;
 
-    /// Direct/unshielded timeline append path.
-    ///
-    /// This remains intentionally separate from `privacy_invoke`; callers must
-    /// not label this path as shielded Privacy Pool activity.
-    fn invoke(ref self: TContractState, calldata: Span<felt252>) -> Span<OpenNoteDeposit>;
+    /// Return the only Privacy Pool authorized to invoke this helper.
+    fn get_privacy_pool(
+        self: @TContractState,
+    ) -> ContractAddress;
 
-    fn get_privacy_pool(self: @TContractState) -> ContractAddress;
-
-    fn get_event_count(self: @TContractState, conversation_tag: felt252) -> u64;
-
-    fn get_event(self: @TContractState, conversation_tag: felt252, index: u64) -> VeilTimelineEvent;
-
-    fn get_payload_chunk(
-        self: @TContractState, conversation_tag: felt252, event_index: u64, chunk_index: u64,
-    ) -> felt252;
-
-    /// Return true only when the stored event entered through the pinned
-    /// Privacy Pool caller. The value is derived by the contract, never from
-    /// user calldata, so clients can keep direct and shielded provenance apart.
-    fn is_privacy_pool_event(
-        self: @TContractState, conversation_tag: felt252, event_index: u64,
+    /// Return whether a one-time message locator has already been stored.
+    fn message_exists(
+        self: @TContractState,
+        message_locator: felt252,
     ) -> bool;
 
-    /// Return whether an exact domain-separated ciphertext commitment has
-    /// already been stored under the opaque conversation tag.
+    /// Return the public record associated with an existing message locator.
+    ///
+    /// The call must revert when the locator has never been stored.
+    fn get_message(
+        self: @TContractState,
+        message_locator: felt252,
+    ) -> VeilMessageRecord;
+
+    /// Return one ciphertext chunk belonging to an existing message.
+    ///
+    /// The call must revert when the message does not exist or when the chunk
+    /// index is outside the record's declared ciphertext length.
+    fn get_payload_chunk(
+        self: @TContractState,
+        message_locator: felt252,
+        chunk_index: u64,
+    ) -> felt252;
+
+    /// Return whether an encrypted-envelope commitment has already been used.
     fn is_payload_committed(
-        self: @TContractState, conversation_tag: felt252, payload_hash: felt252,
+        self: @TContractState,
+        payload_commitment: felt252,
     ) -> bool;
 }
