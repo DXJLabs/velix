@@ -1,105 +1,111 @@
-use starknet::ContractAddress;
-use crate::offers::offer_types::OfferStatus;
+use crate::utils::constants::{
+    MAX_OFFER_PAYLOAD_CHUNKS,
+    VEIL_OFFER_ENVELOPE_VERSION,
+};
+use crate::utils::errors;
 
-pub const SHIELDED_CREATE_ACTION: felt252 = 1;
-pub const SHIELDED_COUNTER_ACTION: felt252 = 2;
-pub const SHIELDED_ACCEPT_ACTION: felt252 = 3;
-pub const SHIELDED_REJECT_ACTION: felt252 = 4;
-pub const SHIELDED_EXPIRE_ACTION: felt252 = 5;
-pub const SHIELDED_CONVERT_ACTION: felt252 = 6;
-
-/// Assert that a felt252 value is non-zero.
-pub fn assert_non_zero(
-    value: felt252,
-    message: felt252,
-) {
-    assert(value != 0, message);
-}
-
-/// Assert that a contract address is non-zero.
-pub fn assert_non_zero_address(
-    address: ContractAddress,
-) {
-    let zero_address: ContractAddress =
-        0.try_into().unwrap();
-
-    assert(
-        address != zero_address,
-        'Zero address',
-    );
-}
-
-/// Assert that maker and taker are different parties.
-pub fn assert_different_parties(
-    maker: ContractAddress,
-    taker: ContractAddress,
-) {
-    assert(
-        maker != taker,
-        'Same party',
-    );
-}
-
-/// Assert that the caller is either maker or taker.
-pub fn assert_participant(
-    caller: ContractAddress,
-    maker: ContractAddress,
-    taker: ContractAddress,
-) {
-    assert(
-        caller == maker || caller == taker,
-        'Only participant',
-    );
-}
-
-/// Assert that the caller is the maker.
-pub fn assert_maker(
-    caller: ContractAddress,
-    maker: ContractAddress,
-) {
-    assert(
-        caller == maker,
-        'Only maker',
-    );
-}
-
-/// Assert that the caller is the taker.
-pub fn assert_taker(
-    caller: ContractAddress,
-    taker: ContractAddress,
-) {
-    assert(
-        caller == taker,
-        'Only taker',
-    );
-}
-
-/// Assert that the offer is currently open.
+/// Validate the public structure of one encrypted VEIL Offer action.
 ///
-/// Countered offers are terminal because a counter-offer
-/// must create a new Offer record.
-pub fn assert_open(
-    status: OfferStatus,
+/// This function validates only:
+///
+/// - supported envelope version;
+/// - required non-zero public fields;
+/// - non-empty ciphertext;
+/// - ciphertext storage bounds.
+///
+/// It does not:
+///
+/// - decrypt the payload;
+/// - identify maker or taker;
+/// - interpret the encrypted action kind;
+/// - validate offer lifecycle transitions;
+/// - validate private expiry;
+/// - authorize negotiation participants;
+/// - establish Privacy Pool replay protection.
+pub fn assert_valid_offer_action_header(
+    envelope_version: u8,
+    offer_action_locator: felt252,
+    payload_commitment: felt252,
+    payload_chunk_count: u64,
 ) {
-    match status {
-        OfferStatus::Open => (),
-        _ => core::panic_with_felt252(
-            'Offer not open',
-        ),
-    }
+    assert(
+        envelope_version == VEIL_OFFER_ENVELOPE_VERSION,
+        errors::UNSUPPORTED_OFFER_ENVELOPE_VERSION,
+    );
+
+    assert(
+        offer_action_locator != 0,
+        errors::ZERO_OFFER_ACTION_LOCATOR,
+    );
+
+    assert(
+        payload_commitment != 0,
+        errors::ZERO_OFFER_PAYLOAD_COMMITMENT,
+    );
+
+    assert(
+        payload_chunk_count > 0,
+        errors::EMPTY_OFFER_PAYLOAD,
+    );
+
+    assert(
+        payload_chunk_count <= MAX_OFFER_PAYLOAD_CHUNKS,
+        errors::TOO_MANY_OFFER_PAYLOAD_CHUNKS,
+    );
 }
 
-/// Assert that the offer can be countered.
+/// Require that an encrypted Offer action exists before its record or
+/// ciphertext chunks are returned.
 ///
-/// Only an Open offer can produce a new counter-offer.
-pub fn assert_can_counter(
-    status: OfferStatus,
+/// Cairo storage maps return default values for keys that were never written,
+/// so an explicit existence map is required to distinguish a missing action
+/// from an all-zero record.
+pub fn assert_offer_action_exists(
+    offer_action_exists: bool,
 ) {
-    match status {
-        OfferStatus::Open => (),
-        _ => core::panic_with_felt252(
-            'Cannot counter',
-        ),
+    assert(
+        offer_action_exists,
+        errors::OFFER_ACTION_NOT_FOUND,
+    );
+}
+
+/// Reject reuse of a one-time encrypted Offer action locator.
+///
+/// A locator identifies exactly one encrypted action. It must never be
+/// overwritten or reused for another payload.
+pub fn assert_offer_action_not_stored(
+    offer_action_exists: bool,
+) {
+    assert(
+        !offer_action_exists,
+        errors::OFFER_ACTION_LOCATOR_ALREADY_USED,
+    );
+}
+
+/// Reject reuse of an encrypted Offer envelope commitment.
+///
+/// This is helper-level duplicate protection only. It does not replace the
+/// official Privacy Pool requirement that the containing transaction obtain
+/// replay protection through a protocol WriteOnce action.
+pub fn assert_offer_payload_not_committed(
+    is_committed: bool,
+) {
+    assert(
+        !is_committed,
+        errors::OFFER_PAYLOAD_ALREADY_COMMITTED,
+    );
+}
+
+/// Validate an index into the ciphertext chunks of an existing Offer action.
+pub fn assert_valid_offer_chunk_index(
+    chunk_index: u64,
+    payload_chunk_count: u64,
+) {
+    assert(
+        chunk_index < payload_chunk_count,
+        errors::OFFER_CHUNK_INDEX_OUT_OF_BOUNDS,
+    );
+}        ),
     }
 }
 
