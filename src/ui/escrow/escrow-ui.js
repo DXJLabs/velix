@@ -166,7 +166,7 @@ export function renderEscrowView({
   setElementText("#escrow-funding-status", fundingComplete ? "Funding complete" : buyerDeposited ? "Waiting seller deposit" : "Waiting deposits");
   setElementText("#escrow-release-status", releaseDone ? "Released" : releaseReady ? "Ready" : fundingComplete ? "Waiting approvals" : "Funding required");
   setElementText("#escrow-release-copy", releaseDone
-    ? "Assets released. Settlement proof is ready."
+    ? "Assets released. The confirmed transaction is available as a settlement record."
     : releaseReady
       ? "Ready for wallet signature."
       : fundingComplete
@@ -204,14 +204,14 @@ export function renderEscrowView({
       settlementAction.disabled = false;
       settlementAction.classList.remove("disabled");
       settlementAction.dataset.openRoute = "settlement";
-      settlementAction.innerHTML = `<i data-lucide="check" class="size-5"></i><span>View Settlement Proof</span>`;
-      setElementText("#escrow-settlement-copy", "Settlement proof is ready.");
+      settlementAction.innerHTML = `<i data-lucide="check" class="size-5"></i><span>View Settlement Record</span>`;
+      setElementText("#escrow-settlement-copy", "No separate cryptographic proof was generated.");
     } else {
       settlementAction.disabled = true;
       settlementAction.classList.add("disabled");
       settlementAction.dataset.openRoute = "settlement";
       settlementAction.innerHTML = `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
-      setElementText("#escrow-settlement-copy", "Release escrow to generate settlement proof.");
+      setElementText("#escrow-settlement-copy", "Release escrow to create a confirmed transaction record.");
     }
   }
 

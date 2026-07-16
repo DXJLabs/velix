@@ -6,6 +6,7 @@ export function createDealStorage({
   readJsonStorage,
   writeJsonStorage,
   logger,
+  persistenceEnabled = false,
 }) {
   function persistentChannel(channel) {
     const { last, ...metadata } = channel;
@@ -24,6 +25,7 @@ export function createDealStorage({
   }
 
   function loadLocalChannels() {
+    if (!persistenceEnabled) return;
     try {
       const payload = readJsonStorage(LOCAL_CHANNELS_KEY, []);
       if (!Array.isArray(payload)) return;
@@ -41,6 +43,7 @@ export function createDealStorage({
   }
 
   function saveLocalChannels() {
+    if (!persistenceEnabled) return;
     try {
       const localChannels = channels
         .filter((channel) => channel.local)

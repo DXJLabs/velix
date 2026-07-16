@@ -8,6 +8,7 @@ export {
   type ChannelKeyMaterial,
 } from "./channel-encryption";
 export { DirectHelperTransport, channelIdToFelt } from "./direct_helper_transport";
+export { deriveOpaqueConversationTag } from "./conversation-tag";
 export {
   EcdhChannelEncryptionAdapter,
   PrivacyPoolChannelEncryptionAdapter,
@@ -189,6 +190,118 @@ export {
 export {
   buildStarknetPrivacySdkAction,
 } from "./starknet_privacy_sdk";
+export {
+  VEIL_PRIVACY_ERROR_CODES,
+  VeilPrivacyError,
+  asPrivacyError,
+  privacyErrorMessage,
+  type VeilPrivacyErrorCode,
+  type VeilPrivacyErrorOptions,
+} from "./privacy/errors";
+export {
+  OFFICIAL_MAX_VIEWING_KEY,
+  assertViewingKey,
+  createLocalViewingKeyProvider,
+} from "./privacy/viewing-key";
+export {
+  VEIL_OFFICIAL_PRIVACY_SDK_VERSION,
+  VEIL_PRIVACY_PROFILE_VERSION,
+  createPrivacyNamespace,
+  normalizeAddress,
+  normalizeAddressBigint,
+  readDiscoveryCursor,
+  wrapDiscoveryCursor,
+  type DiscoveryProviderKind,
+  type NamespacedCursor,
+  type PrivacyNamespace,
+  type PrivacyNamespaceInput,
+} from "./privacy/namespace";
+export {
+  DEFAULT_NOTE_MATURITY_BLOCKS,
+  assertSpendableBalance,
+  computePrivateBalance,
+  isNoteMature,
+  type PrivateBalanceSummary,
+} from "./privacy/balances";
+export {
+  DEFAULT_PROVING_REORG_BUFFER,
+  computeProvingBlockId,
+  serializeProofSubmission,
+  submitWithFreshProof,
+  type CallAndProofLike,
+  type FreshProofResult,
+  type FreshProofRetryDependencies,
+  type ProofAwareCall,
+  type ProofSubmissionDetails,
+} from "./privacy/proving";
+export {
+  assertScreeningCapableDeposit,
+  createOfficialPrivacySdkContext,
+  mapSetupRequirement,
+  type OfficialPrivacySdkConfig,
+  type OfficialPrivacySdkContext,
+  type RecipientPrivacyRequirement,
+} from "./privacy/official-sdk";
+export {
+  OfficialPrivacyFlows,
+  type ApprovalResult,
+  type ExactApprovalAdapter,
+  type FundAndPayInput,
+  type OfficialPrivacyFlowContext,
+  type OfficialPrivacyFlowsConfig,
+  type PrivateFlowResult,
+  type PrivatePaymentMemoInput,
+  type PrivateTransferInput,
+  type PrivacyChainProvider,
+  type PrivacyTransactionReceipt,
+  type PrivacyTransactionStage,
+  type ProofAwareSubmitter,
+  type ShieldInput,
+  type ShieldResult,
+  type WithdrawInput,
+} from "./privacy/financial-flows";
+export {
+  BrowserEncryptedPrivacyProfileStore,
+  generateDeviceStorageKey,
+  type BrowserEncryptedPrivacyProfileStoreConfig,
+  type EncryptedPrivacyProfileStore,
+} from "./privacy/profile-store";
+export {
+  VEIL_APPLICATION_KEY_DOMAINS,
+  decryptApplicationPayload,
+  encryptApplicationPayload,
+  type DecryptApplicationPayloadInput,
+  type EncryptApplicationPayloadInput,
+  type VeilApplicationCiphertext,
+  type VeilApplicationEncryptionContext,
+  type VeilApplicationKeyDomain,
+} from "./privacy/application-encryption";
+export {
+  VEIL_CLAIM_COMMITMENT_DOMAIN,
+  VEIL_CLAIM_SECRET_BYTES,
+  computeClaimCommitment,
+  createPrivateClaimLink,
+  generateClaimSecret,
+  normalizeClaimSecret,
+  publicClaimUrl,
+  readClaimSecretFromFragment,
+} from "./privacy/claim-link";
+export {
+  Strk20WalletApiClient,
+  VEIL_STRK20_WALLET_API_SOURCE_COMMIT,
+  VEIL_STRK20_WALLET_API_VERSION,
+  detectStrk20WalletCapabilities,
+  strk20DepositAction,
+  strk20InvokeAction,
+  strk20TransferAction,
+  strk20WithdrawAction,
+  type StarknetWalletRequestTransport,
+  type Strk20PreparedInvoke,
+  type Strk20WalletAction,
+  type Strk20WalletApiConfig,
+  type Strk20WalletBalance,
+  type Strk20WalletCapabilities,
+} from "./privacy/wallet-api";
 export {
   VeilOnchainContracts,
   createVeilDealCommitments,

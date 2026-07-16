@@ -49,7 +49,7 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
   readonly #provider: StarknetProviderLike | undefined;
   readonly #readTransport: VeilTransport;
   readonly #now: () => number;
-  readonly #channelIdEncoder: (channelId: string) => string;
+  readonly #channelIdEncoder: (channelId: string) => string | Promise<string>;
   readonly #waitForConfirmation: boolean;
   readonly #confirmationTimeoutMs: number;
   readonly #confirmationPollMs: number;
@@ -79,7 +79,7 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     this.#gasEstimate = config.gasEstimate;
   }
 
-  encodeConversationTag(channelId: string): string {
+  async encodeConversationTag(channelId: string): Promise<string> {
     return this.#channelIdEncoder(channelId);
   }
 
@@ -184,7 +184,7 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     const helperCalldata = input.calldata.length
       ? input.calldata.map((felt, index) => toFeltString(felt, `calldata_${index}`))
       : encodeInvokeCalldata(input.item, {
-          conversationTag: this.#channelIdEncoder(input.item.channelId),
+          conversationTag: await this.#channelIdEncoder(input.item.channelId),
         });
     const helperCall = createSpanHelperCall(input.helperAddress || this.#helperAddress, helperCalldata);
     const clientActions = [

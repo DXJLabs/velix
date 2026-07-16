@@ -19,7 +19,7 @@
           <section class="channel-security-banner">
             <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
             <div class="min-w-0">
-              <strong>Encrypted On-chain</strong>
+              <strong>Direct encrypted</strong>
               <small>Available</small>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
               <div class="channel-security-badges" aria-label="Encryption status">

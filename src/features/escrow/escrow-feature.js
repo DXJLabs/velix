@@ -1,3 +1,5 @@
+import { isTransactionHash } from "../../utils/transactions.js";
+
 const BUYER_DEPOSIT_PATTERNS = [
   "alice deposited",
   "buyer deposited",
@@ -96,7 +98,7 @@ export function escrowReleaseProofItemFromMessages(messages = [], { fallbackTime
 }
 
 export function hasRealTransactionHash(item) {
-  return Boolean(item?.txHash && !String(item.txHash).startsWith("mock-"));
+  return isTransactionHash(item?.txHash);
 }
 
 export function escrowEventMatchesMessages(messages = [], patterns = []) {

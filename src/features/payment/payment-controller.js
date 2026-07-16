@@ -7,14 +7,11 @@ export function createPaymentController({
   paymentReviewModal,
   recipient,
   estimateVeilFee,
-  rewardPoints,
   setElementText,
   iconRefresh,
   safeSubmit,
   getVeilClient,
   transactionTransportMode,
-  awardReward,
-  currentChannel,
   renderWorkflowProgress,
   showScreen,
   now = () => Date.now(),
@@ -36,20 +33,20 @@ export function createPaymentController({
 
   function renderPaymentTransactionSummary() {
     const amountLabel = paymentAmountLabel();
-    const fee = estimateVeilFee("directPayment", amountLabel, {
-      shielded: state.paymentMode === "shield",
+    const fee = estimateVeilFee("encryptedMemo", "0 STRK", {
+      shielded: false,
     });
 
-    setElementText("#payment-summary-amount", amountLabel);
+    setElementText("#payment-summary-amount", `${amountLabel} (memo only)`);
     setElementText("#payment-total-fee", fee.feeLabel);
-    setElementText("#payment-summary-total", fee.totalLabel);
+    setElementText("#payment-summary-total", fee.feeLabel);
     setElementText("#payment-review-recipient", recipient);
-    setElementText("#payment-review-amount", amountLabel);
+    setElementText("#payment-review-amount", `${amountLabel} (not transferred)`);
     setElementText("#payment-review-privacy", paymentPrivacyLabel());
     setElementText("#payment-review-fee", fee.feeLabel);
-    setElementText("#payment-review-reward", `+${rewardPoints.directPayment} VEIL Points`);
+    setElementText("#payment-review-reward", "None - this is not a payment");
     setElementText("#payment-review-memo", paymentMemoValue());
-    setElementText("#payment-review-total", fee.totalLabel);
+    setElementText("#payment-review-total", fee.feeLabel);
   }
 
   function showPaymentReview() {
@@ -74,6 +71,7 @@ export function createPaymentController({
     const amount = document.querySelector("#payment-amount").value.trim() || "450";
     const asset = document.querySelector("#payment-asset").value.trim() || "STRK";
     const memo = document.querySelector("#payment-memo").value.trim() || DEFAULT_PAYMENT_MEMO;
+    state.paymentSent = false;
     const submitted = await safeSubmit(
       () => getVeilClient().sendPaymentMemo({
         channelId: state.channelId,
@@ -84,26 +82,25 @@ export function createPaymentController({
       }),
       {
         type: "inline",
-        title: "Payment completed",
-        subtitle: `${amount} ${asset} to Bob`,
+        title: "Direct encrypted payment memo",
+        subtitle: `${amount} ${asset} is memo content only; no assets were transferred.`,
         actor: "Alice",
         time: now(),
         mode: state.paymentMode,
       },
-      "Payment sent.",
+      "Encrypted memo sent. No assets were transferred.",
       {
-        actionLabel: "Sending Payment",
-        successTitle: "Public Settlement Sent",
-        successSubtitle: `${amount} ${asset} payment recorded in the private channel.`,
+        actionLabel: "Sending encrypted memo",
+        successTitle: "Direct encrypted memo sent",
+        successSubtitle: "Payment intent recorded as ciphertext. No assets were transferred.",
       },
     );
-    if (!submitted) return;
-    awardReward("directPayment");
-    state.paymentSent = true;
-    currentChannel().status = "Deal Completed";
+    state.paymentSent = false;
+    if (!submitted) return false;
     renderPayment();
     renderWorkflowProgress();
-    showScreen("settlement");
+    showScreen("channel");
+    return true;
   }
 
   return {

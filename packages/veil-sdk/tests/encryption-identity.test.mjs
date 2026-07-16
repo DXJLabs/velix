@@ -157,6 +157,11 @@ describe("VEIL encryption identity and key registry boundary", () => {
       resolveContext: () => ({ ...base, localAccountAddress: BOB, recipientAccountAddress: ALICE }),
     });
     const context = { channelId: "deal-1", eventType: 1 };
+    const aliceConversationTag = await aliceAdapter.deriveConversationTag("deal-1");
+    const bobConversationTag = await bobAdapter.deriveConversationTag("deal-1");
+    assert.equal(aliceConversationTag, bobConversationTag);
+    assert.match(aliceConversationTag, /^0x[0-9a-f]+$/);
+    assert.notEqual(BigInt(aliceConversationTag), 0n);
     const encrypted = await aliceAdapter.encryptPayload({ kind: "chat", message: "identity boundary" }, context);
     const item = { eventId: "1", eventType: 1, channelId: "deal-1", timestamp: 1, ...encrypted };
     assert.equal((await bobAdapter.decryptPayload(item, context)).message, "identity boundary");

@@ -21,22 +21,19 @@ export function renderPaymentView({
   const paymentDealStatus = document.querySelector("#payment-deal-status");
   const settlementAction = document.querySelector("#payment-settlement-action");
   if (paymentDealStatus) {
-    paymentDealStatus.textContent = state.paymentSent
-      ? "Settlement Complete"
-      : "Direct Transfer";
+    paymentDealStatus.textContent = "Memo only - no asset transfer";
   }
   document.querySelectorAll("[data-payment-mode]").forEach((button) => {
     button.classList.toggle("active", button.dataset.paymentMode === state.paymentMode);
   });
   renderPaymentTransactionSummary();
   if (settlementAction) {
-    settlementAction.disabled = !state.paymentSent;
-    settlementAction.classList.toggle("disabled", !state.paymentSent);
-    settlementAction.innerHTML = state.paymentSent
-      ? `<i data-lucide="check" class="size-5"></i><span>View Settlement</span>`
-      : `<i data-lucide="lock" class="size-5"></i><span>Settlement Locked</span>`;
-    setElementText("#payment-settlement-copy", state.paymentSent
-      ? "Settlement proof is ready."
-      : "Send payment to generate settlement proof.");
+    settlementAction.disabled = true;
+    settlementAction.classList.add("disabled");
+    settlementAction.innerHTML = `<i data-lucide="lock" class="size-5"></i><span>Settlement unavailable</span>`;
+    setElementText(
+      "#payment-settlement-copy",
+      "This action sends a Direct encrypted memo only. It does not transfer assets or generate a settlement proof.",
+    );
   }
 }

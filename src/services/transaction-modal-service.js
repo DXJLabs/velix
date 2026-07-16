@@ -5,7 +5,7 @@ export function inferTransactionOverlayCopy(localItem = {}, success = "", fallba
   if (localItem.type === "message") {
     return {
       actionLabel: "Encrypting locally",
-      successTitle: "Encrypted On-chain",
+      successTitle: "Direct encrypted",
       successSubtitle: "Encrypted ciphertext confirmed on-chain.",
     };
   }
@@ -68,9 +68,9 @@ export function inferTransactionOverlayCopy(localItem = {}, success = "", fallba
 
   if (label.includes("payment")) {
     return {
-      actionLabel: "Sending Payment",
-      successTitle: "Public Settlement Sent",
-      successSubtitle: "Encrypted memo stored in the channel.",
+      actionLabel: "Sending encrypted memo",
+      successTitle: "Direct encrypted memo sent",
+      successSubtitle: "Encrypted memo stored in the channel. No assets were transferred.",
     };
   }
 

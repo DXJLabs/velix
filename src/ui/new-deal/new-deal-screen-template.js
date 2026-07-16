@@ -16,7 +16,7 @@
                 <span class="new-deal-icon"><i data-lucide="user-check" class="size-5"></i></span>
                 <div>
                   <h2>Choose Counterparty</h2>
-                  <p>Search a .stark name or wallet address. VEIL checks whether they can receive an in-app deal request.</p>
+                  <p>Recipient discovery and live two-party delivery must be verified before a deal can be created.</p>
                 </div>
               </div>
               <label class="field">
@@ -31,14 +31,14 @@
                 <span class="avatar">B</span>
                 <div>
                   <strong id="counterparty-result-name">bob.stark</strong>
-                  <small id="counterparty-result-detail">0x0b...71e9</small>
+                  <small id="counterparty-result-detail">Recipient discovery is not E2E-verified.</small>
                 </div>
-                <span id="counterparty-result-status" class="status-pill escrow-active">VEIL Available</span>
+                <span id="counterparty-result-status" class="status-pill waiting-deposit">Unavailable</span>
               </article>
-              <p id="counterparty-action-hint" class="plain-note compact">Creates a private deal request and sends an in-app notification.</p>
-              <button id="new-deal-primary-action" class="primary-action w-full" type="button" data-new-deal-action="existing">
-                <i data-lucide="plus" class="size-5"></i>
-                <span>Create Deal</span>
+              <p id="counterparty-action-hint" class="plain-note compact">No request or notification will be created in this build.</p>
+              <button id="new-deal-primary-action" class="primary-action w-full" type="button" disabled aria-disabled="true">
+                <i data-lucide="lock" class="size-5"></i>
+                <span>Deal Creation Unavailable</span>
               </button>
             </section>
 
@@ -47,19 +47,19 @@
                 <span class="new-deal-icon muted"><i data-lucide="send" class="size-5"></i></span>
                 <div>
                   <h2>Can't find them?</h2>
-                  <p>If they are not on VEIL yet, generate an invite link and share it outside the app.</p>
+                  <p>Invite delivery is unavailable until its backend metadata flow is implemented and verified.</p>
                 </div>
               </div>
-              <button id="show-invite-form" class="secondary-action w-full" type="button" data-new-deal-action="show-invite">
+              <button id="show-invite-form" class="secondary-action w-full" type="button" disabled aria-disabled="true">
                 <i data-lucide="mail-plus" class="size-5"></i>
-                <span>Invite Counterparty</span>
+                <span>Invite Unavailable</span>
               </button>
               <div id="invite-form-panel" class="invite-form-panel" hidden>
                 <label class="field">
                   <span>Counterparty or contact</span>
                   <input id="invite-target" type="text" value="bob.stark" />
                 </label>
-                <p class="plain-note compact">Invite link will be generated after the invite is created.</p>
+                <p class="plain-note compact">No invite link will be generated in this build.</p>
                 <div class="offer-form-actions">
                   <button class="secondary-action" type="button" data-new-deal-action="cancel-invite">Cancel</button>
                   <button class="primary-action" type="button" data-new-deal-action="invite">

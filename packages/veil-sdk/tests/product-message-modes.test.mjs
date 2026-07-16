@@ -34,7 +34,7 @@ describe("production-safe VEIL message modes", () => {
     assert.equal(config.timelineMode, "encrypted-direct");
   });
 
-  it("accepts a registry only when its explicit chain matches runtime", () => {
+  it("accepts a registry only when its explicit Sepolia chain matches runtime", () => {
     const address = "0x123";
     const matching = createRuntimeConfig({
       VITE_STARKNET_CHAIN_ID: "SN_SEPOLIA",
@@ -43,19 +43,17 @@ describe("production-safe VEIL message modes", () => {
     }, "");
     assert.equal(matching.encryptionKeyRegistryAddress, address);
 
-    const wrongChain = createRuntimeConfig({
+    assert.throws(() => createRuntimeConfig({
       VITE_STARKNET_CHAIN_ID: "SN_MAIN",
       VITE_VEIL_KEY_REGISTRY_ADDRESS: address,
       VITE_VEIL_KEY_REGISTRY_CHAIN_ID: "SN_SEPOLIA",
-    }, "");
-    assert.equal(wrongChain.encryptionKeyRegistryAddress, "");
+    }, ""), /supports SN_SEPOLIA only/);
 
-    const zero = createRuntimeConfig({
+    assert.throws(() => createRuntimeConfig({
       VITE_STARKNET_CHAIN_ID: "SN_SEPOLIA",
       VITE_VEIL_KEY_REGISTRY_ADDRESS: "0x0",
       VITE_VEIL_KEY_REGISTRY_CHAIN_ID: "SN_SEPOLIA",
-    }, "");
-    assert.equal(zero.encryptionKeyRegistryAddress, "");
+    }, ""), /not a valid Starknet address/);
   });
 
   it("encrypts before direct submission and excludes plaintext from helper calldata", async () => {
@@ -196,6 +194,7 @@ describe("production-safe VEIL message modes", () => {
       readJsonStorage: () => [],
       writeJsonStorage: (_key, value) => { persisted = value; },
       logger: { veilError() {} },
+      persistenceEnabled: true,
     });
     storage.saveLocalChannels();
     assert.equal(JSON.stringify(persisted).includes("plaintext preview"), false);

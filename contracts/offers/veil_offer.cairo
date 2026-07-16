@@ -9,8 +9,10 @@ pub mod VeilOffer {
 
     use starknet::{
         ContractAddress,
+        get_block_timestamp,
         get_caller_address,
     };
+    use starknet::event::EventEmitter;
 
     use starknet::storage::{
         Map,
@@ -23,6 +25,13 @@ pub mod VeilOffer {
     use crate::offers::offer_types::{
         Offer,
         OfferStatus,
+        ShieldedOfferAction,
+    };
+
+    use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
+
+    use crate::offers::offer_commitments::{
+        compute_shielded_offer_action_commitment,
     };
 
     use crate::offers::offer_interfaces::IVeilOffer;
@@ -35,10 +44,14 @@ pub mod VeilOffer {
         OfferCancelled,
         OfferExpired,
         OfferConvertedToEscrow,
+        ShieldedOfferActionCommitted,
     };
 
     use crate::offers::offer_validation::{
+        assert_non_zero,
         assert_non_zero_address,
+        assert_supported_shielded_action,
+        assert_valid_expiry,
     };
 
     const IVEIL_OFFER_ID: felt252 =
@@ -90,6 +103,20 @@ pub mod VeilOffer {
         /// and therefore increment this count.
         offer_count: u64,
 
+        /// Exact encrypted terms commitments consumed by direct create/counter
+        /// operations. A randomized, context-bound ciphertext envelope should
+        /// produce a fresh commitment for every legitimate action.
+        used_terms_commitments: Map<felt252, bool>,
+
+        /// Canonical Privacy Pool allowed to call privacy_invoke.
+        privacy_pool: ContractAddress,
+
+        /// Append-only encrypted action journal for the Pool path.
+        shielded_actions: Map<u64, ShieldedOfferAction>,
+        shielded_action_count: u64,
+        used_shielded_action_commitments: Map<felt252, bool>,
+        used_shielded_nullifiers: Map<felt252, bool>,
+
         /// Trusted VeilEscrow contract.
         ///
         /// Only this contract may convert an Accepted offer
@@ -121,6 +148,7 @@ pub mod VeilOffer {
         OfferCancelled: OfferCancelled,
         OfferExpired: OfferExpired,
         OfferConvertedToEscrow: OfferConvertedToEscrow,
+        ShieldedOfferActionCommitted: ShieldedOfferActionCommitted,
     }
 
     // -------------------------------------------------------------------------
@@ -130,9 +158,11 @@ pub mod VeilOffer {
     #[constructor]
     fn constructor(
         ref self: ContractState,
+        privacy_pool: ContractAddress,
         escrow_contract: ContractAddress,
         owner: ContractAddress,
     ) {
+        assert_non_zero_address(privacy_pool);
         assert_non_zero_address(owner);
 
         let zero_address: ContractAddress =
@@ -142,6 +172,7 @@ pub mod VeilOffer {
             assert_non_zero_address(escrow_contract);
         }
 
+        self.privacy_pool.write(privacy_pool);
         self.escrow_contract.write(escrow_contract);
         self.owner.write(owner);
 
@@ -156,6 +187,101 @@ pub mod VeilOffer {
 
     #[abi(embed_v0)]
     impl VeilOfferImpl of IVeilOffer<ContractState> {
+        /// Store one fixed-schema encrypted offer action from the pinned Pool.
+        ///
+        /// Pool provenance alone cannot prove which direct ContractAddress is
+        /// the maker/taker. Consequently this append-only journal never mutates
+        /// the account-authorized Offer lifecycle below. Pure shielded offer
+        /// actions remain UNVERIFIED until proof-backed participant
+        /// authorization and live E2E exist.
+        fn privacy_invoke(
+            ref self: ContractState,
+            calldata: Span<felt252>,
+        ) -> Span<OpenNoteDeposit> {
+            assert(
+                get_caller_address() == self.privacy_pool.read(),
+                'Not privacy pool',
+            );
+
+            // Fixed calldata only. There is intentionally no target, selector,
+            // nested call array, or arbitrary external-call surface.
+            assert(calldata.len() == 6, 'Invalid offer calldata');
+
+            self.enter_reentrancy_guard();
+
+            let action_kind = *calldata.at(0);
+            let conversation_tag = *calldata.at(1);
+            let encrypted_payload_commitment = *calldata.at(2);
+            let valid_until: u64 = (*calldata.at(3))
+                .try_into()
+                .expect('Invalid offer expiry');
+            let replay_nullifier = *calldata.at(4);
+            let claimed_action_commitment = *calldata.at(5);
+            let now = get_block_timestamp();
+
+            assert_supported_shielded_action(action_kind);
+            assert_non_zero(conversation_tag, 'Invalid conversation');
+            assert_non_zero(encrypted_payload_commitment, 'Invalid encrypted terms');
+            assert_non_zero(replay_nullifier, 'Invalid offer nullifier');
+            assert_non_zero(claimed_action_commitment, 'Invalid offer commitment');
+            assert_valid_expiry(valid_until, now);
+
+            let computed_action_commitment = compute_shielded_offer_action_commitment(
+                action_kind,
+                conversation_tag,
+                encrypted_payload_commitment,
+                valid_until,
+                replay_nullifier,
+            );
+
+            assert(
+                computed_action_commitment == claimed_action_commitment,
+                'Offer commitment mismatch',
+            );
+            assert(
+                !self.used_shielded_action_commitments.read(computed_action_commitment),
+                'Offer action replay',
+            );
+            assert(
+                !self.used_shielded_nullifiers.read(replay_nullifier),
+                'Offer nullifier replay',
+            );
+
+            let action_index = self.shielded_action_count.read() + 1;
+            let action = ShieldedOfferAction {
+                action_index,
+                action_kind,
+                conversation_tag,
+                encrypted_payload_commitment,
+                valid_until,
+                replay_nullifier,
+                action_commitment: computed_action_commitment,
+                created_at: now,
+            };
+
+            // Effects precede the event; this entry point performs no external
+            // calls and returns no deposits.
+            self.shielded_actions.write(action_index, action);
+            self.shielded_action_count.write(action_index);
+            self.used_shielded_action_commitments.write(computed_action_commitment, true);
+            self.used_shielded_nullifiers.write(replay_nullifier, true);
+
+            self.emit(
+                Event::ShieldedOfferActionCommitted(
+                    ShieldedOfferActionCommitted {
+                        conversation_tag,
+                        action_index,
+                        action_kind,
+                        action_commitment: computed_action_commitment,
+                        timestamp: now,
+                    },
+                ),
+            );
+
+            self.exit_reentrancy_guard();
+            ArrayTrait::<OpenNoteDeposit>::new().span()
+        }
+
         fn create_offer(
             ref self: ContractState,
             conversation_tag: felt252,
@@ -308,6 +434,52 @@ pub mod VeilOffer {
             ).escrow_id
         }
 
+        fn get_offer_commitment(
+            self: @ContractState,
+            offer_id: felt252,
+        ) -> felt252 {
+            self.read_existing_offer(offer_id).offer_commitment
+        }
+
+        fn is_terms_commitment_used(
+            self: @ContractState,
+            terms_hash: felt252,
+        ) -> bool {
+            self.used_terms_commitments.read(terms_hash)
+        }
+
+        fn get_shielded_action_count(
+            self: @ContractState,
+        ) -> u64 {
+            self.shielded_action_count.read()
+        }
+
+        fn get_shielded_action(
+            self: @ContractState,
+            action_index: u64,
+        ) -> ShieldedOfferAction {
+            let count = self.shielded_action_count.read();
+            assert(
+                action_index != 0 && action_index <= count,
+                'Shielded action not found',
+            );
+            self.shielded_actions.read(action_index)
+        }
+
+        fn is_shielded_action_committed(
+            self: @ContractState,
+            action_commitment: felt252,
+        ) -> bool {
+            self.used_shielded_action_commitments.read(action_commitment)
+        }
+
+        fn is_shielded_nullifier_used(
+            self: @ContractState,
+            replay_nullifier: felt252,
+        ) -> bool {
+            self.used_shielded_nullifiers.read(replay_nullifier)
+        }
+
         fn get_offer_count(
             self: @ContractState,
         ) -> u64 {
@@ -318,6 +490,12 @@ pub mod VeilOffer {
             self: @ContractState,
         ) -> ContractAddress {
             self.escrow_contract.read()
+        }
+
+        fn get_privacy_pool(
+            self: @ContractState,
+        ) -> ContractAddress {
+            self.privacy_pool.read()
         }
 
         fn get_owner(
@@ -399,6 +577,22 @@ pub mod VeilOffer {
                 offer.offer_id,
                 true,
             );
+        }
+
+        /// Consume a randomized ciphertext/terms commitment once globally.
+        /// Reusing an exact encrypted envelope is treated as replay even across
+        /// conversations; legitimate retries must rebuild encryption with a
+        /// fresh nonce and therefore a fresh commitment.
+        fn reserve_terms_commitment(
+            ref self: ContractState,
+            terms_hash: felt252,
+        ) {
+            assert(terms_hash != 0, 'Invalid terms');
+            assert(
+                !self.used_terms_commitments.read(terms_hash),
+                'Offer replay',
+            );
+            self.used_terms_commitments.write(terms_hash, true);
         }
 
         /// Start OpenZeppelin reentrancy protection.

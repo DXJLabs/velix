@@ -28,25 +28,22 @@
             <aside class="conversation-inspector" aria-label="Selected channel">
               <div class="inspector-top">
                 <div>
-                  <p class="eyebrow">Active deal</p>
-                  <h2>Rights Transfer</h2>
+                  <p class="eyebrow">Selected deal</p>
+                  <h2>No deal selected</h2>
                 </div>
-                <span class="status-pill waiting-deposit">Waiting Deposit</span>
+                <span class="status-pill waiting-deposit">Unavailable</span>
               </div>
               <div class="inspector-amount">
-                <span>Accepted offer</span>
-                <strong>450 STRK</strong>
-                <small>Waiting for Alice and Bob deposits</small>
+                <span>Verified settlement</span>
+                <strong>—</strong>
+                <small>No fabricated offer, deposit, or settlement state is shown.</small>
               </div>
               <div class="inspector-timeline">
-                <div class="complete"><i data-lucide="check" class="size-4"></i><span>Alice accepted Bob's counter offer</span></div>
-                <div class="complete"><i data-lucide="check" class="size-4"></i><span>AI prepared</span></div>
-                <div><i data-lucide="shield" class="size-4"></i><span>Escrow deposits pending</span></div>
-                <div><i data-lucide="file-check-2" class="size-4"></i><span>Proof export next</span></div>
+                <div><i data-lucide="shield" class="size-4"></i><span>Select a verified conversation to inspect it.</span></div>
               </div>
-              <button class="primary-action w-full" type="button" data-open-channel="20260625">
-                <i data-lucide="arrow-right" class="size-5"></i>
-                <span>Open Deal</span>
+              <button class="primary-action w-full" type="button" disabled aria-disabled="true">
+                <i data-lucide="lock" class="size-5"></i>
+                <span>No Deal Available</span>
               </button>
             </aside>
           </div>

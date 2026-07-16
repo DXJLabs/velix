@@ -6,7 +6,8 @@ import { registerAppLifecycle } from "./lifecycle.js";
 import { buildRuntimeApi } from "./runtime-api.js";
 import { initApp } from "./init.js";
 import { createAppStore, createDefaultWalletAssetBalances } from "../state/app-store.js";
-import { createDemoData, knownVeilCounterparties } from "../state/demo-data.js";
+import { knownVeilCounterparties } from "../state/demo-data.js";
+import { createBootstrapData } from "../state/bootstrap-data.js";
 import { createVeilLogger } from "../services/logging/log-service.js";
 import { resolveChannelKeyConfig } from "../services/encryption/channel-key-service.js";
 import {
@@ -40,7 +41,12 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
   const config = createRuntimeConfig(env, windowRef.location.search);
   const logger = createVeilLogger({ debugLogsEnabled: config.debugLogsEnabled, dev: env.DEV });
   const channelKeyConfig = resolveChannelKeyConfig(config, logger);
-  const data = createDemoData({ now: Date.now(), demoTxHash });
+  const data = createBootstrapData({
+    demoRuntimeMode: config.demoRuntimeMode,
+    now: Date.now(),
+    demoTxHash,
+  });
+  const runtimeCounterparties = config.demoRuntimeMode ? knownVeilCounterparties : new Set();
   const store = createAppStore({
     config,
     channels: data.channels,
@@ -81,6 +87,7 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
     readJsonStorage,
     writeJsonStorage,
     logger,
+    persistenceEnabled: config.demoRuntimeMode,
   });
   Object.assign(api, dealStorage);
 
@@ -151,7 +158,7 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
     dom,
     store,
     logger,
-    knownVeilCounterparties,
+    knownVeilCounterparties: runtimeCounterparties,
     chainMetaUi,
     networkService,
     walletInitialization,
@@ -222,13 +229,16 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
         },
       }) };
     },
-    createOnchainContracts: ({ account, provider }) => createVeilOnchainContracts({
-      offerAddress: config.offerAddress,
-      escrowAddress: config.escrowAddress,
-      settlementHelperAddress: config.settlementHelperAddress,
-      account,
-      ...(provider ? { provider } : {}),
-    }),
+    createOnchainContracts: ({ account, provider }) => {
+      if (!config.offerAddress || !config.escrowAddress || !config.settlementHelperAddress) return null;
+      return createVeilOnchainContracts({
+        offerAddress: config.offerAddress,
+        escrowAddress: config.escrowAddress,
+        settlementHelperAddress: config.settlementHelperAddress,
+        account,
+        ...(provider ? { provider } : {}),
+      });
+    },
     getDirectTransport: () => directTransport,
     setDirectTransport: (nextTransport) => {
       directTransport = nextTransport;

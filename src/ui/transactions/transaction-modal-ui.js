@@ -35,6 +35,7 @@ export function renderTransactionModalElement(element, modal, {
     const href = transactionExplorerUrl(modal.txHash, explorerUrl);
     link.hidden = !isSuccess || !href;
     if (href) link.href = href;
+    else link.removeAttribute("href");
   }
   if (cancel) {
     cancel.hidden = modal.stage !== "signing";

@@ -22,12 +22,13 @@ export function createHomeUi({
     if (!isDirectHelperTimelineMode(config.timelineMode)) return "Privacy Pool";
     if (!config.helperAddress) return "Network unavailable";
     if (state.walletInitState === "failed" && walletFailureCategory() === "Network unavailable") return "Network unavailable";
-    return "Verified";
+    return state.helperVerified ? "Verified deployment" : "Unverified";
   }
 
   function homePrivacyPoolLabel() {
     if (config.timelineMode === "mock") return "Demo";
-    return config.timelineMode === "strk20-shielded" ? "Coming Soon" : "Not used";
+    if (!config.networkConfig?.privacyPool?.screeningCapable) return "Legacy — Shield blocked";
+    return config.timelineMode === "strk20-shielded" ? "Unverified" : "Configured, not active";
   }
 
   function renderHomeStatus() {

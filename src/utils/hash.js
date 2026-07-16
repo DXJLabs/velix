@@ -16,13 +16,11 @@ export function deterministicHex(seed, length = 64) {
 }
 
 export function demoTxHash(seed) {
-  return deterministicHex(`tx:${seed}`, 64);
+  return `demo-${deterministicHex(`tx:${seed}`, 64)}`;
 }
 
 export function displayTransactionHash(value) {
   const text = String(value || "");
-  if (!text) return "";
-  if (text.startsWith("mock-")) return deterministicHex(`legacy:${text}`, 64);
   return text;
 }
 

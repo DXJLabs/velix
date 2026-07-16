@@ -21,7 +21,8 @@ export function bindFormEvents({ documentRef = document, dom, state, api }) {
 
     const settingToggle = event.target.closest("[data-setting-toggle]");
     if (settingToggle) {
-      api.showToast(settingToggle.checked ? "Setting enabled." : "Setting disabled.");
+      settingToggle.checked = false;
+      api.showToast("This setting is unavailable in the current build. No preference was changed.");
     }
   });
 

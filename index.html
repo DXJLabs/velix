@@ -6,24 +6,6 @@
     <title>VEIL</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
-    <script>
-      (() => {
-        const noisyPatterns = [
-          "ObjectMultiplex - orphaned data",
-          "ObjectMultiplex - malformed chunk",
-          "MaxListenersExceededWarning",
-        ];
-        const shouldSuppress = (args) => noisyPatterns.some((pattern) => args.some((arg) => String(arg).includes(pattern)));
-        ["warn", "error"].forEach((method) => {
-          const original = console[method];
-          console[method] = (...args) => {
-            if (shouldSuppress(args)) return;
-            original.apply(console, args);
-          };
-        });
-      })();
-    </script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     <script type="module" src="/app.js"></script>
   </head>
   <body class="bg-[#e8ebef] font-sans text-slate-950 antialiased">

@@ -1,5 +1,7 @@
 # Experimental STWO Prover
 
+> **Historical, non-authoritative research record.** For current requirements and readiness, use [`VEIL_ARCHITECTURE_LOCK.md`](./VEIL_ARCHITECTURE_LOCK.md) and [`VEIL_PREPRODUCTION_STATUS.md`](./VEIL_PREPRODUCTION_STATUS.md).
+
 **Experimental research - not the default production transport.**
 
 VEIL preserves a self-hosted proving proof-of-concept built from public StarkWare components. This work demonstrates protocol compatibility and transaction construction; it does not demonstrate a live accepted Privacy Pool transaction.

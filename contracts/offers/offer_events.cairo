@@ -16,6 +16,9 @@ pub struct OfferCreated {
     /// Commitment/hash of the negotiated terms.
     pub terms_hash: felt252,
 
+    /// Contract-computed, domain-separated commitment to the full offer.
+    pub offer_commitment: felt252,
+
     pub expires_at: u64,
     pub timestamp: u64,
 }
@@ -34,6 +37,7 @@ pub struct CounterOfferCreated {
     /// Counter-offer data remains commitment-based.
     pub price_commitment: felt252,
     pub terms_hash: felt252,
+    pub offer_commitment: felt252,
 
     pub expires_at: u64,
     pub timestamp: u64,
@@ -96,5 +100,20 @@ pub struct OfferConvertedToEscrow {
     /// for the Veil application layer.
     pub conversation_tag: felt252,
 
+    pub timestamp: u64,
+}
+
+/// Minimal indexer event for an encrypted offer action that entered through
+/// the pinned Privacy Pool. The encrypted payload itself is not emitted.
+#[derive(Drop, starknet::Event)]
+pub struct ShieldedOfferActionCommitted {
+    #[key]
+    pub conversation_tag: felt252,
+
+    #[key]
+    pub action_index: u64,
+
+    pub action_kind: felt252,
+    pub action_commitment: felt252,
     pub timestamp: u64,
 }

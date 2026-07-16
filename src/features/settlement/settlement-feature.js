@@ -1,7 +1,3 @@
-function defaultHash() {
-  return "0x0000000000000000000000000000000000000000000000000000000000000000";
-}
-
 function latestMatchingItem(messages = [], predicate) {
   return [...messages].reverse().find(predicate);
 }
@@ -10,12 +6,11 @@ function escapeValue(value, escapeHtml) {
   return escapeHtml ? escapeHtml(value) : String(value ?? "");
 }
 
-export function createSettlementProofMeta(source, hashFactory = defaultHash) {
-  const dealSource = source || "Deal";
-  const hash = hashFactory(`settlement:${dealSource}`, 64);
+export function createSettlementProofMeta() {
   return {
-    proofId: `VP-${String(dealSource).replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase() || "DEAL"}-${hash.slice(2, 8).toUpperCase()}`,
-    settlementHash: hash,
+    available: false,
+    proofId: "Unavailable",
+    settlementHash: "Unavailable",
   };
 }
 
@@ -46,56 +41,19 @@ export function proofStepMarkup(label, value, escapeHtml) {
 export function escrowSettlementProofMarkup(escapeHtml) {
   return `
     <div class="proof-group">
-      <h2>Negotiation</h2>
-      <ol>
-        ${proofStepMarkup("Alice created an offer", "500 STRK", escapeHtml)}
-        ${proofStepMarkup("Bob created a counter offer", "450 STRK", escapeHtml)}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Funding</h2>
-      <ol>
-        ${proofStepMarkup("Alice deposited", "450 STRK", escapeHtml)}
-        ${proofStepMarkup("Bob locked NFT", "Rights Package NFT", escapeHtml)}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Release</h2>
-      <ol>
-        ${proofStepMarkup("Assets released", "Complete", escapeHtml)}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Settlement</h2>
-      <ol>
-        ${proofStepMarkup("NFT delivered to Alice", "Complete", escapeHtml)}
-        ${proofStepMarkup("450 STRK delivered to Bob", "Complete", escapeHtml)}
-      </ol>
+      <h2>Settlement proof unavailable</h2>
+      <p>${escapeValue("VEIL does not fabricate negotiation, funding, release, or delivery proof steps.", escapeHtml)}</p>
     </div>
   `;
 }
 
 export function directPaymentProofMarkup({
-  recipient,
-  amountLabel,
-  privacyLabel,
   escapeHtml,
 } = {}) {
   return `
     <div class="proof-group">
-      <h2>Direct Payment</h2>
-      <ol>
-        ${proofStepMarkup("Recipient", recipient, escapeHtml)}
-        ${proofStepMarkup("Amount", amountLabel, escapeHtml)}
-        ${proofStepMarkup("Privacy", privacyLabel, escapeHtml)}
-      </ol>
-    </div>
-    <div class="proof-group">
-      <h2>Settlement</h2>
-      <ol>
-        ${proofStepMarkup("Payment confirmed", "Complete", escapeHtml)}
-        ${proofStepMarkup("Proof attached", "Ready", escapeHtml)}
-      </ol>
+      <h2>Payment proof unavailable</h2>
+      <p>${escapeValue("A Direct encrypted memo is not evidence that assets were transferred.", escapeHtml)}</p>
     </div>
   `;
 }

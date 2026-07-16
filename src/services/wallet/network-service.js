@@ -1,4 +1,5 @@
 import { ChainId } from "starkzap-config";
+import { RpcProvider } from "starknet";
 import { networkLabel, normalizeChainId } from "../../app/runtime-config.js";
 
 export function createNetworkService({
@@ -8,15 +9,8 @@ export function createNetworkService({
 }) {
   let starknetReadProvider;
 
-  async function loadStarknetSdk() {
-    if (window.__veilStarknetSdk) return window.__veilStarknetSdk;
-    window.__veilStarknetSdk = await import("https://esm.sh/starknet@7.6.4?target=es2022");
-    return window.__veilStarknetSdk;
-  }
-
   async function getStarknetReadProvider() {
     if (starknetReadProvider) return starknetReadProvider;
-    const { RpcProvider } = await loadStarknetSdk();
     starknetReadProvider = new RpcProvider({ nodeUrl: config.privyStarknetRpcUrl });
     return starknetReadProvider;
   }
@@ -81,7 +75,15 @@ export function createNetworkService({
     if (!config.helperAddress) return false;
 
     try {
-      await veilClient.getEventCount(channelId);
+      const provider = await getStarknetReadProvider();
+      if (typeof provider.getClassHashAt !== "function") {
+        throw new Error("The configured Starknet provider cannot verify contract class hashes.");
+      }
+      const actualClassHash = await provider.getClassHashAt(config.helperAddress);
+      const expectedClassHash = config.networkConfig?.contracts?.channelHelper?.classHash;
+      if (!expectedClassHash || BigInt(actualClassHash) !== BigInt(expectedClassHash)) {
+        throw new Error("The configured channel helper class hash does not match the verified deployment manifest.");
+      }
       state.helperVerified = true;
       return true;
     } catch (error) {

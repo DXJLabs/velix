@@ -19,6 +19,7 @@ use crate::offers::offer_events::{
     OfferAccepted,
     OfferCreated,
 };
+use crate::offers::offer_commitments::compute_offer_commitment;
 use crate::offers::offer_types::{
     Offer,
     OfferStatus,
@@ -96,8 +97,21 @@ use crate::offers::offer_validation::{
                 now,
             );
 
+            self.reserve_terms_commitment(terms_hash);
+
             let offer_id =
                 self.next_offer_id();
+
+            let offer_commitment = compute_offer_commitment(
+                conversation_tag,
+                offer_id,
+                asset_type_commitment,
+                asset_commitment,
+                payment_commitment,
+                price_commitment,
+                terms_hash,
+                expires_at,
+            );
 
             let offer = Offer {
                 offer_id,
@@ -112,6 +126,7 @@ use crate::offers::offer_validation::{
                 payment_commitment,
                 price_commitment,
                 terms_hash,
+                offer_commitment,
 
                 expires_at,
 
@@ -144,6 +159,7 @@ use crate::offers::offer_validation::{
                         payment_commitment,
                         price_commitment,
                         terms_hash,
+                        offer_commitment,
 
                         expires_at,
                         timestamp: now,
@@ -218,6 +234,8 @@ use crate::offers::offer_validation::{
                 now,
             );
 
+            self.reserve_terms_commitment(terms_hash);
+
             assert_valid_status_transition(
                 parent_offer.status,
                 OfferStatus::Countered,
@@ -238,6 +256,17 @@ use crate::offers::offer_validation::{
             // Create a new independent Offer record.
             let counter_offer_id =
                 self.next_offer_id();
+
+            let counter_offer_commitment = compute_offer_commitment(
+                parent_offer.conversation_tag,
+                counter_offer_id,
+                parent_offer.asset_type_commitment,
+                parent_offer.asset_commitment,
+                parent_offer.payment_commitment,
+                price_commitment,
+                terms_hash,
+                expires_at,
+            );
 
             let counter_offer = Offer {
                 offer_id: counter_offer_id,
@@ -265,6 +294,8 @@ use crate::offers::offer_validation::{
                 // Price and full terms may change.
                 price_commitment,
                 terms_hash,
+                offer_commitment:
+                    counter_offer_commitment,
 
                 expires_at,
 
@@ -303,6 +334,8 @@ use crate::offers::offer_validation::{
 
                         price_commitment,
                         terms_hash,
+                        offer_commitment:
+                            counter_offer_commitment,
 
                         expires_at,
                         timestamp: now,

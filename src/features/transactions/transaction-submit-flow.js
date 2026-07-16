@@ -167,7 +167,7 @@ export function createTransactionSubmitService({
         label: "Coming Soon",
         toast: "Shielded via STRK20 is coming soon.",
         why: message,
-        howToFix: "Choose Encrypted On-chain for the currently available messaging path.",
+        howToFix: "Choose Direct encrypted for the currently available messaging path.",
       };
     }
     if (
