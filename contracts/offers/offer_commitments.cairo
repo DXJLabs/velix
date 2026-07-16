@@ -1,49 +1,78 @@
 use core::poseidon::poseidon_hash_span;
-use crate::utils::constants::OFFER_COMMITMENT_DOMAIN;
 
-/// Separate domain for encrypted offer actions submitted through the pinned
-/// Privacy Pool. Keeping this distinct from the direct Offer commitment avoids
-/// cross-protocol commitment reuse.
-pub const SHIELDED_OFFER_ACTION_DOMAIN: felt252 = 'VEIL_PRIVATE_OFFER_ACTION_V1';
+use crate::utils::constants::{
+    OFFER_ENVELOPE_HEADER_FELTS,
+    VEIL_OFFER_COMMITMENT_DOMAIN,
+};
 
-pub fn compute_offer_commitment(
-    conversation_tag: felt252,
-    offer_nonce: felt252,
-    asset_type_commitment: felt252,
-    asset_commitment: felt252,
-    payment_commitment: felt252,
-    price_commitment: felt252,
-    terms_hash: felt252,
-    expires_at: u64,
+/// Compute the domain-separated commitment for one encrypted VEIL Offer action.
+///
+/// Commitment format:
+///
+/// Poseidon(
+///     VEIL_OFFER_COMMITMENT_DOMAIN,
+///     envelope_version,
+///     offer_action_locator,
+///     payload_chunk_count,
+///     ...ciphertext_chunks
+/// )
+///
+/// SECURITY:
+///
+/// - the encrypted-envelope version is committed;
+/// - the one-time action locator is committed;
+/// - the declared ciphertext length is committed;
+/// - ciphertext ordering is committed;
+/// - changing any ciphertext chunk changes the commitment;
+/// - the claimed commitment field itself is not hashed;
+/// - Offer lifecycle semantics remain inside ciphertext.
+///
+/// The caller must validate the exact calldata length before invoking this
+/// function.
+///
+/// Calldata layout:
+///
+/// 0. envelope_version
+/// 1. offer_action_locator
+/// 2. claimed_payload_commitment
+/// 3. payload_chunk_count
+/// 4... ciphertext_chunks
+///
+/// Helper-level commitment uniqueness does not replace the Privacy Pool's
+/// protocol-level WriteOnce replay-protection requirement.
+pub fn compute_offer_action_commitment(
+    envelope_version: u8,
+    offer_action_locator: felt252,
+    payload_chunk_count: u64,
+    calldata: Span<felt252>,
 ) -> felt252 {
-    let data = array![
-        OFFER_COMMITMENT_DOMAIN,
-        conversation_tag,
-        offer_nonce,
-        asset_type_commitment,
-        asset_commitment,
-        payment_commitment,
-        price_commitment,
-        terms_hash,
-        expires_at.into(),
-    ];
-    poseidon_hash_span(data.span())
-}
+    let mut hash_input = ArrayTrait::<felt252>::new();
 
-pub fn compute_shielded_offer_action_commitment(
-    action_kind: felt252,
-    conversation_tag: felt252,
-    encrypted_payload_commitment: felt252,
-    valid_until: u64,
-    replay_nullifier: felt252,
-) -> felt252 {
-    let data = array![
-        SHIELDED_OFFER_ACTION_DOMAIN,
-        action_kind,
-        conversation_tag,
-        encrypted_payload_commitment,
-        valid_until.into(),
-        replay_nullifier,
-    ];
-    poseidon_hash_span(data.span())
+    hash_input.append(VEIL_OFFER_COMMITMENT_DOMAIN);
+    hash_input.append(envelope_version.into());
+    hash_input.append(offer_action_locator);
+    hash_input.append(payload_chunk_count.into());
+
+    let mut chunk_index: u64 = 0;
+
+    loop {
+        if chunk_index == payload_chunk_count {
+            break;
+        }
+
+        let chunk_offset: usize = chunk_index
+            .try_into()
+            .expect('Offer chunk overflow');
+
+        let calldata_index =
+            OFFER_ENVELOPE_HEADER_FELTS + chunk_offset;
+
+        hash_input.append(
+            *calldata.at(calldata_index),
+        );
+
+        chunk_index += 1;
+    };
+
+    poseidon_hash_span(hash_input.span())
 }
