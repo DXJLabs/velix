@@ -1,19 +1,5 @@
 #[starknet::contract]
-pub mod VeilOffer {
-    use openzeppelin_introspection::src5::SRC5Component;
-    use openzeppelin_introspection::src5::SRC5Component::InternalTrait as SRC5InternalTrait;
-
-    use openzeppelin_security::reentrancyguard::ReentrancyGuardComponent;
-    use openzeppelin_security::reentrancyguard::ReentrancyGuardComponent::InternalTrait
-        as ReentrancyGuardInternalTrait;
-
-    use starknet::{
-        ContractAddress,
-        get_block_timestamp,
-        get_caller_address,
-    };
-    use starknet::event::EventEmitter;
-
+pub mod VeilOfferHelper {
     use starknet::storage::{
         Map,
         StorageMapReadAccess,
@@ -21,63 +7,18 @@ pub mod VeilOffer {
         StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-
-    use crate::offers::offer_types::{
-        Offer,
-        OfferStatus,
-        ShieldedOfferAction,
-    };
+    use starknet::{ContractAddress, get_caller_address};
 
     use crate::interfaces::privacy_pool_types::OpenNoteDeposit;
 
-    use crate::offers::offer_commitments::{
-        compute_shielded_offer_action_commitment,
-    };
+    use crate::offers::offer_commitments::compute_offer_action_commitment;
+    use crate::offers::offer_events::OfferActionCommitted;
+    use crate::offers::offer_interfaces::IVeilOfferHelper;
+    use crate::offers::offer_types::EncryptedOfferActionRecord;
+    use crate::offers::offer_validation;
 
-    use crate::offers::offer_interfaces::IVeilOffer;
-
-    use crate::offers::offer_events::{
-        OfferCreated,
-        CounterOfferCreated,
-        OfferAccepted,
-        OfferRejected,
-        OfferCancelled,
-        OfferExpired,
-        OfferConvertedToEscrow,
-        ShieldedOfferActionCommitted,
-    };
-
-    use crate::offers::offer_validation::{
-        assert_non_zero,
-        assert_non_zero_address,
-        assert_supported_shielded_action,
-        assert_valid_expiry,
-    };
-
-    const IVEIL_OFFER_ID: felt252 =
-        0x5645494c5f4f464645525f5631;
-
-    component!(
-        path: SRC5Component,
-        storage: src5,
-        event: SRC5Event
-    );
-
-    component!(
-        path: ReentrancyGuardComponent,
-        storage: reentrancy_guard,
-        event: ReentrancyGuardEvent,
-    );
-
-    #[abi(embed_v0)]
-    impl SRC5Impl =
-        SRC5Component::SRC5Impl<ContractState>;
-
-    #[path("../../contracts/offers/offer_lifecycle_actions.cairo")]
-    mod offer_lifecycle_actions;
-
-    #[path("../../contracts/offers/offer_resolution_actions.cairo")]
-    mod offer_resolution_actions;
+    use crate::utils::constants::OFFER_ENVELOPE_HEADER_FELTS;
+    use crate::utils::errors;
 
     // -------------------------------------------------------------------------
     // Storage
@@ -85,46 +26,28 @@ pub mod VeilOffer {
 
     #[storage]
     struct Storage {
-        #[substorage(v0)]
-        src5: SRC5Component::Storage,
-
-        #[substorage(v0)]
-        reentrancy_guard: ReentrancyGuardComponent::Storage,
-
-        /// Offer state indexed by offer id.
-        offers: Map<felt252, Offer>,
-
-        /// Explicit existence marker.
-        offer_exists: Map<felt252, bool>,
-
-        /// Number of offer records created.
-        ///
-        /// Counter-offers are independent Offer records
-        /// and therefore increment this count.
-        offer_count: u64,
-
-        /// Exact encrypted terms commitments consumed by direct create/counter
-        /// operations. A randomized, context-bound ciphertext envelope should
-        /// produce a fresh commitment for every legitimate action.
-        used_terms_commitments: Map<felt252, bool>,
-
-        /// Canonical Privacy Pool allowed to call privacy_invoke.
+        /// Only this Privacy Pool may invoke the encrypted Offer path.
         privacy_pool: ContractAddress,
 
-        /// Append-only encrypted action journal for the Pool path.
-        shielded_actions: Map<u64, ShieldedOfferAction>,
-        shielded_action_count: u64,
-        used_shielded_action_commitments: Map<felt252, bool>,
-        used_shielded_nullifiers: Map<felt252, bool>,
+        /// Public structural records indexed by one-time action locators.
+        offer_actions: Map<felt252, EncryptedOfferActionRecord>,
 
-        /// Trusted VeilEscrow contract.
+        /// Ciphertext chunks indexed by:
         ///
-        /// Only this contract may convert an Accepted offer
-        /// into ConvertedToEscrow.
-        escrow_contract: ContractAddress,
+        /// `(offer_action_locator, chunk_index)`.
+        payload_chunks: Map<(felt252, u64), felt252>,
 
-        /// Deployment owner allowed to complete two-step wiring.
-        owner: ContractAddress,
+        /// Explicit action existence marker.
+        ///
+        /// Cairo maps return default values for unwritten keys, so this map
+        /// distinguishes an absent action from an all-zero record.
+        stored_offer_action_locators: Map<felt252, bool>,
+
+        /// Global encrypted-envelope commitment reuse guard.
+        ///
+        /// This is helper-level duplicate protection only. It does not replace
+        /// Privacy Pool replay protection.
+        committed_offer_payloads: Map<felt252, bool>,
     }
 
     // -------------------------------------------------------------------------
@@ -134,21 +57,7 @@ pub mod VeilOffer {
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
-        #[flat]
-        SRC5Event: SRC5Component::Event,
-
-        #[flat]
-        ReentrancyGuardEvent:
-            ReentrancyGuardComponent::Event,
-
-        OfferCreated: OfferCreated,
-        CounterOfferCreated: CounterOfferCreated,
-        OfferAccepted: OfferAccepted,
-        OfferRejected: OfferRejected,
-        OfferCancelled: OfferCancelled,
-        OfferExpired: OfferExpired,
-        OfferConvertedToEscrow: OfferConvertedToEscrow,
-        ShieldedOfferActionCommitted: ShieldedOfferActionCommitted,
+        OfferActionCommitted: OfferActionCommitted,
     }
 
     // -------------------------------------------------------------------------
@@ -159,26 +68,15 @@ pub mod VeilOffer {
     fn constructor(
         ref self: ContractState,
         privacy_pool: ContractAddress,
-        escrow_contract: ContractAddress,
-        owner: ContractAddress,
     ) {
-        assert_non_zero_address(privacy_pool);
-        assert_non_zero_address(owner);
+        let zero_address: ContractAddress = 0.try_into().unwrap();
 
-        let zero_address: ContractAddress =
-            0.try_into().unwrap();
-
-        if escrow_contract != zero_address {
-            assert_non_zero_address(escrow_contract);
-        }
+        assert(
+            privacy_pool != zero_address,
+            errors::ZERO_ADDRESS,
+        );
 
         self.privacy_pool.write(privacy_pool);
-        self.escrow_contract.write(escrow_contract);
-        self.owner.write(owner);
-
-        self.src5.register_interface(
-            IVEIL_OFFER_ID,
-        );
     }
 
     // -------------------------------------------------------------------------
@@ -186,310 +84,33 @@ pub mod VeilOffer {
     // -------------------------------------------------------------------------
 
     #[abi(embed_v0)]
-    impl VeilOfferImpl of IVeilOffer<ContractState> {
-        /// Store one fixed-schema encrypted offer action from the pinned Pool.
+    impl VeilOfferHelperImpl of IVeilOfferHelper<ContractState> {
+        /// Store one encrypted VEIL Offer action through Privacy Pool
+        /// `InvokeExternal`.
         ///
-        /// Pool provenance alone cannot prove which direct ContractAddress is
-        /// the maker/taker. Consequently this append-only journal never mutates
-        /// the account-authorized Offer lifecycle below. Pure shielded offer
-        /// actions remain UNVERIFIED until proof-backed participant
-        /// authorization and live E2E exist.
+        /// SECURITY BOUNDARIES:
+        ///
+        /// - only the Privacy Pool fixed at deployment may call this function;
+        /// - arbitrary wallets and contracts cannot write directly;
+        /// - InvokeExternal calldata remains public ciphertext;
+        /// - the helper validates only envelope structure and commitment;
+        /// - the helper never parses Offer lifecycle semantics;
+        /// - participant authorization remains outside this helper;
+        /// - the containing pool transaction must independently satisfy the
+        ///   official replay-protection requirement.
         fn privacy_invoke(
             ref self: ContractState,
             calldata: Span<felt252>,
         ) -> Span<OpenNoteDeposit> {
-            assert(
-                get_caller_address() == self.privacy_pool.read(),
-                'Not privacy pool',
-            );
-
-            // Fixed calldata only. There is intentionally no target, selector,
-            // nested call array, or arbitrary external-call surface.
-            assert(calldata.len() == 6, 'Invalid offer calldata');
-
-            self.enter_reentrancy_guard();
-
-            let action_kind = *calldata.at(0);
-            let conversation_tag = *calldata.at(1);
-            let encrypted_payload_commitment = *calldata.at(2);
-            let valid_until: u64 = (*calldata.at(3))
-                .try_into()
-                .expect('Invalid offer expiry');
-            let replay_nullifier = *calldata.at(4);
-            let claimed_action_commitment = *calldata.at(5);
-            let now = get_block_timestamp();
-
-            assert_supported_shielded_action(action_kind);
-            assert_non_zero(conversation_tag, 'Invalid conversation');
-            assert_non_zero(encrypted_payload_commitment, 'Invalid encrypted terms');
-            assert_non_zero(replay_nullifier, 'Invalid offer nullifier');
-            assert_non_zero(claimed_action_commitment, 'Invalid offer commitment');
-            assert_valid_expiry(valid_until, now);
-
-            let computed_action_commitment = compute_shielded_offer_action_commitment(
-                action_kind,
-                conversation_tag,
-                encrypted_payload_commitment,
-                valid_until,
-                replay_nullifier,
-            );
+            let caller = get_caller_address();
+            let expected_privacy_pool = self.privacy_pool.read();
 
             assert(
-                computed_action_commitment == claimed_action_commitment,
-                'Offer commitment mismatch',
-            );
-            assert(
-                !self.used_shielded_action_commitments.read(computed_action_commitment),
-                'Offer action replay',
-            );
-            assert(
-                !self.used_shielded_nullifiers.read(replay_nullifier),
-                'Offer nullifier replay',
+                caller == expected_privacy_pool,
+                errors::UNAUTHORIZED_PRIVACY_POOL,
             );
 
-            let action_index = self.shielded_action_count.read() + 1;
-            let action = ShieldedOfferAction {
-                action_index,
-                action_kind,
-                conversation_tag,
-                encrypted_payload_commitment,
-                valid_until,
-                replay_nullifier,
-                action_commitment: computed_action_commitment,
-                created_at: now,
-            };
-
-            // Effects precede the event; this entry point performs no external
-            // calls and returns no deposits.
-            self.shielded_actions.write(action_index, action);
-            self.shielded_action_count.write(action_index);
-            self.used_shielded_action_commitments.write(computed_action_commitment, true);
-            self.used_shielded_nullifiers.write(replay_nullifier, true);
-
-            self.emit(
-                Event::ShieldedOfferActionCommitted(
-                    ShieldedOfferActionCommitted {
-                        conversation_tag,
-                        action_index,
-                        action_kind,
-                        action_commitment: computed_action_commitment,
-                        timestamp: now,
-                    },
-                ),
-            );
-
-            self.exit_reentrancy_guard();
-            ArrayTrait::<OpenNoteDeposit>::new().span()
-        }
-
-        fn create_offer(
-            ref self: ContractState,
-            conversation_tag: felt252,
-            taker: ContractAddress,
-            asset_type_commitment: felt252,
-            asset_commitment: felt252,
-            payment_commitment: felt252,
-            price_commitment: felt252,
-            terms_hash: felt252,
-            expires_at: u64,
-        ) -> felt252 {
-            offer_lifecycle_actions::create_offer(
-                ref self,
-                conversation_tag,
-                taker,
-                asset_type_commitment,
-                asset_commitment,
-                payment_commitment,
-                price_commitment,
-                terms_hash,
-                expires_at,
-            )
-        }
-
-        fn counter_offer(
-            ref self: ContractState,
-            offer_id: felt252,
-            price_commitment: felt252,
-            terms_hash: felt252,
-            expires_at: u64,
-        ) -> felt252 {
-            offer_lifecycle_actions::counter_offer(
-                ref self,
-                offer_id,
-                price_commitment,
-                terms_hash,
-                expires_at,
-            )
-        }
-
-        fn accept_offer(
-            ref self: ContractState,
-            offer_id: felt252,
-        ) {
-            offer_lifecycle_actions::accept_offer(
-                ref self,
-                offer_id,
-            );
-        }
-
-        fn reject_offer(
-            ref self: ContractState,
-            offer_id: felt252,
-        ) {
-            offer_resolution_actions::reject_offer(
-                ref self,
-                offer_id,
-            );
-        }
-
-        fn cancel_offer(
-            ref self: ContractState,
-            offer_id: felt252,
-        ) {
-            offer_resolution_actions::cancel_offer(
-                ref self,
-                offer_id,
-            );
-        }
-
-        fn expire_offer(
-            ref self: ContractState,
-            offer_id: felt252,
-        ) {
-            offer_resolution_actions::expire_offer(
-                ref self,
-                offer_id,
-            );
-        }
-
-        fn mark_converted_to_escrow(
-            ref self: ContractState,
-            offer_id: felt252,
-            escrow_id: felt252,
-        ) {
-            offer_resolution_actions::mark_converted_to_escrow(
-                ref self,
-                offer_id,
-                escrow_id,
-            );
-        }
-
-        fn set_escrow_contract(
-            ref self: ContractState,
-            escrow_contract: ContractAddress,
-        ) {
-            let caller =
-                get_caller_address();
-
-            assert(
-                caller == self.owner.read(),
-                'Only owner',
-            );
-
-            assert_non_zero_address(escrow_contract);
-
-            let zero_address: ContractAddress =
-                0.try_into().unwrap();
-
-            let current_escrow =
-                self.escrow_contract.read();
-
-            assert(
-                current_escrow == zero_address
-                    || current_escrow == escrow_contract,
-                'Escrow already set',
-            );
-
-            self.escrow_contract.write(escrow_contract);
-        }
-
-        // ---------------------------------------------------------------------
-        // Views
-        // ---------------------------------------------------------------------
-
-        fn get_offer(
-            self: @ContractState,
-            offer_id: felt252,
-        ) -> Offer {
-            self.read_existing_offer(
-                offer_id,
-            )
-        }
-
-        fn get_offer_status(
-            self: @ContractState,
-            offer_id: felt252,
-        ) -> OfferStatus {
-            self.read_existing_offer(
-                offer_id,
-            ).status
-        }
-
-        fn get_escrow_id(
-            self: @ContractState,
-            offer_id: felt252,
-        ) -> felt252 {
-            self.read_existing_offer(
-                offer_id,
-            ).escrow_id
-        }
-
-        fn get_offer_commitment(
-            self: @ContractState,
-            offer_id: felt252,
-        ) -> felt252 {
-            self.read_existing_offer(offer_id).offer_commitment
-        }
-
-        fn is_terms_commitment_used(
-            self: @ContractState,
-            terms_hash: felt252,
-        ) -> bool {
-            self.used_terms_commitments.read(terms_hash)
-        }
-
-        fn get_shielded_action_count(
-            self: @ContractState,
-        ) -> u64 {
-            self.shielded_action_count.read()
-        }
-
-        fn get_shielded_action(
-            self: @ContractState,
-            action_index: u64,
-        ) -> ShieldedOfferAction {
-            let count = self.shielded_action_count.read();
-            assert(
-                action_index != 0 && action_index <= count,
-                'Shielded action not found',
-            );
-            self.shielded_actions.read(action_index)
-        }
-
-        fn is_shielded_action_committed(
-            self: @ContractState,
-            action_commitment: felt252,
-        ) -> bool {
-            self.used_shielded_action_commitments.read(action_commitment)
-        }
-
-        fn is_shielded_nullifier_used(
-            self: @ContractState,
-            replay_nullifier: felt252,
-        ) -> bool {
-            self.used_shielded_nullifiers.read(replay_nullifier)
-        }
-
-        fn get_offer_count(
-            self: @ContractState,
-        ) -> u64 {
-            self.offer_count.read()
-        }
-
-        fn get_escrow_contract(
-            self: @ContractState,
-        ) -> ContractAddress {
-            self.escrow_contract.read()
+            self.store_offer_action(calldata)
         }
 
         fn get_privacy_pool(
@@ -498,10 +119,57 @@ pub mod VeilOffer {
             self.privacy_pool.read()
         }
 
-        fn get_owner(
+        fn has_offer_action(
             self: @ContractState,
-        ) -> ContractAddress {
-            self.owner.read()
+            offer_action_locator: felt252,
+        ) -> bool {
+            self
+                .stored_offer_action_locators
+                .read(offer_action_locator)
+        }
+
+        fn get_offer_action(
+            self: @ContractState,
+            offer_action_locator: felt252,
+        ) -> EncryptedOfferActionRecord {
+            let exists = self
+                .stored_offer_action_locators
+                .read(offer_action_locator);
+
+            offer_validation::assert_offer_action_exists(exists);
+
+            self.offer_actions.read(offer_action_locator)
+        }
+
+        fn get_offer_payload_chunk(
+            self: @ContractState,
+            offer_action_locator: felt252,
+            chunk_index: u64,
+        ) -> felt252 {
+            let exists = self
+                .stored_offer_action_locators
+                .read(offer_action_locator);
+
+            offer_validation::assert_offer_action_exists(exists);
+
+            let offer_action =
+                self.offer_actions.read(offer_action_locator);
+
+            offer_validation::assert_valid_offer_chunk_index(
+                chunk_index,
+                offer_action.payload_chunk_count,
+            );
+
+            self
+                .payload_chunks
+                .read((offer_action_locator, chunk_index))
+        }
+
+        fn is_offer_payload_committed(
+            self: @ContractState,
+            payload_commitment: felt252,
+        ) -> bool {
+            self.committed_offer_payloads.read(payload_commitment)
         }
     }
 
@@ -511,102 +179,159 @@ pub mod VeilOffer {
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
-        /// Read an existing offer or revert.
-        fn read_existing_offer(
-            self: @ContractState,
-            offer_id: felt252,
-        ) -> Offer {
-            assert(
-                offer_id != 0,
-                'Invalid offer',
-            );
-
-            assert(
-                self.offer_exists.read(offer_id),
-                'Offer not found',
-            );
-
-            self.offers.read(
-                offer_id,
-            )
-        }
-
-        /// Allocate the next sequential offer id.
+        /// Validate and persist one encrypted Offer action.
         ///
-        /// Counter-offers are independent Offer records
-        /// and therefore receive their own ids.
-        fn next_offer_id(
+        /// Calldata layout:
+        ///
+        /// 0. envelope_version
+        /// 1. offer_action_locator
+        /// 2. claimed_payload_commitment
+        /// 3. payload_chunk_count
+        /// 4... ciphertext_chunks
+        fn store_offer_action(
             ref self: ContractState,
-        ) -> felt252 {
-            let current_count =
-                self.offer_count.read();
-
-            let offer_id: felt252 =
-                current_count.into() + 1;
-
-            self.offer_count.write(
-                current_count + 1,
+            calldata: Span<felt252>,
+        ) -> Span<OpenNoteDeposit> {
+            assert(
+                calldata.len() >= OFFER_ENVELOPE_HEADER_FELTS,
+                errors::INVALID_OFFER_CALLDATA,
             );
 
-            offer_id
-        }
+            let envelope_version: u8 = (*calldata.at(0))
+                .try_into()
+                .expect(errors::INVALID_OFFER_ENVELOPE_VERSION);
 
-        /// Persist a newly created Offer record.
-        fn write_new_offer(
-            ref self: ContractState,
-            offer: Offer,
-        ) {
-            assert(
-                offer.offer_id != 0,
-                'Invalid offer',
+            let offer_action_locator = *calldata.at(1);
+            let claimed_payload_commitment = *calldata.at(2);
+
+            let payload_chunk_count: u64 = (*calldata.at(3))
+                .try_into()
+                .expect(errors::INVALID_OFFER_CHUNK_COUNT);
+
+            offer_validation::assert_valid_offer_action_header(
+                envelope_version,
+                offer_action_locator,
+                claimed_payload_commitment,
+                payload_chunk_count,
             );
 
+            let chunk_count_usize: usize = payload_chunk_count
+                .try_into()
+                .expect('Offer chunk overflow');
+
+            let expected_calldata_length =
+                OFFER_ENVELOPE_HEADER_FELTS + chunk_count_usize;
+
             assert(
-                !self.offer_exists.read(
-                    offer.offer_id,
+                calldata.len() == expected_calldata_length,
+                errors::INVALID_OFFER_PAYLOAD_SIZE,
+            );
+
+            let computed_payload_commitment =
+                compute_offer_action_commitment(
+                    envelope_version,
+                    offer_action_locator,
+                    payload_chunk_count,
+                    calldata,
+                );
+
+            assert(
+                computed_payload_commitment
+                    == claimed_payload_commitment,
+                errors::OFFER_PAYLOAD_COMMITMENT_MISMATCH,
+            );
+
+            let locator_exists = self
+                .stored_offer_action_locators
+                .read(offer_action_locator);
+
+            offer_validation::assert_offer_action_not_stored(
+                locator_exists,
+            );
+
+            let commitment_exists = self
+                .committed_offer_payloads
+                .read(computed_payload_commitment);
+
+            offer_validation::assert_offer_payload_not_committed(
+                commitment_exists,
+            );
+
+            let offer_action = EncryptedOfferActionRecord {
+                envelope_version,
+                offer_action_locator,
+                payload_commitment: computed_payload_commitment,
+                payload_chunk_count,
+            };
+
+            self
+                .offer_actions
+                .write(offer_action_locator, offer_action);
+
+            self.store_offer_payload_chunks(
+                offer_action_locator,
+                payload_chunk_count,
+                calldata,
+            );
+
+            self
+                .stored_offer_action_locators
+                .write(offer_action_locator, true);
+
+            self
+                .committed_offer_payloads
+                .write(computed_payload_commitment, true);
+
+            self.emit(
+                Event::OfferActionCommitted(
+                    OfferActionCommitted {
+                        offer_action_locator,
+                        payload_commitment:
+                            computed_payload_commitment,
+                    },
                 ),
-                'Offer exists',
             );
 
-            self.offers.write(
-                offer.offer_id,
-                offer,
-            );
-
-            self.offer_exists.write(
-                offer.offer_id,
-                true,
-            );
+            // Storing an encrypted Offer action does not request an ERC-20
+            // output deposit into an open note.
+            ArrayTrait::<OpenNoteDeposit>::new().span()
         }
 
-        /// Consume a randomized ciphertext/terms commitment once globally.
-        /// Reusing an exact encrypted envelope is treated as replay even across
-        /// conversations; legitimate retries must rebuild encryption with a
-        /// fresh nonce and therefore a fresh commitment.
-        fn reserve_terms_commitment(
+        /// Persist opaque ciphertext chunks.
+        ///
+        /// Zero-valued felts are accepted because a valid encrypted
+        /// representation may contain zero.
+        fn store_offer_payload_chunks(
             ref self: ContractState,
-            terms_hash: felt252,
+            offer_action_locator: felt252,
+            payload_chunk_count: u64,
+            calldata: Span<felt252>,
         ) {
-            assert(terms_hash != 0, 'Invalid terms');
-            assert(
-                !self.used_terms_commitments.read(terms_hash),
-                'Offer replay',
-            );
-            self.used_terms_commitments.write(terms_hash, true);
-        }
+            let mut chunk_index: u64 = 0;
 
-        /// Start OpenZeppelin reentrancy protection.
-        fn enter_reentrancy_guard(
-            ref self: ContractState,
-        ) {
-            self.reentrancy_guard.start();
-        }
+            loop {
+                if chunk_index == payload_chunk_count {
+                    break;
+                }
 
-        /// End OpenZeppelin reentrancy protection.
-        fn exit_reentrancy_guard(
-            ref self: ContractState,
-        ) {
-            self.reentrancy_guard.end();
+                let chunk_offset: usize = chunk_index
+                    .try_into()
+                    .expect('Offer chunk index overflow');
+
+                let calldata_index =
+                    OFFER_ENVELOPE_HEADER_FELTS + chunk_offset;
+
+                let chunk = *calldata.at(calldata_index);
+
+                self
+                    .payload_chunks
+                    .write(
+                        (offer_action_locator, chunk_index),
+                        chunk,
+                    );
+
+                chunk_index += 1;
+            };
         }
     }
 }
