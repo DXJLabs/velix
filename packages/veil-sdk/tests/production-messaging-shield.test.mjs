@@ -178,6 +178,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           throw new Error("not used");
@@ -227,6 +228,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           return { transaction: { kind: "privacy-pool-apply" } };
@@ -292,6 +294,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           throw new Error("not used");
@@ -353,6 +356,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           throw new Error("not used");

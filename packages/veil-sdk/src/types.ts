@@ -355,6 +355,7 @@ export interface StarknetPrivacyPoolTransportConfig {
   privacyPoolAddress: string;
   helperAddress: string;
   privacySdk?: StarknetPrivacySdkLike;
+  transportRoute?: "official-sdk" | "legacy-test-only";
   actionBuilder?: StarknetPrivacyActionBuilderLike;
   paymaster?: AvnuPaymasterLike;
   provider?: StarknetProviderLike;

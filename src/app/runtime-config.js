@@ -4,7 +4,10 @@ import {
   normalizeStarknetChainId,
   requireVeilSepoliaConfig,
 } from "../../config/veil-sepolia.js";
-import { VEIL_PHASE1_FEATURE_STATUS } from "../domain/feature-status.js";
+import {
+  VEIL_PHASE1_FEATURE_STATUS,
+  VEIL_PHASE3_PRIVACY_TRANSPORT_STATE,
+} from "../domain/feature-status.js";
 
 export const ENCRYPTED_DIRECT_MESSAGE_MODE = "encrypted-direct";
 export const STRK20_SHIELDED_MESSAGE_MODE = "strk20-shielded";
@@ -93,6 +96,53 @@ function readOptionalHttpUrl(value, name) {
   return normalized ? validateHttpUrl(normalized, name) : "";
 }
 
+function isLoopbackHostname(value) {
+  const hostname = String(value || "").toLowerCase().replace(/^\[|\]$/gu, "");
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function isPrivateNetworkLiteral(value) {
+  const hostname = String(value || "").toLowerCase().replace(/^\[|\]$/gu, "");
+  if (hostname.includes(":")) {
+    return hostname === "::1" || hostname.startsWith("fc") || hostname.startsWith("fd") || hostname.startsWith("fe80:");
+  }
+  const octets = hostname.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+  const [first, second = 0] = octets;
+  return first === 0
+    || first === 10
+    || first === 127
+    || (first === 100 && second >= 64 && second <= 127)
+    || (first === 169 && second === 254)
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168);
+}
+
+function readProverUrl(value, mode) {
+  const normalized = readOptionalHttpUrl(value, "VITE_STRK20_PROVER_URL");
+  if (!normalized) return "";
+  const parsed = new URL(normalized);
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error("VITE_STRK20_PROVER_URL cannot contain credentials, query parameters, or fragments.");
+  }
+  if (parsed.pathname !== "/" && parsed.pathname !== "") {
+    throw new Error("VITE_STRK20_PROVER_URL must use the reviewed root JSON-RPC path.");
+  }
+  const loopback = isLoopbackHostname(parsed.hostname);
+  if (mode === "self-hosted" && !loopback) {
+    throw new Error("Self-hosted proving accepts a loopback endpoint only.");
+  }
+  if (mode === "hosted" && (loopback || isPrivateNetworkLiteral(parsed.hostname))) {
+    throw new Error("Hosted proving rejects loopback and private-network literal endpoints.");
+  }
+  if (!loopback && parsed.protocol !== "https:") {
+    throw new Error("Non-local proving requires HTTPS.");
+  }
+  return parsed.origin;
+}
+
 function assertRpcNamespace(url, name) {
   const namespace = new URL(url).pathname.match(/\/rpc\/(v\d+_\d+)(?:\/|$)/i)?.[1];
   if (namespace && namespace.toLowerCase() !== VEIL_SEPOLIA_CONFIG.rpc.version.toLowerCase()) {
@@ -133,7 +183,7 @@ function createPrivacyRuntimeConfig(env, networkConfig) {
     ["disabled", "self-hosted", "hosted"],
     "disabled",
   );
-  const proverUrl = readOptionalHttpUrl(env.VITE_STRK20_PROVER_URL, "VITE_STRK20_PROVER_URL");
+  const proverUrl = readProverUrl(env.VITE_STRK20_PROVER_URL, proverMode);
   if (proverMode === "disabled" && proverUrl) {
     throw new Error("VITE_STRK20_PROVER_URL requires a non-disabled VITE_STRK20_PROVER_MODE.");
   }
@@ -174,19 +224,38 @@ function createPrivacyRuntimeConfig(env, networkConfig) {
     throw new Error("Screening cannot be configured for the verified legacy Sepolia Privacy Pool.");
   }
 
+  const sdkCompatible = networkConfig.officialCompatibility.sdk.version === "0.14.3-rc.2";
+  const poolCompatible = networkConfig.privacyPool.compatibility === networkConfig.officialCompatibility.poolContract.tag;
+
   return Object.freeze({
     sdk: Object.freeze({
       enabled: false,
       installed: true,
+      compatible: sdkCompatible,
       pin: networkConfig.officialCompatibility.sdk,
     }),
-    prover: Object.freeze({ mode: proverMode, url: proverUrl }),
+    wallet: Object.freeze({ capable: false, liveVerified: false }),
+    pool: Object.freeze({
+      compatible: poolCompatible,
+      compatibility: networkConfig.privacyPool.compatibility,
+    }),
+    prover: Object.freeze({
+      mode: proverMode,
+      url: proverUrl,
+      configured: proverMode !== "disabled",
+      localVerified: false,
+      liveVerified: false,
+      broadcastEnabled: false,
+    }),
     discovery: Object.freeze({ provider: discoveryProvider, url: discoveryUrl }),
     screening: Object.freeze({
       capable: networkConfig.privacyPool.screeningCapable,
       provider: screeningProvider,
       url: screeningUrl,
     }),
+    legacy: VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.legacy,
+    canonical: VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.canonical,
+    unshield: VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.unshield,
   });
 }
 

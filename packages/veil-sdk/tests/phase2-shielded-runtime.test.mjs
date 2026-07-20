@@ -190,6 +190,7 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction(input) {
           capturedActionInput = input;
@@ -281,7 +282,7 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
             mode: "shield",
           },
         }),
-      /Starknet Privacy SDK integration/i,
+      (error) => error.code === "CANONICAL_CAPABILITY_UNAVAILABLE",
     );
   });
 

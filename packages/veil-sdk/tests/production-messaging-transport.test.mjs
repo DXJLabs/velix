@@ -212,6 +212,7 @@ describe("VEIL onchain transport metadata and action preparation", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction(input) {
           builderInput = input;

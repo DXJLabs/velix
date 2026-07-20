@@ -14,6 +14,7 @@ import {
   type PrivacyPoolTotalCostEstimate,
 } from "../privacy_pool_fees";
 import { buildStarknetPrivacySdkAction } from "../starknet_privacy_sdk";
+import { VeilPrivacyError } from "../privacy/errors.js";
 import {
   createSpanHelperCall,
   extractBlockNumber,
@@ -44,6 +45,7 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
   readonly #privacyPoolAddress: string;
   readonly #helperAddress: string;
   readonly #privacySdk: StarknetPrivacyPoolTransportConfig["privacySdk"];
+  readonly #transportRoute: NonNullable<StarknetPrivacyPoolTransportConfig["transportRoute"]>;
   readonly #actionBuilder: StarknetPrivacyPoolTransportConfig["actionBuilder"];
   readonly #paymaster: StarknetPrivacyPoolTransportConfig["paymaster"];
   readonly #provider: StarknetProviderLike | undefined;
@@ -63,7 +65,26 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     this.#privacyPoolAddress = config.privacyPoolAddress;
     this.#helperAddress = config.helperAddress;
     this.#privacySdk = config.privacySdk;
+    this.#transportRoute = config.transportRoute ?? "official-sdk";
     this.#actionBuilder = config.actionBuilder;
+    if (this.#privacySdk && this.#actionBuilder) {
+      throw new VeilPrivacyError(
+        "CANONICAL_FALLBACK_FORBIDDEN",
+        "Official Privacy SDK and legacy action builder routes cannot be configured together.",
+      );
+    }
+    if (this.#actionBuilder && this.#transportRoute !== "legacy-test-only") {
+      throw new VeilPrivacyError(
+        "CANONICAL_FALLBACK_FORBIDDEN",
+        "Legacy Privacy Pool action builders require the explicit legacy-test-only route.",
+      );
+    }
+    if (this.#transportRoute === "legacy-test-only" && !this.#actionBuilder) {
+      throw new VeilPrivacyError(
+        "CANONICAL_CAPABILITY_UNAVAILABLE",
+        "The explicit legacy-test-only route requires a legacy action builder.",
+      );
+    }
     this.#paymaster = config.paymaster;
     this.#provider = config.provider;
     this.#readTransport = config.readTransport;
@@ -284,7 +305,13 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     legacyBuilder: () => Promise<StarknetPrivacyMessageAction | undefined> | undefined,
     missingMessage: string,
   ): Promise<StarknetPrivacyMessageAction> {
-    if (this.#privacySdk) {
+    if (this.#transportRoute === "official-sdk") {
+      if (!this.#privacySdk) {
+        throw new VeilPrivacyError(
+          "CANONICAL_CAPABILITY_UNAVAILABLE",
+          "Canonical Privacy Pool transport requires the isolated official SDK adapter.",
+        );
+      }
       return buildStarknetPrivacySdkAction(this.#privacySdk, input);
     }
 
@@ -293,7 +320,7 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
       return action;
     }
 
-    throw new Error(missingMessage);
+    throw new VeilPrivacyError("CANONICAL_CAPABILITY_UNAVAILABLE", missingMessage);
   }
 
   async #estimateFees(): Promise<PrivacyPoolTotalCostEstimate> {

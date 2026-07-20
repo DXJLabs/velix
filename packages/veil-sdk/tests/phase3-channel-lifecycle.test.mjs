@@ -210,6 +210,7 @@ describe("VEIL Phase 3 channel lifecycle", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction(input) {
           captured = input;

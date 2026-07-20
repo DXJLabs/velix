@@ -46,7 +46,6 @@ export function createWalletService({
       registration: detected.registration,
       shield: detected.shield && config.privacyRuntime.screening.capable,
       privateTransfer: detected.privateTransfer,
-      withdraw: detected.withdraw,
       customAnonymizerInvocation: detected.customInvoke,
       walletProofManagement: detected.walletProofManagement,
       screeningCapableDeposit: detected.screeningCapableDeposit && config.privacyRuntime.screening.capable,
