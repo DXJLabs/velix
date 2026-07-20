@@ -904,6 +904,26 @@ Hasil verifikasi 2026-07-20:
 - helper lama yang dideploy: class hash `0x7892efb...` — berbeda, tetap versi legacy;
 - laporan: [`docs/internal/testing/PHASE_4D_HELPER_ISOLATED_BUILD_TEST_REPORT.md`](./docs/internal/testing/PHASE_4D_HELPER_ISOLATED_BUILD_TEST_REPORT.md).
 
+### Fase 4E — Tinjauan Keamanan VeilChannelHelper ✅ done 2026-07-20
+
+Tujuan:
+
+- tinjauan keamanan sumber level kode untuk VeilChannelHelper dan modul pendukungnya;
+- verifikasi batas otorisasi, validasi payload, preimage commitment, proteksi duplikat;
+- analisis risiko: replay, locator griefing, spam, metadata leakage, storage growth;
+- tanpa mengubah Cairo, tanpa test, tanpa SDK.
+
+Hasil tinjauan 2026-07-20:
+
+- tidak ada kerentanan kritis ditemukan dalam sumber saat ini;
+- helper hanya mengautentikasi Pool yang dipasang pada konstruksi;
+- locator dan commitment uniqueness adalah proteksi duplikat, bukan replay protection lengkap;
+- pertumbuhan storage permanen — tidak ada mekanisme pruning;
+- metadata (locator, commitment, chunk count, timing) tetap terlihat on-chain;
+- 20 test lulus; test hardening diperlukan sebelum deployment;
+- deployment direkomendasikan BERSYARAT — terblokir sementara hingga syarat controlled-test terpenuhi;
+- laporan: [`docs/internal/audits/PHASE4E_HELPER_SECURITY_HARDENING_REVIEW.md`](./docs/internal/audits/PHASE4E_HELPER_SECURITY_HARDENING_REVIEW.md).
+
 ### Fase 5 — Private Invoke ke Helper
 
 Tujuan:
