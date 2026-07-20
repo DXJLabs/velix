@@ -19,7 +19,10 @@
 |---|---|
 | Privacy Pool | `0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5` |
 | Pool class hash | `0x30b8c540cf04d8ef0f4db2a9098d9cc0e35e83af1cb3325f5a4f40144b4b30b` |
-| VeilChannelHelper | `0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23` |
+| Helper target (lama, dideploy) | `0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23` |
+| Helper class hash (dideploy) | `0x7892efb93c77260c410d2e3e29cf6a28421d8e1ab0c688ffaf64304e7e47d97` |
+
+**Klarifikasi:** Helper yang menjadi target Invoke adalah versi lama yang sudah dideploy, BUKAN sumber lokal saat ini (`contracts/messaging/veil_channel_helper.cairo`). Lihat [`docs/internal/audits/PHASE4C_SMART_CONTRACT_REALITY_AUDIT.md`](./audits/PHASE4C_SMART_CONTRACT_REALITY_AUDIT.md) untuk perbandingan lengkap.
 
 ---
 
@@ -38,11 +41,11 @@ Hasil `compile_actions` dari Pool (didecode menggunakan ABI resmi SDK):
 1. **WriteOnce** — replay protection, registrasi viewing key
 2. **WriteOnce** — replay protection, marker channel
 3. **EmitViewingKeySet** — event, viewing key tercatat on-chain
-4. **Invoke** — memanggil VeilChannelHelper
+4. **Invoke** — memanggil helper lama yang dideploy
 
 Verifikasi:
 
-- Exactly satu Invoke menargetkan VeilChannelHelper.
+- Exactly satu Invoke menargetkan helper lama yang dideploy.
 - Tidak ada Deposit.
 - Tidak ada Withdraw.
 - Tidak ada Unshield.
@@ -50,6 +53,8 @@ Verifikasi:
 - Tidak ada TransferTo.
 - Tidak ada Offer.
 - Tidak ada Escrow.
+
+**Batasan:** Fase 4B tidak memverifikasi eksekusi helper, storage writes, penerimaan payload, event yang diemisi helper, atau kesamaan helper lama dengan sumber lokal saat ini.
 
 ---
 
@@ -78,10 +83,22 @@ Persyaratan sebelum proving asli dapat dilanjutkan:
 ## Status
 
 ```
+LEGACY_HELPER_ADDRESS_USED_FOR_CALL_MOCK=true
+CALL_MOCK_COMPILE_ACTIONS_VERIFIED=true
+HELPER_SOURCE_DEPLOYMENT_MATCH_VERIFIED=false
+HELPER_LOCAL_CLASS_HASH_UNAVAILABLE=true
+HELPER_SOURCE_REVIEW_COMPLETED=true
+HELPER_SECURITY_AUDIT_COMPLETED=false
+HELPER_ISOLATED_BUILD_VERIFIED=false
+HELPER_RUNTIME_EXECUTION_VERIFIED=false
+PRIVATE_INVOKE_HELPER_EXECUTION_VERIFIED=false
+HELPER_STORAGE_SPAM_RISK_REVIEW_REQUIRED=true
+SMART_CONTRACT_REALITY_AUDIT_COMPLETED=true
+SMART_CONTRACT_SECURITY_AUDIT_COMPLETED=false
+FULL_CAIRO_BUILD_VERIFIED=false
 POOL_ABI_SURFACE_VERIFIED=true
 POOL_EXACT_RC0_IDENTITY_VERIFIED=false
 STATIC_INVOKE_V3_VERIFIED=true
-CALL_MOCK_COMPILE_ACTIONS_VERIFIED=true
 CALL_MOCK_SIGNATURE_VERIFIED=false
 CALL_MOCK_PROOF_VERIFIED=false
 REAL_PROVER_DEFERRED_INFRASTRUCTURE=true
@@ -98,6 +115,12 @@ FASE_5_STARTED=false
 
 - Tidak ada broadcast transaksi.
 - Tidak ada pemanggilan `apply_actions`.
+- Tidak ada eksekusi helper yang diverifikasi.
+- Tidak ada verifikasi storage writes atau event helper.
+- Tidak ada verifikasi penerimaan payload oleh helper.
+- Tidak ada verifikasi kesamaan helper lama dengan sumber lokal saat ini.
+- Payer gas dan perilaku submission tidak diverifikasi oleh audit ini.
 - Shield tetap dinonaktifkan.
 - Fase 5 belum dimulai.
 - Tidak ada perubahan pada Cairo contracts, frontend, atau dependency.
+- Lihat [`docs/internal/audits/PHASE4C_SMART_CONTRACT_REALITY_AUDIT.md`](./audits/PHASE4C_SMART_CONTRACT_REALITY_AUDIT.md) untuk audit realitas lengkap.

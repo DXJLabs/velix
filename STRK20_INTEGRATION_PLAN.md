@@ -805,7 +805,7 @@ Tujuan:
 
 - verifikasi pipeline proving menggunakan `CallMockProofProvider` resmi SDK;
 - konfirmasi struktur Invoke V3 dan server actions ter-decode;
-- validasi replay-protection WriteOnce dan Invoke ke VeilChannelHelper;
+- validasi replay-protection WriteOnce dan Invoke ke alamat helper;
 - tanpa broadcast, tanpa apply_actions, tanpa prover lokal.
 
 Hasil verifikasi 2026-07-20:
@@ -814,20 +814,40 @@ Hasil verifikasi 2026-07-20:
 - hasil: **4 passed, 0 failed, 0 skipped**;
 - Privacy Pool: `0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5`;
 - Pool class hash: `0x30b8c540cf04d8ef0f4db2a9098d9cc0e35e83af1cb3325f5a4f40144b4b30b`;
-- VeilChannelHelper: `0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23`;
+- Helper target: `0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23`;
 - Invoke Transaction V3, calldata length: 17, signature length: 2;
 - server actions ter-decode: WriteOnce, WriteOnce, EmitViewingKeySet, Invoke;
-- tepat satu Invoke menargetkan VeilChannelHelper;
+- tepat satu Invoke menargetkan helper lama yang dideploy;
 - tidak ada Deposit, Withdraw, Unshield, TransferFrom, TransferTo, Offer, atau Escrow;
-- laporan: [`docs/internal/PHASE4B_CALL_MOCK_PROVING_REPORT.md`](./docs/internal/PHASE4B_CALL_MOCK_PROVING_REPORT.md).
+- laporan: [`docs/internal/PHASE4B_CALL_MOCK_PROVING_REPORT.md`](./docs/internal/PHASE4B_CALL_MOCK_PROVING_REPORT.md);
+- audit realitas: [`docs/internal/audits/PHASE4C_SMART_CONTRACT_REALITY_AUDIT.md`](./docs/internal/audits/PHASE4C_SMART_CONTRACT_REALITY_AUDIT.md).
+
+Klarifikasi penting:
+
+- Helper yang menjadi target Invoke adalah versi lama yang sudah dideploy (`0x05239084...`, class hash `0x7892efb...`), BUKAN sumber lokal saat ini (`contracts/messaging/veil_channel_helper.cairo`).
+- Helper lama menggunakan `conversation_tag`/`event_index` dan emit `TimelineCommitmentStored`. Sumber lokal saat ini menggunakan `message_locator`/`payload_commitment` dan emit `MessageCommitted`. Keduanya adalah kontrak berbeda.
+- `HELPER_SOURCE_DEPLOYMENT_MATCH_VERIFIED=false`.
+- `CallMockProofProvider` memverifikasi pipeline SDK → `Pool::compile_actions` → decode server actions. Tidak memverifikasi eksekusi helper, storage writes, penerimaan payload, atau kesamaan dengan sumber lokal.
 
 Status:
 
 ```
+LEGACY_HELPER_ADDRESS_USED_FOR_CALL_MOCK=true
+CALL_MOCK_COMPILE_ACTIONS_VERIFIED=true
+HELPER_SOURCE_DEPLOYMENT_MATCH_VERIFIED=false
+HELPER_LOCAL_CLASS_HASH_UNAVAILABLE=true
+HELPER_SOURCE_REVIEW_COMPLETED=true
+HELPER_SECURITY_AUDIT_COMPLETED=false
+HELPER_ISOLATED_BUILD_VERIFIED=false
+HELPER_RUNTIME_EXECUTION_VERIFIED=false
+PRIVATE_INVOKE_HELPER_EXECUTION_VERIFIED=false
+HELPER_STORAGE_SPAM_RISK_REVIEW_REQUIRED=true
+SMART_CONTRACT_REALITY_AUDIT_COMPLETED=true
+SMART_CONTRACT_SECURITY_AUDIT_COMPLETED=false
+FULL_CAIRO_BUILD_VERIFIED=false
 POOL_ABI_SURFACE_VERIFIED=true
 POOL_EXACT_RC0_IDENTITY_VERIFIED=false
 STATIC_INVOKE_V3_VERIFIED=true
-CALL_MOCK_COMPILE_ACTIONS_VERIFIED=true
 CALL_MOCK_SIGNATURE_VERIFIED=false
 CALL_MOCK_PROOF_VERIFIED=false
 REAL_PROVER_DEFERRED_INFRASTRUCTURE=true
@@ -851,6 +871,19 @@ Tahap prover asli ditangguhkan karena komputasi VPS/cloud yang sesuai belum ters
 - CPU dan RAM yang mencukupi;
 - tidak ada wallet secret produksi;
 - akun/state testing ephemeral yang dimiliki integrator.
+
+**Urutan implementasi yang dikoreksi:**
+
+1. ✅ Koreksi dokumentasi Fase 4B.
+2. Kunci spesifikasi VeilChannelHelper kanonikal (message_locator, payload_commitment, event).
+3. Buat target build dan test terisolasi untuk helper saat ini.
+4. Review validasi payload, storage, event, authorization, dan batas spam.
+5. Produksi class hash lokal yang dapat direproduksi.
+6. Deploy helper yang ditulis ulang hanya setelah persetujuan eksplisit.
+7. Ulangi CallMockProofProvider terhadap alamat helper baru.
+8. Real proving tetap ditangguhkan untuk infrastruktur VPS/cloud.
+9. Perbaiki Offer setelah messaging kanonikal stabil.
+10. Audit/redesign VeilDealEscrow secara terpisah.
 
 ### Fase 5 — Private Invoke ke Helper
 
