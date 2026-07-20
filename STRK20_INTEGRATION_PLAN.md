@@ -885,6 +885,25 @@ Tahap prover asli ditangguhkan karena komputasi VPS/cloud yang sesuai belum ters
 9. Perbaiki Offer setelah messaging kanonikal stabil.
 10. Audit/redesign VeilDealEscrow secara terpisah.
 
+### Fase 4D — VeilChannelHelper Isolated Build dan Test ✅ done 2026-07-20
+
+Tujuan:
+
+- verifikasi helper saat ini dapat dikompilasi secara terisolasi;
+- ganti test lama yang menggunakan API legacy dengan test terfokus untuk sumber saat ini;
+- validasi seluruh entrypoint, validasi envelope, proteksi duplikat, dan getter;
+- tanpa mengubah sumber kontrak, tanpa Offer, tanpa Escrow.
+
+Hasil verifikasi 2026-07-20:
+
+- test: `tests/test_veil_channel_helper.cairo` — commit `249cb47`;
+- isolated build: **SUCCEEDED** — `/tmp/veil-channel-helper-isolated`;
+- isolated test: **20 passed, 0 failed, 0 skipped** — `/tmp/veil-channel-helper-isolated-test`;
+- Sierra artifact dan CASM artifact dihasilkan;
+- local class hash: `0x35d26edfba322a472f717d57654b31d9bab13c681e18ef1bd616f613d4b6665`;
+- helper lama yang dideploy: class hash `0x7892efb...` — berbeda, tetap versi legacy;
+- laporan: [`docs/internal/testing/PHASE_4D_HELPER_ISOLATED_BUILD_TEST_REPORT.md`](./docs/internal/testing/PHASE_4D_HELPER_ISOLATED_BUILD_TEST_REPORT.md).
+
 ### Fase 5 — Private Invoke ke Helper
 
 Tujuan:
