@@ -160,10 +160,31 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
       resolveBootstrapMaterial: () => MATERIAL,
       now: () => 1_700_000_000_000,
     });
+    const baseProvider = providerFixture();
     const transport = new StarknetPrivacyPoolTransport({
       privacyPoolAddress: "0xpool",
       helperAddress: "0xhelper",
-      provider: providerFixture(),
+      provider: {
+        ...baseProvider,
+        async callContract(call) {
+          if (call.entrypoint === "message_exists") {
+            return ["1"];
+          }
+
+          if (call.entrypoint === "get_message") {
+            return capturedActionInput.canonicalMessage.helperCalldata.slice(0, 4);
+          }
+
+          if (call.entrypoint === "get_payload_chunk") {
+            const index = Number(call.calldata[1]);
+            return [
+              capturedActionInput.canonicalMessage.helperCalldata[4 + index],
+            ];
+          }
+
+          return baseProvider.callContract(call);
+        },
+      },
       waitForConfirmation: true,
       confirmationTimeoutMs: 1_000,
       confirmationPollMs: 1,

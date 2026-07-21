@@ -1,4 +1,4 @@
-﻿import { channelIdToFelt } from "../direct_helper_transport";
+import { channelIdToFelt } from "../direct_helper_transport";
 import { encodeInvokeCalldata } from "../timeline";
 import {
   analyzeClientActionBatch,
@@ -199,9 +199,10 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
       );
     }
 
-    const eventIndex = this.#waitForConfirmation
-      ? await this.#readTransport.getEventCount(input.item.channelId)
-      : undefined;
+    const eventIndex =
+      this.#waitForConfirmation && !input.canonicalMessage
+        ? await this.#readTransport.getEventCount(input.item.channelId)
+        : undefined;
     const helperCalldata = input.calldata.length
       ? input.calldata.map((felt, index) => toFeltString(felt, `calldata_${index}`))
       : encodeInvokeCalldata(input.item, {
@@ -257,12 +258,23 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
     );
     const transactionHash = await this.#submitPrivacyAction(action);
     if (this.#waitForConfirmation) {
-      if (eventIndex === undefined) {
-        throw new Error("Shield confirmation mode could not determine the helper event index.");
-      }
       const receipt = await this.#waitForReceipt(transactionHash);
       const blockNumber = extractBlockNumber(receipt);
-      const confirmedItem = await this.#waitForTimelineEvent(input.item.channelId, eventIndex);
+
+      let confirmedItem: TimelineItem;
+      if (input.canonicalMessage) {
+        confirmedItem = await this.#waitForCanonicalMessage(
+          input.helperAddress || this.#helperAddress,
+          input.item,
+          input.canonicalMessage,
+        );
+      } else {
+        if (eventIndex === undefined) {
+          throw new Error("Shield confirmation mode could not determine the helper event index.");
+        }
+        confirmedItem = await this.#waitForTimelineEvent(input.item.channelId, eventIndex);
+      }
+
       const returnedItem: TimelineItem = {
         ...confirmedItem,
         transactionHash,
@@ -410,6 +422,148 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
         lastError instanceof Error ? ` (${lastError.message})` : ""
       }`,
     );
+  }
+
+  async #waitForCanonicalMessage(
+    helperAddress: string,
+    item: TimelineItem,
+    canonicalMessage: NonNullable<InvokeExternalInput["canonicalMessage"]>,
+  ): Promise<TimelineItem> {
+    const deadline = Date.now() + this.#confirmationTimeoutMs;
+    let lastError: unknown;
+
+    while (Date.now() < deadline) {
+      try {
+        const existsResult = await this.#callHelperView(
+          helperAddress,
+          "message_exists",
+          [canonicalMessage.messageLocator],
+        );
+
+        if (existsResult.length < 1) {
+          throw new Error("message_exists returned no value.");
+        }
+
+        const exists =
+          BigInt(toFeltString(existsResult[0]!, "message_exists")) !== 0n;
+
+        if (!exists) {
+          throw new Error(
+            `Canonical message ${canonicalMessage.messageLocator} is not stored yet.`,
+          );
+        }
+
+        const record = await this.#callHelperView(
+          helperAddress,
+          "get_message",
+          [canonicalMessage.messageLocator],
+        );
+
+        if (record.length < 4) {
+          throw new VeilPrivacyError(
+            "PAYLOAD_MALFORMED",
+            "Canonical helper returned a malformed message record.",
+          );
+        }
+
+        const expectedRecord = canonicalMessage.helperCalldata.slice(0, 4);
+        const actualRecord = record.slice(0, 4);
+
+        if (!sameFeltArray(actualRecord, expectedRecord)) {
+          throw new VeilPrivacyError(
+            "PAYLOAD_MALFORMED",
+            "Stored canonical message record does not match the submitted payload.",
+          );
+        }
+
+        const chunkCount = Number(
+          BigInt(toFeltString(record[3]!, "payload_chunk_count")),
+        );
+        const expectedChunks = canonicalMessage.helperCalldata.slice(4);
+
+        if (
+          !Number.isSafeInteger(chunkCount)
+          || chunkCount < 0
+          || chunkCount > 64
+          || chunkCount !== expectedChunks.length
+        ) {
+          throw new VeilPrivacyError(
+            "PAYLOAD_MALFORMED",
+            "Stored canonical message has an invalid payload chunk count.",
+          );
+        }
+
+        const payloadChunks: string[] = [];
+
+        for (let index = 0; index < chunkCount; index += 1) {
+          const chunkResult = await this.#callHelperView(
+            helperAddress,
+            "get_payload_chunk",
+            [canonicalMessage.messageLocator, String(index)],
+          );
+
+          if (chunkResult.length < 1) {
+            throw new VeilPrivacyError(
+              "PAYLOAD_MALFORMED",
+              `Canonical helper returned no payload chunk at index ${index}.`,
+            );
+          }
+
+          payloadChunks.push(
+            toFeltString(chunkResult[0]!, `payload_chunk_${index}`),
+          );
+        }
+
+        if (!sameFeltArray(payloadChunks, expectedChunks)) {
+          throw new VeilPrivacyError(
+            "PAYLOAD_MALFORMED",
+            "Stored canonical ciphertext chunks do not match the submitted payload.",
+          );
+        }
+
+        return {
+          ...item,
+          payloadChunkCount: chunkCount,
+          ...(payloadChunks.length ? { payloadChunks } : {}),
+        };
+      } catch (error) {
+        if (error instanceof VeilPrivacyError) {
+          throw error;
+        }
+        lastError = error;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.#confirmationPollMs),
+      );
+    }
+
+    throw new Error(
+      `Timed out waiting for canonical VEIL message ${canonicalMessage.messageLocator}${
+        lastError instanceof Error ? ` (${lastError.message})` : ""
+      }`,
+    );
+  }
+
+  async #callHelperView(
+    helperAddress: string,
+    entrypoint: string,
+    calldata: string[],
+  ): Promise<readonly (string | number | bigint)[]> {
+    if (!this.#provider) {
+      throw new Error("Canonical message confirmation requires a Starknet provider.");
+    }
+
+    const response = await this.#provider.callContract({
+      contractAddress: helperAddress,
+      entrypoint,
+      calldata,
+    });
+
+    if ("result" in response) {
+      return response.result;
+    }
+    return response;
   }
 
   async #executePaymasterTransaction(transaction: unknown): Promise<Awaited<ReturnType<StarknetAccountLike["execute"]>>> {
