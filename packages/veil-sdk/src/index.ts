@@ -265,6 +265,13 @@ export {
   type VeilCiphertextEnvelopeV1,
 } from "./privacy/canonical-payload";
 export {
+  VEIL_MESSAGE_LOCATOR_ENTROPY_BITS,
+  createMessageLocatorResolver,
+  generateMessageLocator,
+  normalizeMessageLocator,
+  type MessageLocatorResolver,
+} from "./privacy/message-locator";
+export {
   OfficialPrivacyTransport,
   OfficialPrivacyTransportError,
   VEIL_CANONICAL_HELPER_SELECTOR,
