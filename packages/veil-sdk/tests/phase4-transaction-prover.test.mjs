@@ -63,6 +63,7 @@ function validTransport(overrides = {}) {
 
 function validCanonical(overrides = {}) {
   return {
+    messageReference: "msg-phase4-1",
     requestId: "phase4-request-1",
     operation: "message",
     keyDomain: "VEIL_MESSAGE_KEY_V1",

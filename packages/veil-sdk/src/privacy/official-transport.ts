@@ -9,6 +9,10 @@ import {
   type VeilPrivacyErrorCode,
 } from "./errors.js";
 import {
+  createMessageLocatorResolver,
+  type MessageLocatorResolver,
+} from "./message-locator.js";
+import {
   VEIL_OFFICIAL_CHAIN_ID,
   VEIL_OFFICIAL_CHAIN_ID_HEX,
   VEIL_OFFICIAL_OUTSIDE_EXECUTION_VERSION,
@@ -58,6 +62,7 @@ export interface OfficialPrivacyTransportConfig {
     allowedAddresses: readonly (string | bigint)[];
     allowedSelectors: readonly string[];
   };
+  messageLocatorResolver?: MessageLocatorResolver;
   onStatus?: (event: OfficialPrivacyTransportLogEvent) => void;
   now?: () => number;
 }
@@ -91,6 +96,13 @@ export interface CanonicalApplicationInvoke {
 }
 
 export interface PrepareOfficialPrivacyTransportInput extends BuildCanonicalHelperPayloadInput {
+  /**
+   * Stable logical identity supplied by the upstream message builder.
+   *
+   * This is not requestId. Multiple proof requests may belong to the same
+   * logical message.
+   */
+  messageReference: string;
   requestId: string;
   applicationInvokes: readonly CanonicalApplicationInvoke[];
 }
@@ -152,11 +164,14 @@ export class OfficialPrivacyTransportError extends VeilPrivacyError {
 export class OfficialPrivacyTransport {
   readonly #config: OfficialPrivacyTransportConfig;
   readonly #snapshot: OfficialPrivacyTransportSnapshot;
+  readonly #messageLocatorResolver: MessageLocatorResolver;
   readonly #now: () => number;
 
   constructor(config: OfficialPrivacyTransportConfig) {
     this.#config = config;
     this.#snapshot = evaluateOfficialPrivacyTransport(config);
+    this.#messageLocatorResolver =
+      config.messageLocatorResolver ?? createMessageLocatorResolver();
     this.#now = config.now ?? (() => Date.now());
   }
 
@@ -178,7 +193,32 @@ export class OfficialPrivacyTransport {
     }
     const requestId = validateRequestId(input.requestId);
     const applicationInvoke = validateSingleApplicationInvoke(input.applicationInvokes, this.#config.helper);
-    const payload = buildCanonicalHelperPayload(input);
+
+    /*
+     * Invoke V3 already contains locator-bound helper calldata before reaching
+     * this transport. This layer validates and registers the upstream locator;
+     * it must not generate the first locator for the transaction.
+     */
+    if (input.messageLocator === undefined || input.messageLocator === null) {
+      throw new OfficialPrivacyTransportError(
+        "PAYLOAD_MALFORMED",
+        "messageLocator must be resolved before the canonical transaction is constructed.",
+        VEIL_PRIVACY_TRANSPORT_STATUS.CANONICAL_FAILED,
+      );
+    }
+
+    const messageLocator = this.#messageLocatorResolver.resolve({
+      messageId: input.messageReference,
+      explicitLocator: input.messageLocator,
+    });
+
+    const payload = buildCanonicalHelperPayload({
+      operation: input.operation,
+      keyDomain: input.keyDomain,
+      envelope: input.envelope,
+      messageLocator,
+      claimedCommitment: input.claimedCommitment,
+    });
     const prepared = Object.freeze({
       requestId,
       route: this.#config.route,

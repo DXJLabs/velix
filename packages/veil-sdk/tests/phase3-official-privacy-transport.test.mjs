@@ -53,6 +53,7 @@ function validConfig(overrides = {}) {
 
 function validInput(overrides = {}) {
   return {
+    messageReference: "msg-phase3-1",
     requestId: "phase3-request-1",
     operation: "message",
     keyDomain: "VEIL_MESSAGE_KEY_V1",

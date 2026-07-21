@@ -286,6 +286,7 @@ export class TransactionProverError extends VeilPrivacyError {
 
 export class TransactionProverClient {
   readonly #config: TransactionProverConfig;
+  readonly #transport: OfficialPrivacyTransport;
   readonly #compatibility: StaticCompatibility;
   readonly #fetch: typeof fetch;
   readonly #sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
@@ -304,6 +305,9 @@ export class TransactionProverClient {
 
   constructor(config: TransactionProverConfig) {
     this.#config = config;
+    this.#transport = new OfficialPrivacyTransport(
+      withoutTransportLogger(config.transport),
+    );
     this.#compatibility = evaluateTransactionProverCompatibility(config);
     this.#fetch = config.fetch ?? globalThis.fetch;
     if (typeof this.#fetch !== "function") {
@@ -610,8 +614,7 @@ export class TransactionProverClient {
       const first = this.#compatibility.reasons[0] as TransactionProverReason;
       throw new TransactionProverError(first.code, first.message, this.#compatibility.status);
     }
-    const transport = new OfficialPrivacyTransport(withoutTransportLogger(this.#config.transport));
-    const canonical = transport.prepare(input.canonical);
+    const canonical = this.#transport.prepare(input.canonical);
     const blockId = validateBlockId(input.blockId);
     const transaction = validateInvokeV3(input.transaction, this.#config.transport.pool.address);
     validateCanonicalTransactionIntent(transaction.calldata, canonical, this.#config.transport.pool.address);
