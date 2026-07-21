@@ -46,7 +46,7 @@ jobs:
 
       # ============================================================
       # 2. VALIDATE SECRETS, ADDRESS, RPC, AND FETCH NONCE
-      # This runs before the 20-minute prover build.
+      # This runs before the prover build.
       # ============================================================
 
       - name: Validate VEIL inputs and fetch account nonce
@@ -75,7 +75,7 @@ jobs:
           fi
 
           if [ -z "${USER_ADDRESS:-}" ]; then
-            echo "Variable VEIL_POC_ACCOUNT_ADDRESS belum tersedia."
+            echo "Secret VEIL_POC_ACCOUNT_ADDRESS belum tersedia."
             exit 1
           fi
 
@@ -98,8 +98,8 @@ jobs:
 
           echo "RPC secret tersedia."
           echo "Private key secret tersedia."
-          echo "Account address: $USER_ADDRESS"
-          echo "Block ID: $BLOCK_ID"
+          echo "Account address tersedia."
+          echo "Block ID tersedia."
           echo "Nilai rahasia tidak ditampilkan."
 
           echo
@@ -209,14 +209,14 @@ jobs:
 
           nonce = response.get("result")
 
-          if not nonce:
+          if nonce is None:
               raise SystemExit("RPC tidak mengembalikan nonce akun")
 
           print(nonce)
           PY
           )"
 
-          echo "Account nonce: $NONCE"
+          echo "Account nonce berhasil diambil."
 
           echo "VEIL_POC_NONCE=$NONCE" >> "$GITHUB_ENV"
           echo "VEIL_POC_RESOLVED_BLOCK_ID=$BLOCK_ID" >> "$GITHUB_ENV"
@@ -238,6 +238,8 @@ jobs:
       - name: Show VEIL source commit
         shell: bash
         run: |
+          set -euo pipefail
+
           cd velix
 
           echo "================================"
@@ -277,12 +279,18 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Build VEIL SetViewingKey PoC
+      - name: Build and test VEIL SetViewingKey PoC
         shell: bash
         run: |
           set -euxo pipefail
 
           cd velix
+
+          cargo test \
+            --release \
+            --manifest-path \
+            tools/privacy-set-viewing-key-poc/Cargo.toml \
+            2>&1 | tee ../veil-poc-test.log
 
           cargo build \
             --release \
@@ -305,6 +313,8 @@ jobs:
       - name: Show official prover source
         shell: bash
         run: |
+          set -euo pipefail
+
           cd sequencer
 
           echo "================================"
@@ -378,6 +388,8 @@ jobs:
       - name: Inspect generic prover image
         shell: bash
         run: |
+          set -euo pipefail
+
           docker image inspect \
             veil-transaction-prover:x86-64-v3 \
             --format='Architecture={{.Architecture}}
@@ -387,7 +399,7 @@ jobs:
           Cmd={{json .Config.Cmd}}'
 
       # ============================================================
-      # 8. START GENERIC PROVER
+      # 8. START GENERIC PROVER WITH FULL DIAGNOSTICS
       # ============================================================
 
       - name: Start generic prover with Sepolia RPC
@@ -420,7 +432,9 @@ jobs:
             -e MAX_CONNECTIONS="2" \
             -e COMPILED_CLASS_CACHE_SIZE="50" \
             -e PREFETCH_STATE="false" \
-            -e RUST_LOG="info" \
+            -e RUST_LOG="debug" \
+            -e RUST_BACKTRACE="1" \
+            -e RUST_LIB_BACKTRACE="1" \
             veil-transaction-prover:x86-64-v3
 
           echo "Container berhasil dibuat."
@@ -556,8 +570,8 @@ jobs:
           echo "================================"
           echo "REAL VEIL STWO PROOF"
           echo "================================"
-          echo "User address: $USER_ADDRESS"
-          echo "Block ID: $VEIL_POC_RESOLVED_BLOCK_ID"
+          echo "User address tersedia."
+          echo "Block ID tersedia."
           echo "Nonce: $VEIL_POC_NONCE"
           echo "Prover: localhost:3000"
           echo "Private key: hidden"
@@ -607,7 +621,7 @@ jobs:
             echo "PROOF STDERR"
             echo "================================"
 
-            tail -n 200 ../veil-proof-stderr.log
+            tail -n 300 ../veil-proof-stderr.log
           fi
 
           echo "duration_seconds=$DURATION" \
@@ -617,12 +631,28 @@ jobs:
             >> "$GITHUB_OUTPUT"
 
           if [ "$PROOF_STATUS" -eq 124 ]; then
+            echo
+            echo "================================"
+            echo "PROVER LOG AFTER TIMEOUT"
+            echo "================================"
+
+            docker logs --tail 500 veil-generic-prover \
+              2>&1 | tee ../prover-failure.log || true
+
             echo "Proof melewati batas waktu 300 menit."
             echo "result=PROOF_TIMEOUT" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
           if [ "$PROOF_STATUS" -eq 137 ]; then
+            echo
+            echo "================================"
+            echo "PROVER LOG AFTER OOM/KILL"
+            echo "================================"
+
+            docker logs --tail 500 veil-generic-prover \
+              2>&1 | tee ../prover-failure.log || true
+
             echo "Proof dihentikan, kemungkinan kehabisan RAM."
             echo "result=PROOF_KILLED_OR_OOM" \
               >> "$GITHUB_OUTPUT"
@@ -630,6 +660,14 @@ jobs:
           fi
 
           if [ "$PROOF_STATUS" -ne 0 ]; then
+            echo
+            echo "================================"
+            echo "PROVER LOG AFTER FAILED REQUEST"
+            echo "================================"
+
+            docker logs --tail 500 veil-generic-prover \
+              2>&1 | tee ../prover-failure.log || true
+
             echo "Proof gagal dengan status $PROOF_STATUS."
             echo "result=PROOF_FAILED" >> "$GITHUB_OUTPUT"
             exit "$PROOF_STATUS"
@@ -779,6 +817,12 @@ jobs:
             > prover-docker-stats.txt \
             2>&1 || true
 
+          echo "Saving final container state..."
+
+          docker inspect veil-generic-prover \
+            > prover-container-inspect.json \
+            2>&1 || true
+
           echo "Stopping prover container..."
 
           docker rm -f \
@@ -796,10 +840,13 @@ jobs:
           path: |
             generic-build.log
             generic-startup.log
+            prover-failure.log
             prover-docker-stats.txt
+            prover-container-inspect.json
             spec-version-response.json
             veil-chain-id-response.json
             veil-nonce-response.json
+            veil-poc-test.log
             veil-poc-build.log
             veil-validate-rpc.log
             veil-proof-time.log
