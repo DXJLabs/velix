@@ -16,17 +16,23 @@ jobs:
       - name: Check runner hardware
         shell: bash
         run: |
-          echo "=== CPU ==="
+          echo "================================"
+          echo "CPU"
+          echo "================================"
           nproc
           lscpu | grep -E \
             "Architecture|CPU\(s\)|Model name|Thread|Core|Socket|Flags"
 
           echo
-          echo "=== RAM ==="
+          echo "================================"
+          echo "RAM"
+          echo "================================"
           free -h
 
           echo
-          echo "=== STORAGE ==="
+          echo "================================"
+          echo "STORAGE"
+          echo "================================"
           df -h /
 
       - name: Checkout official sequencer release
@@ -45,9 +51,11 @@ jobs:
           echo "Commit:"
           git rev-parse HEAD
 
+          echo
           echo "Tag:"
           git describe --tags --exact-match || true
 
+          echo
           echo "Dockerfile:"
           test -f crates/starknet_transaction_prover/Dockerfile
           ls -lh crates/starknet_transaction_prover/Dockerfile
@@ -96,57 +104,148 @@ jobs:
           Entrypoint={{json .Config.Entrypoint}}
           Cmd={{json .Config.Cmd}}'
 
-      - name: Test generic prover startup
+      - name: Start generic prover with Sepolia RPC
         id: startup
         shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
         run: |
           set +e
 
-          echo "Starting generic prover for up to 30 seconds..."
+          echo "================================"
+          echo "CHECKING RPC SECRET"
+          echo "================================"
 
-          timeout 30s docker run --rm \
-            --network host \
+          if [ -z "${RPC_URL:-}" ]; then
+            echo "Secret STARKNET_SEPOLIA_RPC_URL tidak ditemukan."
+            echo "result=SECRET_MISSING" >> "$GITHUB_OUTPUT"
+            echo "exit_status=1" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Secret RPC tersedia."
+          echo "Nilai RPC disembunyikan oleh GitHub."
+
+          docker rm -f veil-generic-prover 2>/dev/null || true
+
+          echo
+          echo "================================"
+          echo "STARTING GENERIC PROVER"
+          echo "================================"
+
+          docker run -d \
             --name veil-generic-prover \
-            veil-transaction-prover:x86-64-v3 \
-            > generic-startup.log 2>&1
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            veil-transaction-prover:x86-64-v3
 
-          STATUS=$?
+          START_STATUS=$?
+
+          if [ "$START_STATUS" -ne 0 ]; then
+            echo "Container gagal dibuat."
+            echo "result=CONTAINER_START_FAILED" >> "$GITHUB_OUTPUT"
+            echo "exit_status=$START_STATUS" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "Container berhasil dibuat."
+          echo "Menunggu JSON-RPC prover siap..."
+
+          READY=0
+
+          for attempt in $(seq 1 30); do
+            RUNNING="$(docker inspect \
+              -f '{{.State.Running}}' \
+              veil-generic-prover 2>/dev/null)"
+
+            if [ "$RUNNING" != "true" ]; then
+              echo "Container berhenti sebelum server siap."
+
+              docker logs veil-generic-prover 2>&1 \
+                | tee generic-startup.log
+
+              echo "result=CONTAINER_STOPPED" >> "$GITHUB_OUTPUT"
+              echo "exit_status=1" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+
+            RESPONSE="$(curl -sS \
+              --connect-timeout 2 \
+              --max-time 5 \
+              -X POST http://127.0.0.1:3000 \
+              -H "Content-Type: application/json" \
+              -d '{
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "starknet_specVersion",
+                "params": []
+              }' 2>/dev/null)"
+
+            if echo "$RESPONSE" | grep -q '"result"'; then
+              echo
+              echo "Prover siap pada percobaan $attempt."
+
+              echo "$RESPONSE" \
+                | tee spec-version-response.json
+
+              READY=1
+              break
+            fi
+
+            echo "Percobaan $attempt/30: server belum siap."
+            sleep 2
+          done
 
           echo
           echo "================================"
           echo "GENERIC PROVER LOG"
           echo "================================"
-          cat generic-startup.log || true
 
-          echo
-          echo "Exit status: $STATUS"
-          echo "exit_status=$STATUS" >> "$GITHUB_OUTPUT"
+          docker logs veil-generic-prover 2>&1 \
+            | tee generic-startup.log
 
-          if [ "$STATUS" -eq 124 ]; then
-            RESULT="PROCESS_STAYED_ALIVE"
-          elif [ "$STATUS" -eq 132 ]; then
-            RESULT="ILLEGAL_INSTRUCTION"
-          elif [ "$STATUS" -eq 137 ]; then
-            RESULT="PROCESS_KILLED_OR_OOM"
-          elif [ "$STATUS" -eq 0 ]; then
-            RESULT="EXITED_SUCCESSFULLY"
-          else
-            RESULT="EXIT_$STATUS"
+          if [ "$READY" -ne 1 ]; then
+            echo
+            echo "Prover tidak siap dalam waktu 60 detik."
+            echo "result=SERVER_NOT_READY" >> "$GITHUB_OUTPUT"
+            echo "exit_status=1" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
 
-          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
-          echo "RESULT: $RESULT"
-
-          exit 0
+          echo
+          echo "result=SERVER_READY" >> "$GITHUB_OUTPUT"
+          echo "exit_status=0" >> "$GITHUB_OUTPUT"
 
       - name: Final verdict
+        if: always()
         shell: bash
         run: |
           echo "================================"
-          echo "FINAL GENERIC BUILD RESULT"
+          echo "FINAL GENERIC PROVER RESULT"
           echo "================================"
           echo "Result: ${{ steps.startup.outputs.result }}"
           echo "Exit status: ${{ steps.startup.outputs.exit_status }}"
+
+      - name: Stop generic prover
+        if: always()
+        shell: bash
+        run: |
+          echo "Saving final container logs..."
+
+          docker logs veil-generic-prover \
+            > generic-startup.log 2>&1 || true
+
+          echo "Stopping container..."
+
+          docker rm -f veil-generic-prover || true
 
       - name: Upload logs
         uses: actions/upload-artifact@v4
@@ -156,5 +255,6 @@ jobs:
           path: |
             generic-build.log
             generic-startup.log
+            spec-version-response.json
           if-no-files-found: ignore
           retention-days: 7
