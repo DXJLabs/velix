@@ -427,3 +427,107 @@ fn commitment_status_consistent_after_store() {
     dispatcher.privacy_invoke(calldata);
     assert(dispatcher.is_payload_committed(expected_commitment), 'Post-commit should be true');
 }
+
+// =========================================================================
+// G. SDK cross-boundary deterministic fixture (Phase 4F-B 2B)
+// =========================================================================
+
+// Deterministic ciphertext chunks copied from
+// packages/veil-sdk/tests/phase4f-canonical-fixture.test.mjs
+// (generated with salt=0x01*32, nonce=0x02*12, ciphertext=0x03*64).
+const FIX_CHUNK_0: felt252 =
+    217560040300862673593977166552124278026005872843966633135598651400730785351;
+const FIX_CHUNK_1: felt252 =
+    118911109094954338182446703046557953179470845693076459373783079942856200517;
+const FIX_CHUNK_2: felt252 =
+    117062710837398703043088504135544480729013957295663051284056668875778911843;
+const FIX_CHUNK_3: felt252 =
+    178687780202837731477292851993289132301881347301318977305263125973685138533;
+const FIX_CHUNK_4: felt252 =
+    212823173110025413427193681810680855888131992284966893137802692984530289015;
+const FIX_CHUNK_5: felt252 =
+    136518307699999070517679151246806737927611224026604261341840807648981500993;
+const FIX_CHUNK_6: felt252 =
+    210788075348080856589622086772965142203500315072052578912337703608700576381;
+
+const FIX_COMMITMENT: felt252 =
+    0x66192296df89bdcb1ff2a0114d3d8cf07a51448e22117314b5b9246e6501b24;
+
+// Mutated commitment when FIX_CHUNK_4 is replaced with MUT_CHUNK_4.
+const MUT_COMMITMENT: felt252 =
+    0x4c13006b3a7cd489f3c6b54b72f487e259bd5c9cdc9b9ac1e2620c1a3ead976;
+
+const FIX_LOCATOR: felt252 = 0x77;
+
+#[test]
+fn sdk_fixture_commitment_matches() {
+    let contract_address = deploy_helper();
+    let dispatcher = IVeilChannelHelperDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, privacy_pool());
+    let chunks = array![
+        FIX_CHUNK_0, FIX_CHUNK_1, FIX_CHUNK_2,
+        FIX_CHUNK_3, FIX_CHUNK_4, FIX_CHUNK_5, FIX_CHUNK_6,
+    ];
+    let calldata = make_calldata(FIX_LOCATOR, 0, chunks.span());
+
+    assert(*calldata.at(2) == FIX_COMMITMENT, 'Commitment mismatch');
+
+    dispatcher.privacy_invoke(calldata);
+    assert(dispatcher.message_exists(FIX_LOCATOR), 'Message not stored');
+    assert(dispatcher.is_payload_committed(FIX_COMMITMENT), 'Not committed');
+}
+
+#[test]
+fn sdk_fixture_layout_is_versioned_envelope() {
+    let chunks = array![
+        FIX_CHUNK_0, FIX_CHUNK_1, FIX_CHUNK_2,
+        FIX_CHUNK_3, FIX_CHUNK_4, FIX_CHUNK_5, FIX_CHUNK_6,
+    ];
+    let calldata = make_calldata(FIX_LOCATOR, 0, chunks.span());
+
+    // [envelope_version, message_locator, payload_commitment, payload_chunk_count, ...chunks]
+    assert(*calldata.at(0) == VEIL_MESSAGE_ENVELOPE_VERSION.into(), 'Bad version');
+    assert(*calldata.at(1) == FIX_LOCATOR, 'Bad locator');
+    assert(*calldata.at(2) == FIX_COMMITMENT, 'Bad commitment');
+    assert(*calldata.at(3) == 7_u64.into(), 'Bad chunk count');
+
+    assert(*calldata.at(4) == FIX_CHUNK_0, 'Bad chunk 0');
+    assert(*calldata.at(5) == FIX_CHUNK_1, 'Bad chunk 1');
+    assert(*calldata.at(6) == FIX_CHUNK_2, 'Bad chunk 2');
+    assert(*calldata.at(7) == FIX_CHUNK_3, 'Bad chunk 3');
+    assert(*calldata.at(8) == FIX_CHUNK_4, 'Bad chunk 4');
+    assert(*calldata.at(9) == FIX_CHUNK_5, 'Bad chunk 5');
+    assert(*calldata.at(10) == FIX_CHUNK_6, 'Bad chunk 6');
+}
+
+#[test]
+fn sdk_fixture_mutated_chunk_changes_commitment() {
+    let contract_address = deploy_helper();
+    let dispatcher = IVeilChannelHelperDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, privacy_pool());
+
+    // Replace only chunk 4 with a different value; all other 6 chunks stay identical.
+    const MUT_CHUNK_4: felt252 =
+        212823173110026681401744229920195150717595480233582945813602474719501894007;
+
+    let mut_chunks = array![
+        FIX_CHUNK_0, FIX_CHUNK_1, FIX_CHUNK_2,
+        FIX_CHUNK_3, MUT_CHUNK_4, FIX_CHUNK_5, FIX_CHUNK_6,
+    ];
+    let mut_calldata = make_calldata(FIX_LOCATOR, 0, mut_chunks.span());
+
+    assert(
+        *mut_calldata.at(2) == MUT_COMMITMENT,
+        'Mutated commitment mismatch',
+    );
+    assert(
+        *mut_calldata.at(2) != FIX_COMMITMENT,
+        'Commitment unchanged',
+    );
+
+    dispatcher.privacy_invoke(mut_calldata);
+    assert(dispatcher.message_exists(FIX_LOCATOR), 'Mutated message not stored');
+    assert(dispatcher.is_payload_committed(MUT_COMMITMENT), 'Mutated not committed');
+}
