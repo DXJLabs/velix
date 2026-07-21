@@ -104,6 +104,28 @@ pub mod offers {
 }
 
 
+#[path("../contracts/private_escrow/private_escrow_commitments.cairo")]
+pub mod private_escrow_commitments;
+#[path("../contracts/private_escrow/private_escrow_events.cairo")]
+pub mod private_escrow_events;
+#[path("../contracts/private_escrow/private_escrow_interfaces.cairo")]
+pub mod private_escrow_interfaces;
+#[path("../contracts/private_escrow/private_escrow_types.cairo")]
+pub mod private_escrow_types;
+#[path("../contracts/private_escrow/private_escrow_validation.cairo")]
+pub mod private_escrow_validation;
+#[path("../contracts/private_escrow/veil_private_escrow_helper.cairo")]
+pub mod veil_private_escrow_helper;
+
+pub mod private_escrow {
+    pub use crate::private_escrow_commitments;
+    pub use crate::private_escrow_events;
+    pub use crate::private_escrow_interfaces;
+    pub use crate::private_escrow_types;
+    pub use crate::private_escrow_validation;
+    pub use crate::veil_private_escrow_helper;
+}
+
 #[path("../contracts/settlement/settlement_events.cairo")]
 pub mod settlement_events;
 #[path("../contracts/settlement/settlement_interfaces.cairo")]

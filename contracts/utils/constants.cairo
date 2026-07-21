@@ -101,6 +101,30 @@ pub const VEIL_OFFER_COMMITMENT_DOMAIN: felt252 =
     'VEIL_OFFER_COMMIT_V1';
 
 // -----------------------------------------------------------------------------
+// Encrypted Private Escrow helper
+// -----------------------------------------------------------------------------
+
+/// Maximum ciphertext chunks accepted for one encrypted Escrow action.
+pub const MAX_PRIVATE_ESCROW_PAYLOAD_CHUNKS: u64 = 64;
+
+/// Current encrypted Private Escrow envelope version.
+pub const VEIL_PRIVATE_ESCROW_ENVELOPE_VERSION: u8 = 1;
+
+/// Fixed fields before encrypted Escrow ciphertext chunks.
+///
+/// Layout:
+/// 0. envelope_version
+/// 1. private_escrow_action_locator
+/// 2. claimed_payload_commitment
+/// 3. payload_chunk_count
+/// 4... ciphertext_chunks
+pub const PRIVATE_ESCROW_ENVELOPE_HEADER_FELTS: usize = 4;
+
+/// Domain separator for encrypted Private Escrow action commitments.
+pub const VEIL_PRIVATE_ESCROW_COMMITMENT_DOMAIN: felt252 =
+    'VEIL_PRIVATE_ESCROW_COMMIT_V1';
+
+// -----------------------------------------------------------------------------
 // Escrow and settlement
 //
 // Keep these unchanged until their modules are audited separately.

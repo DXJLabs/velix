@@ -118,6 +118,52 @@ pub const OFFER_CHUNK_INDEX_OUT_OF_BOUNDS: felt252 =
     'OFFER_CHUNK_OOB';
 
 // -----------------------------------------------------------------------------
+// Encrypted Private Escrow calldata and storage
+// -----------------------------------------------------------------------------
+
+pub const INVALID_PRIVATE_ESCROW_CALLDATA: felt252 =
+    'BAD_ESCROW_DATA';
+
+pub const INVALID_PRIVATE_ESCROW_ENVELOPE_VERSION: felt252 =
+    'BAD_ESCROW_VER';
+
+pub const UNSUPPORTED_PRIVATE_ESCROW_ENVELOPE_VERSION: felt252 =
+    'UNSUPPORTED_ESCROW_VER';
+
+pub const ZERO_PRIVATE_ESCROW_ACTION_LOCATOR: felt252 =
+    'ZERO_ESCROW_LOCATOR';
+
+pub const ZERO_PRIVATE_ESCROW_PAYLOAD_COMMITMENT: felt252 =
+    'ZERO_ESCROW_COMMIT';
+
+pub const EMPTY_PRIVATE_ESCROW_PAYLOAD: felt252 =
+    'EMPTY_ESCROW_CIPHERTEXT';
+
+pub const INVALID_PRIVATE_ESCROW_CHUNK_COUNT: felt252 =
+    'BAD_ESCROW_CHUNK_COUNT';
+
+pub const TOO_MANY_PRIVATE_ESCROW_PAYLOAD_CHUNKS: felt252 =
+    'TOO_MANY_ESCROW_CHUNKS';
+
+pub const INVALID_PRIVATE_ESCROW_PAYLOAD_SIZE: felt252 =
+    'BAD_ESCROW_PAYLOAD_SIZE';
+
+pub const PRIVATE_ESCROW_PAYLOAD_COMMITMENT_MISMATCH: felt252 =
+    'ESCROW_COMMIT_MISMATCH';
+
+pub const PRIVATE_ESCROW_ACTION_LOCATOR_ALREADY_USED: felt252 =
+    'ESCROW_LOCATOR_USED';
+
+pub const PRIVATE_ESCROW_PAYLOAD_ALREADY_COMMITTED: felt252 =
+    'ESCROW_PAYLOAD_USED';
+
+pub const PRIVATE_ESCROW_ACTION_NOT_FOUND: felt252 =
+    'ESCROW_ACTION_NOT_FOUND';
+
+pub const PRIVATE_ESCROW_CHUNK_INDEX_OUT_OF_BOUNDS: felt252 =
+    'ESCROW_CHUNK_OOB';
+
+// -----------------------------------------------------------------------------
 // Existing settlement and escrow errors
 //
 // Keep these until their respective modules are audited and replaced.
