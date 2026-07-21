@@ -295,7 +295,11 @@ fn duplicate_seller_deposit_is_rejected() {
     accept(escrow, deal_id);
     fund_payment_direct(token, escrow, deal_id);
     fund_asset(nft, escrow, deal_id);
-    fund_asset(nft, escrow, deal_id);
+
+    // Do not approve again: after the first deposit, escrow owns the NFT.
+    // The second call must reach Deal Escrow validation itself.
+    start_cheat_caller_address(escrow, address(SELLER));
+    IVeilDealEscrowDispatcher { contract_address: escrow }.deposit_asset(deal_id);
 }
 
 #[test]

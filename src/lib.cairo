@@ -87,8 +87,6 @@ pub mod offer_commitments;
 pub mod offer_events;
 #[path("../contracts/offers/offer_interfaces.cairo")]
 pub mod offer_interfaces;
-#[path("../contracts/offers/offer_payload.cairo")]
-pub mod offer_payload;
 #[path("../contracts/offers/offer_types.cairo")]
 pub mod offer_types;
 #[path("../contracts/offers/offer_validation.cairo")]
@@ -100,30 +98,11 @@ pub mod offers {
     pub use crate::offer_commitments;
     pub use crate::offer_events;
     pub use crate::offer_interfaces;
-    pub use crate::offer_payload;
     pub use crate::offer_types;
     pub use crate::offer_validation;
     pub use crate::veil_offer;
 }
 
-#[path("../contracts/escrow/escrow_commitments.cairo")]
-pub mod escrow_commitments;
-#[path("../contracts/escrow/escrow_payload.cairo")]
-pub mod escrow_payload;
-#[path("../contracts/escrow/escrow_types.cairo")]
-pub mod escrow_types;
-#[path("../contracts/escrow/escrow_validation.cairo")]
-pub mod escrow_validation;
-#[path("../contracts/escrow/veil_escrow.cairo")]
-pub mod veil_escrow;
-
-pub mod escrow {
-    pub use crate::escrow_commitments;
-    pub use crate::escrow_payload;
-    pub use crate::escrow_types;
-    pub use crate::escrow_validation;
-    pub use crate::veil_escrow;
-}
 
 #[path("../contracts/settlement/settlement_events.cairo")]
 pub mod settlement_events;
@@ -151,13 +130,10 @@ pub mod events {
     pub use crate::escrow_events;
 }
 
-#[path("../contracts/interfaces/escrow_interfaces.cairo")]
-pub mod escrow_interfaces;
 #[path("../contracts/interfaces/privacy_pool_types.cairo")]
 pub mod privacy_pool_types;
 
 pub mod interfaces {
-    pub use crate::escrow_interfaces;
     pub use crate::privacy_pool_types;
 }
 

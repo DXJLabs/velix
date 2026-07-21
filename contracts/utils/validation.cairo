@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 use crate::utils::errors;
 
 pub fn assert_non_zero(value: felt252) {
-    assert(value != 0, errors::ZERO_PAYLOAD_HASH);
+    assert(value != 0, errors::ZERO_PAYLOAD_COMMITMENT);
 }
 
 pub fn assert_non_zero_address(address: ContractAddress) {
