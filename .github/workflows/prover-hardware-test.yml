@@ -1,0 +1,118 @@
+name: STWO Prover Hardware Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prover-test:
+    name: Test Official Prover
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check runner hardware
+        shell: bash
+        run: |
+          echo "================================"
+          echo "CPU"
+          echo "================================"
+          nproc
+          lscpu | grep -E \
+            "Architecture|CPU\(s\)|Model name|Thread|Core|Socket|Flags"
+
+          echo
+          echo "================================"
+          echo "RAM"
+          echo "================================"
+          free -h
+
+          echo
+          echo "================================"
+          echo "STORAGE"
+          echo "================================"
+          df -h
+
+          echo
+          echo "================================"
+          echo "DOCKER"
+          echo "================================"
+          docker version
+
+      - name: Pull official transaction prover
+        shell: bash
+        run: |
+          IMAGE="ghcr.io/starkware-libs/starknet-privacy/transaction-prover:PRIVACY-0.14.3-RC.2"
+
+          echo "Pulling $IMAGE"
+          docker pull "$IMAGE"
+
+          docker image inspect "$IMAGE" \
+            --format='Architecture={{.Architecture}}
+          OS={{.Os}}
+          Size={{.Size}}
+          Entrypoint={{json .Config.Entrypoint}}
+          Cmd={{json .Config.Cmd}}'
+
+      - name: Test prover startup
+        id: prover
+        shell: bash
+        run: |
+          set +e
+
+          IMAGE="ghcr.io/starkware-libs/starknet-privacy/transaction-prover:PRIVACY-0.14.3-RC.2"
+
+          echo "Starting prover for a maximum of 30 seconds..."
+
+          timeout 30s docker run --rm \
+            --network host \
+            "$IMAGE" \
+            > prover-startup.log 2>&1
+
+          STATUS=$?
+
+          echo
+          echo "================================"
+          echo "PROVER LOG"
+          echo "================================"
+          cat prover-startup.log
+
+          echo
+          echo "Exit status: $STATUS"
+          echo "exit_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          if [ "$STATUS" -eq 124 ]; then
+            echo "RESULT: Prover stayed alive for 30 seconds."
+            echo "result=PROCESS_STAYED_ALIVE" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" -eq 132 ]; then
+            echo "RESULT: Illegal instruction / incompatible CPU."
+            echo "result=ILLEGAL_INSTRUCTION" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" -eq 137 ]; then
+            echo "RESULT: Process was killed, possibly out of memory."
+            echo "result=PROCESS_KILLED" >> "$GITHUB_OUTPUT"
+          else
+            echo "RESULT: Prover exited with status $STATUS."
+            echo "result=EXIT_$STATUS" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Jangan buat seluruh workflow gagal hanya karena startup prover gagal.
+          exit 0
+
+      - name: Show final verdict
+        shell: bash
+        run: |
+          echo "================================"
+          echo "FINAL RESULT"
+          echo "================================"
+          echo "Result: ${{ steps.prover.outputs.result }}"
+          echo "Exit status: ${{ steps.prover.outputs.exit_status }}"
+
+      - name: Upload prover log
+        uses: actions/upload-artifact@v4
+        with:
+          name: stwo-prover-startup-log
+          path: prover-startup.log
+          if-no-files-found: warn
+          retention-days: 7
