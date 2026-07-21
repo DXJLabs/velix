@@ -1,4 +1,4 @@
-﻿import { describe, it } from "node:test";
+import { describe, it } from "node:test";
 import { assert, createFeeProvider, sdk } from "./production-messaging.helpers.mjs";
 
 const {
@@ -114,16 +114,35 @@ describe("VEIL shield transport submission", () => {
         },
       },
     });
+    const mockEncryption = new MockEncryptionAdapter();
     const client = new VeilClient({
       privacyPoolAddress: "0xpool",
       helperAddress: "0xhelper",
       rpcUrl: "http://localhost",
-      encryption: new MockEncryptionAdapter(),
+      encryption: {
+        async encryptPayload(payload, context) {
+          const encrypted = await mockEncryption.encryptPayload(payload, context);
+          return {
+            ...encrypted,
+            canonicalEnvelope: {
+              version: 1,
+              algorithm: "A256GCM",
+              salt: Buffer.alloc(32, 1).toString("base64url"),
+              nonce: Buffer.alloc(12, 2).toString("base64url"),
+              ciphertext: Buffer.alloc(64, 3).toString("base64url"),
+            },
+          };
+        },
+        async decryptPayload(item, context) {
+          return mockEncryption.decryptPayload(item, context);
+        },
+      },
       transport,
     });
 
     const item = await client.sendShieldedMessage({
       channelId: "123",
+      messageReference: "production-shield-message-1",
       message: "real shield pipeline",
       privacyPool: {
         createEncNote: {

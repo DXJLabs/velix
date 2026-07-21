@@ -1,4 +1,6 @@
 import type { VeilSession, VeilSessionManagerLike } from "./session-key-types";
+import type { VeilCiphertextEnvelopeV1 } from "./privacy/canonical-payload";
+import type { MessageLocatorResolver } from "./privacy/message-locator";
 import type {
   BuildPrivacyPoolChannelActionsInput,
   BuildPrivacyPoolMessageActionsInput,
@@ -128,6 +130,8 @@ export interface EncryptedPayload {
   envelopeHash?: string;
   nonce?: string;
   payloadChunks?: string[];
+  /** Canonical ciphertext committed through Privacy Pool InvokeExternal. */
+  canonicalEnvelope?: VeilCiphertextEnvelopeV1;
   privacyPool?: BuildPrivacyPoolMessageActionsInput;
   channelBootstrap?: ShieldedChannelBootstrapMetadata;
 }
@@ -158,7 +162,15 @@ export interface VeilClientConfig {
   privateFeeBalance?: FeltLike;
   feeEstimator?: StarknetFeeEstimatorLike;
   gasEstimate?: FeltLike;
+  messageLocatorResolver?: MessageLocatorResolver;
   now?: () => number;
+}
+
+export interface CanonicalMessageContext {
+  messageReference: string;
+  messageLocator: string;
+  payloadCommitment: string;
+  helperCalldata: readonly string[];
 }
 
 export interface InvokeExternalInput {
@@ -168,6 +180,7 @@ export interface InvokeExternalInput {
   item: TimelineItem;
   mode: VeilMessageMode;
   privacyPool?: BuildPrivacyPoolMessageActionsInput;
+  canonicalMessage?: CanonicalMessageContext;
   session?: VeilSession;
 }
 
@@ -267,6 +280,7 @@ export interface StarknetPrivacyMessageActionInput {
   feeTokenAddress: string;
   feeEstimate: PrivacyPoolTotalCostEstimate;
   item: TimelineItem;
+  canonicalMessage?: CanonicalMessageContext;
   session?: VeilSession;
 }
 
@@ -306,6 +320,7 @@ export interface StarknetPrivacySdkExecutionInput {
   feeTokenAddress: string;
   feeEstimate: PrivacyPoolTotalCostEstimate;
   item?: TimelineItem;
+  canonicalMessage?: CanonicalMessageContext;
   session?: VeilSession;
 }
 
@@ -473,7 +488,14 @@ export interface OpenSubchannelResult {
   encodedPrivacyPoolClientActions?: readonly string[];
 }
 
-export interface SendMessageInput {
+export interface CanonicalMessageIdentityInput {
+  /** Stable identity supplied by the application when retry persistence is needed. */
+  messageReference?: string;
+  /** Optional explicit upstream locator. */
+  messageLocator?: string | bigint;
+}
+
+export interface SendMessageInput extends CanonicalMessageIdentityInput {
   channelId: string;
   message: string;
   sender?: VeilActor | string;
@@ -481,7 +503,7 @@ export interface SendMessageInput {
   privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
-export interface SendPaymentMemoInput {
+export interface SendPaymentMemoInput extends CanonicalMessageIdentityInput {
   channelId: string;
   memo: string;
   amount?: string;
@@ -490,7 +512,7 @@ export interface SendPaymentMemoInput {
   privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
-export interface OfferInput {
+export interface OfferInput extends CanonicalMessageIdentityInput {
   channelId: string;
   amount: string;
   currency?: string;
@@ -500,7 +522,7 @@ export interface OfferInput {
   privacyPool?: BuildPrivacyPoolMessageActionsInput;
 }
 
-export interface OfferDecisionInput {
+export interface OfferDecisionInput extends CanonicalMessageIdentityInput {
   channelId: string;
   offerId?: string;
   reason?: string;
@@ -516,7 +538,7 @@ export interface EscrowStatusInput {
   sender?: VeilActor | string;
 }
 
-export interface AttachProofInput {
+export interface AttachProofInput extends CanonicalMessageIdentityInput {
   channelId: string;
   proofRef: string;
   label?: string;

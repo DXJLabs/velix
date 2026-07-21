@@ -217,7 +217,9 @@ export class OfficialPrivacyTransport {
       keyDomain: input.keyDomain,
       envelope: input.envelope,
       messageLocator,
-      claimedCommitment: input.claimedCommitment,
+      ...(input.claimedCommitment !== undefined
+        ? { claimedCommitment: input.claimedCommitment }
+        : {}),
     });
     const prepared = Object.freeze({
       requestId,

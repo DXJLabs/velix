@@ -207,6 +207,16 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
       : encodeInvokeCalldata(input.item, {
           conversationTag: await this.#channelIdEncoder(input.item.channelId),
         });
+    if (
+      input.canonicalMessage
+      && !sameFeltArray(helperCalldata, input.canonicalMessage.helperCalldata)
+    ) {
+      throw new VeilPrivacyError(
+        "PAYLOAD_MALFORMED",
+        "InvokeExternal calldata does not match the prepared canonical message.",
+      );
+    }
+
     const helperCall = createSpanHelperCall(input.helperAddress || this.#helperAddress, helperCalldata);
     const clientActions = [
       ...buildPrivacyPoolMessageActions(input.privacyPool),
@@ -235,6 +245,9 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
       feeTokenAddress: feeEstimate.poolFee.feeTokenAddress,
       feeEstimate,
       item: input.item,
+      ...(input.canonicalMessage
+        ? { canonicalMessage: input.canonicalMessage }
+        : {}),
     };
     const executionInput = input.session ? { ...actionInput, session: input.session } : actionInput;
     const action = await this.#buildPrivacyAction(
@@ -418,5 +431,20 @@ export class StarknetPrivacyPoolTransport implements VeilTransport {
 export class AvnuPrivacyPoolTransport extends StarknetPrivacyPoolTransport {
   constructor(config: AvnuPrivacyPoolTransportConfig) {
     super(config);
+  }
+}
+
+function sameFeltArray(
+  left: readonly (string | number | bigint)[],
+  right: readonly (string | number | bigint)[],
+): boolean {
+  if (left.length !== right.length) return false;
+  try {
+    return left.every(
+      (value, index) =>
+        BigInt(value) === BigInt(right[index] as string | number | bigint),
+    );
+  } catch {
+    return false;
   }
 }
