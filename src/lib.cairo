@@ -126,6 +126,34 @@ pub mod private_escrow {
     pub use crate::veil_private_escrow_helper;
 }
 
+#[path("../contracts/private_escrow_settlement/private_escrow_settlement_commitments.cairo")]
+pub mod private_escrow_settlement_commitments;
+#[path("../contracts/private_escrow_settlement/private_escrow_settlement_errors.cairo")]
+pub mod private_escrow_settlement_errors;
+#[path("../contracts/private_escrow_settlement/private_escrow_settlement_events.cairo")]
+pub mod private_escrow_settlement_events;
+#[path("../contracts/private_escrow_settlement/private_escrow_settlement_interfaces.cairo")]
+pub mod private_escrow_settlement_interfaces;
+#[path("../contracts/private_escrow_settlement/private_escrow_settlement_types.cairo")]
+pub mod private_escrow_settlement_types;
+#[path("../contracts/private_escrow_settlement/veil_private_escrow_settlement.cairo")]
+pub mod veil_private_escrow_settlement;
+#[path("../contracts/private_escrow_settlement/test_mocks/mock_private_escrow_settlement_privacy_pool.cairo")]
+pub mod mock_private_escrow_settlement_privacy_pool;
+
+pub mod private_escrow_settlement {
+    pub use crate::private_escrow_settlement_commitments;
+    pub use crate::private_escrow_settlement_errors;
+    pub use crate::private_escrow_settlement_events;
+    pub use crate::private_escrow_settlement_interfaces;
+    pub use crate::private_escrow_settlement_types;
+    pub use crate::veil_private_escrow_settlement;
+
+    pub mod test_mocks {
+        pub use crate::mock_private_escrow_settlement_privacy_pool;
+    }
+}
+
 #[path("../contracts/settlement/settlement_events.cairo")]
 pub mod settlement_events;
 #[path("../contracts/settlement/settlement_interfaces.cairo")]
