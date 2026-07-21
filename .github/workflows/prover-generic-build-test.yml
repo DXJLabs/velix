@@ -55,8 +55,8 @@ jobs:
         env:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
-          USER_ADDRESS: ${{ vars.VEIL_POC_ACCOUNT_ADDRESS }}
-          CONFIGURED_BLOCK_ID: ${{ vars.VEIL_POC_BLOCK_ID }}
+          USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          CONFIGURED_BLOCK_ID: ${{ secrets.VEIL_POC_BLOCK_ID }}
         run: |
           set -euo pipefail
 
