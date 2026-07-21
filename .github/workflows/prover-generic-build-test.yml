@@ -531,7 +531,7 @@ jobs:
           VEIL_POC_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
           VEIL_POC_OUT_DIR: ${{ github.workspace }}/veil-proof-artifacts
-          USER_ADDRESS: ${{ vars.VEIL_POC_ACCOUNT_ADDRESS }}
+          USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
         run: |
           set -euo pipefail
 
