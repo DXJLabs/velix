@@ -1,1 +1,160 @@
+name: Build Generic STWO Prover
 
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test Generic Prover
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Check runner hardware
+        shell: bash
+        run: |
+          echo "=== CPU ==="
+          nproc
+          lscpu | grep -E \
+            "Architecture|CPU\(s\)|Model name|Thread|Core|Socket|Flags"
+
+          echo
+          echo "=== RAM ==="
+          free -h
+
+          echo
+          echo "=== STORAGE ==="
+          df -h /
+
+      - name: Checkout official sequencer release
+        uses: actions/checkout@v4
+        with:
+          repository: starkware-libs/sequencer
+          ref: PRIVACY-0.14.3-RC.2
+          path: sequencer
+          fetch-depth: 1
+
+      - name: Show official source commit
+        shell: bash
+        run: |
+          cd sequencer
+
+          echo "Commit:"
+          git rev-parse HEAD
+
+          echo "Tag:"
+          git describe --tags --exact-match || true
+
+          echo "Dockerfile:"
+          test -f crates/starknet_transaction_prover/Dockerfile
+          ls -lh crates/starknet_transaction_prover/Dockerfile
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+
+          docker system prune -af || true
+
+          echo "Storage after cleanup:"
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Build x86-64-v3 transaction prover
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          cd sequencer
+
+          docker buildx build \
+            --load \
+            --progress=plain \
+            --build-arg BUILD_MODE=release \
+            --build-arg TARGET_CPU=x86-64-v3 \
+            -f crates/starknet_transaction_prover/Dockerfile \
+            -t veil-transaction-prover:x86-64-v3 \
+            . 2>&1 | tee ../generic-build.log
+
+      - name: Inspect generic image
+        shell: bash
+        run: |
+          docker image inspect \
+            veil-transaction-prover:x86-64-v3 \
+            --format='Architecture={{.Architecture}}
+          OS={{.Os}}
+          Size={{.Size}}
+          Entrypoint={{json .Config.Entrypoint}}
+          Cmd={{json .Config.Cmd}}'
+
+      - name: Test generic prover startup
+        id: startup
+        shell: bash
+        run: |
+          set +e
+
+          echo "Starting generic prover for up to 30 seconds..."
+
+          timeout 30s docker run --rm \
+            --network host \
+            --name veil-generic-prover \
+            veil-transaction-prover:x86-64-v3 \
+            > generic-startup.log 2>&1
+
+          STATUS=$?
+
+          echo
+          echo "================================"
+          echo "GENERIC PROVER LOG"
+          echo "================================"
+          cat generic-startup.log || true
+
+          echo
+          echo "Exit status: $STATUS"
+          echo "exit_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          if [ "$STATUS" -eq 124 ]; then
+            RESULT="PROCESS_STAYED_ALIVE"
+          elif [ "$STATUS" -eq 132 ]; then
+            RESULT="ILLEGAL_INSTRUCTION"
+          elif [ "$STATUS" -eq 137 ]; then
+            RESULT="PROCESS_KILLED_OR_OOM"
+          elif [ "$STATUS" -eq 0 ]; then
+            RESULT="EXITED_SUCCESSFULLY"
+          else
+            RESULT="EXIT_$STATUS"
+          fi
+
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
+          echo "RESULT: $RESULT"
+
+          exit 0
+
+      - name: Final verdict
+        shell: bash
+        run: |
+          echo "================================"
+          echo "FINAL GENERIC BUILD RESULT"
+          echo "================================"
+          echo "Result: ${{ steps.startup.outputs.result }}"
+          echo "Exit status: ${{ steps.startup.outputs.exit_status }}"
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generic-stwo-prover-logs
+          path: |
+            generic-build.log
+            generic-startup.log
+          if-no-files-found: ignore
+          retention-days: 7
