@@ -1,4 +1,4 @@
-name: Build Generic STWO Prover
+name: Build Generic STWO Prover and Run VEIL Proof
 
 on:
   workflow_dispatch:
@@ -7,12 +7,20 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
-    name: Build and Test Generic Prover
+  build-and-prove:
+    name: Build Prover and Generate VEIL Proof
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_BUILD_JOBS: "2"
+
     steps:
+      # ============================================================
+      # 1. CHECK HARDWARE
+      # ============================================================
+
       - name: Check runner hardware
         shell: bash
         run: |
@@ -20,6 +28,7 @@ jobs:
           echo "CPU"
           echo "================================"
           nproc
+
           lscpu | grep -E \
             "Architecture|CPU\(s\)|Model name|Thread|Core|Socket|Flags"
 
@@ -35,6 +44,256 @@ jobs:
           echo "================================"
           df -h /
 
+      # ============================================================
+      # 2. VALIDATE SECRETS, ADDRESS, RPC, AND FETCH NONCE
+      # This runs before the 20-minute prover build.
+      # ============================================================
+
+      - name: Validate VEIL inputs and fetch account nonce
+        id: veil-inputs
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          USER_ADDRESS: ${{ vars.VEIL_POC_ACCOUNT_ADDRESS }}
+          CONFIGURED_BLOCK_ID: ${{ vars.VEIL_POC_BLOCK_ID }}
+        run: |
+          set -euo pipefail
+
+          echo "================================"
+          echo "VALIDATE VEIL INPUTS"
+          echo "================================"
+
+          if [ -z "${RPC_URL:-}" ]; then
+            echo "Secret STARKNET_SEPOLIA_RPC_URL belum tersedia."
+            exit 1
+          fi
+
+          if [ -z "${ACCOUNT_PRIVATE_KEY:-}" ]; then
+            echo "Secret VEIL_POC_ACCOUNT_PRIVATE_KEY belum tersedia."
+            exit 1
+          fi
+
+          if [ -z "${USER_ADDRESS:-}" ]; then
+            echo "Variable VEIL_POC_ACCOUNT_ADDRESS belum tersedia."
+            exit 1
+          fi
+
+          case "$USER_ADDRESS" in
+            0x*)
+              ;;
+            *)
+              echo "VEIL_POC_ACCOUNT_ADDRESS harus diawali 0x."
+              exit 1
+              ;;
+          esac
+
+          BLOCK_ID="${CONFIGURED_BLOCK_ID:-latest}"
+
+          if [ "$BLOCK_ID" != "latest" ] && \
+             ! [[ "$BLOCK_ID" =~ ^[0-9]+$ ]]; then
+            echo "VEIL_POC_BLOCK_ID hanya boleh latest atau nomor block."
+            exit 1
+          fi
+
+          echo "RPC secret tersedia."
+          echo "Private key secret tersedia."
+          echo "Account address: $USER_ADDRESS"
+          echo "Block ID: $BLOCK_ID"
+          echo "Nilai rahasia tidak ditampilkan."
+
+          echo
+          echo "================================"
+          echo "CHECK STARKNET CHAIN ID"
+          echo "================================"
+
+          CHAIN_RESPONSE="$(
+            curl --fail-with-body -sS \
+              --connect-timeout 10 \
+              --max-time 30 \
+              -X POST "$RPC_URL" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "starknet_chainId",
+                "params": []
+              }'
+          )"
+
+          echo "$CHAIN_RESPONSE" > veil-chain-id-response.json
+
+          python3 - veil-chain-id-response.json <<'PY'
+          import json
+          import sys
+
+          path = sys.argv[1]
+
+          with open(path, "r", encoding="utf-8") as file:
+              response = json.load(file)
+
+          if response.get("error"):
+              raise SystemExit(
+                  "RPC chainId error: "
+                  + json.dumps(response["error"], ensure_ascii=False)
+              )
+
+          chain_id = response.get("result")
+
+          if not chain_id:
+              raise SystemExit("RPC tidak mengembalikan chain ID")
+
+          print("Chain ID:", chain_id)
+          PY
+
+          echo
+          echo "================================"
+          echo "FETCH CURRENT ACCOUNT NONCE"
+          echo "================================"
+
+          NONCE_PAYLOAD="$(
+            python3 - "$USER_ADDRESS" "$BLOCK_ID" <<'PY'
+          import json
+          import sys
+
+          account_address = sys.argv[1]
+          block_id_input = sys.argv[2]
+
+          if block_id_input == "latest":
+              block_id = "latest"
+          else:
+              block_id = {
+                  "block_number": int(block_id_input)
+              }
+
+          request = {
+              "jsonrpc": "2.0",
+              "id": 2,
+              "method": "starknet_getNonce",
+              "params": {
+                  "block_id": block_id,
+                  "contract_address": account_address,
+              },
+          }
+
+          print(json.dumps(request))
+          PY
+          )"
+
+          NONCE_RESPONSE="$(
+            curl --fail-with-body -sS \
+              --connect-timeout 10 \
+              --max-time 30 \
+              -X POST "$RPC_URL" \
+              -H "Content-Type: application/json" \
+              -d "$NONCE_PAYLOAD"
+          )"
+
+          echo "$NONCE_RESPONSE" > veil-nonce-response.json
+
+          NONCE="$(
+            python3 - veil-nonce-response.json <<'PY'
+          import json
+          import sys
+
+          path = sys.argv[1]
+
+          with open(path, "r", encoding="utf-8") as file:
+              response = json.load(file)
+
+          if response.get("error"):
+              raise SystemExit(
+                  "RPC getNonce error: "
+                  + json.dumps(response["error"], ensure_ascii=False)
+              )
+
+          nonce = response.get("result")
+
+          if not nonce:
+              raise SystemExit("RPC tidak mengembalikan nonce akun")
+
+          print(nonce)
+          PY
+          )"
+
+          echo "Account nonce: $NONCE"
+
+          echo "VEIL_POC_NONCE=$NONCE" >> "$GITHUB_ENV"
+          echo "VEIL_POC_RESOLVED_BLOCK_ID=$BLOCK_ID" >> "$GITHUB_ENV"
+
+          echo "nonce=$NONCE" >> "$GITHUB_OUTPUT"
+          echo "block_id=$BLOCK_ID" >> "$GITHUB_OUTPUT"
+          echo "result=INPUTS_VALID" >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # 3. CHECKOUT VEIL SOURCE
+      # ============================================================
+
+      - name: Checkout VEIL source
+        uses: actions/checkout@v4
+        with:
+          path: velix
+          fetch-depth: 1
+
+      - name: Show VEIL source commit
+        shell: bash
+        run: |
+          cd velix
+
+          echo "================================"
+          echo "VEIL COMMIT"
+          echo "================================"
+
+          git rev-parse HEAD
+          git log -1 --oneline
+
+          echo
+          echo "================================"
+          echo "VEIL POC FILES"
+          echo "================================"
+
+          test -f tools/privacy-set-viewing-key-poc/Cargo.toml
+          test -f tools/privacy-set-viewing-key-poc/src/main.rs
+          test -f tools/privacy-set-viewing-key-poc/src/lib.rs
+
+          find tools/privacy-set-viewing-key-poc \
+            -maxdepth 2 \
+            -type f \
+            -print
+
+      # ============================================================
+      # 4. PREPARE AND BUILD VEIL RUST POC
+      # Build before starting prover to reduce concurrent RAM usage.
+      # ============================================================
+
+      - name: Prepare Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+          rustc --version
+          cargo --version
+
+      - name: Build VEIL SetViewingKey PoC
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          cd velix
+
+          cargo build \
+            --release \
+            --manifest-path \
+            tools/privacy-set-viewing-key-poc/Cargo.toml \
+            2>&1 | tee ../veil-poc-build.log
+
+      # ============================================================
+      # 5. CHECKOUT OFFICIAL STARKWARE SEQUENCER SOURCE
+      # ============================================================
+
       - name: Checkout official sequencer release
         uses: actions/checkout@v4
         with:
@@ -43,26 +302,45 @@ jobs:
           path: sequencer
           fetch-depth: 1
 
-      - name: Show official source commit
+      - name: Show official prover source
         shell: bash
         run: |
           cd sequencer
 
-          echo "Commit:"
+          echo "================================"
+          echo "OFFICIAL SEQUENCER COMMIT"
+          echo "================================"
+
           git rev-parse HEAD
 
           echo
           echo "Tag:"
+
           git describe --tags --exact-match || true
 
           echo
           echo "Dockerfile:"
-          test -f crates/starknet_transaction_prover/Dockerfile
-          ls -lh crates/starknet_transaction_prover/Dockerfile
 
-      - name: Free disk space
+          test -f crates/starknet_transaction_prover/Dockerfile
+
+          ls -lh \
+            crates/starknet_transaction_prover/Dockerfile
+
+      # ============================================================
+      # 6. PREPARE DISK AND DOCKER
+      # ============================================================
+
+      - name: Free disk space and install utilities
         shell: bash
         run: |
+          set -euo pipefail
+
+          sudo apt-get update -qq
+
+          sudo apt-get install -y -qq \
+            jq \
+            time
+
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
@@ -76,6 +354,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker
+
+      # ============================================================
+      # 7. BUILD GENERIC X86-64-V3 TRANSACTION PROVER
+      # ============================================================
 
       - name: Build x86-64-v3 transaction prover
         shell: bash
@@ -93,7 +375,7 @@ jobs:
             -t veil-transaction-prover:x86-64-v3 \
             . 2>&1 | tee ../generic-build.log
 
-      - name: Inspect generic image
+      - name: Inspect generic prover image
         shell: bash
         run: |
           docker image inspect \
@@ -104,33 +386,26 @@ jobs:
           Entrypoint={{json .Config.Entrypoint}}
           Cmd={{json .Config.Cmd}}'
 
+      # ============================================================
+      # 8. START GENERIC PROVER
+      # ============================================================
+
       - name: Start generic prover with Sepolia RPC
         id: startup
         shell: bash
         env:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
         run: |
-          set +e
+          set -euo pipefail
+
+          echo "result=STARTING" >> "$GITHUB_OUTPUT"
+          echo "exit_status=1" >> "$GITHUB_OUTPUT"
+
+          docker rm -f veil-generic-prover \
+            2>/dev/null || true
 
           echo "================================"
-          echo "CHECKING RPC SECRET"
-          echo "================================"
-
-          if [ -z "${RPC_URL:-}" ]; then
-            echo "Secret STARKNET_SEPOLIA_RPC_URL tidak ditemukan."
-            echo "result=SECRET_MISSING" >> "$GITHUB_OUTPUT"
-            echo "exit_status=1" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-          echo "Secret RPC tersedia."
-          echo "Nilai RPC disembunyikan oleh GitHub."
-
-          docker rm -f veil-generic-prover 2>/dev/null || true
-
-          echo
-          echo "================================"
-          echo "STARTING GENERIC PROVER"
+          echo "START GENERIC PROVER"
           echo "================================"
 
           docker run -d \
@@ -141,53 +416,53 @@ jobs:
             -e PROVER_IP="0.0.0.0" \
             -e PROVER_PORT="3000" \
             -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
             -e MAX_CONNECTIONS="2" \
             -e COMPILED_CLASS_CACHE_SIZE="50" \
             -e PREFETCH_STATE="false" \
             -e RUST_LOG="info" \
             veil-transaction-prover:x86-64-v3
 
-          START_STATUS=$?
-
-          if [ "$START_STATUS" -ne 0 ]; then
-            echo "Container gagal dibuat."
-            echo "result=CONTAINER_START_FAILED" >> "$GITHUB_OUTPUT"
-            echo "exit_status=$START_STATUS" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
           echo "Container berhasil dibuat."
           echo "Menunggu JSON-RPC prover siap..."
 
           READY=0
 
-          for attempt in $(seq 1 30); do
-            RUNNING="$(docker inspect \
-              -f '{{.State.Running}}' \
-              veil-generic-prover 2>/dev/null)"
+          for attempt in $(seq 1 60); do
+            RUNNING="$(
+              docker inspect \
+                -f '{{.State.Running}}' \
+                veil-generic-prover \
+                2>/dev/null || true
+            )"
 
             if [ "$RUNNING" != "true" ]; then
               echo "Container berhenti sebelum server siap."
 
-              docker logs veil-generic-prover 2>&1 \
-                | tee generic-startup.log
+              docker logs veil-generic-prover \
+                2>&1 | tee generic-startup.log
 
-              echo "result=CONTAINER_STOPPED" >> "$GITHUB_OUTPUT"
-              echo "exit_status=1" >> "$GITHUB_OUTPUT"
+              echo "result=CONTAINER_STOPPED" \
+                >> "$GITHUB_OUTPUT"
+
               exit 1
             fi
 
-            RESPONSE="$(curl -sS \
-              --connect-timeout 2 \
-              --max-time 5 \
-              -X POST http://127.0.0.1:3000 \
-              -H "Content-Type: application/json" \
-              -d '{
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "starknet_specVersion",
-                "params": []
-              }' 2>/dev/null)"
+            RESPONSE="$(
+              curl -sS \
+                --connect-timeout 2 \
+                --max-time 5 \
+                -X POST \
+                http://127.0.0.1:3000 \
+                -H "Content-Type: application/json" \
+                -d '{
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "starknet_specVersion",
+                  "params": []
+                }' \
+                2>/dev/null || true
+            )"
 
             if echo "$RESPONSE" | grep -q '"result"'; then
               echo
@@ -200,61 +475,336 @@ jobs:
               break
             fi
 
-            echo "Percobaan $attempt/30: server belum siap."
+            echo "Percobaan $attempt/60: belum siap."
             sleep 2
           done
 
-          echo
-          echo "================================"
-          echo "GENERIC PROVER LOG"
-          echo "================================"
-
-          docker logs veil-generic-prover 2>&1 \
-            | tee generic-startup.log
+          docker logs veil-generic-prover \
+            2>&1 | tee generic-startup.log
 
           if [ "$READY" -ne 1 ]; then
-            echo
-            echo "Prover tidak siap dalam waktu 60 detik."
-            echo "result=SERVER_NOT_READY" >> "$GITHUB_OUTPUT"
-            echo "exit_status=1" >> "$GITHUB_OUTPUT"
+            echo "Prover tidak siap dalam 120 detik."
+
+            echo "result=SERVER_NOT_READY" \
+              >> "$GITHUB_OUTPUT"
+
             exit 1
           fi
 
-          echo
           echo "result=SERVER_READY" >> "$GITHUB_OUTPUT"
           echo "exit_status=0" >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # 9. VALIDATE VEIL POC AGAINST RPC
+      # ============================================================
+
+      - name: Validate VEIL PoC RPC compatibility
+        shell: bash
+        env:
+          VEIL_POC_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+        run: |
+          set -euo pipefail
+
+          cd velix
+
+          cargo run \
+            --release \
+            --manifest-path \
+            tools/privacy-set-viewing-key-poc/Cargo.toml \
+            -- \
+            validate-rpc \
+            > ../veil-validate-rpc.log \
+            2>&1
+
+          cat ../veil-validate-rpc.log
+
+      # ============================================================
+      # 10. RUN REAL VEIL SETVIEWINGKEY PROOF
+      # ============================================================
+
+      - name: Run VEIL SetViewingKey real proof
+        id: veil-proof
+        shell: bash
+        env:
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_OUT_DIR: ${{ github.workspace }}/veil-proof-artifacts
+          USER_ADDRESS: ${{ vars.VEIL_POC_ACCOUNT_ADDRESS }}
+        run: |
+          set -euo pipefail
+
+          echo "result=PROOF_STARTING" >> "$GITHUB_OUTPUT"
+          echo "exit_status=1" >> "$GITHUB_OUTPUT"
+          echo "duration_seconds=0" >> "$GITHUB_OUTPUT"
+
+          if [ -z "${VEIL_POC_ACCOUNT_PRIVATE_KEY:-}" ]; then
+            echo "VEIL_POC_ACCOUNT_PRIVATE_KEY kosong."
+            echo "result=SECRET_MISSING" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ -z "${USER_ADDRESS:-}" ]; then
+            echo "VEIL_POC_ACCOUNT_ADDRESS kosong."
+            echo "result=ADDRESS_MISSING" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          mkdir -p "$VEIL_POC_OUT_DIR"
+
+          echo "================================"
+          echo "REAL VEIL STWO PROOF"
+          echo "================================"
+          echo "User address: $USER_ADDRESS"
+          echo "Block ID: $VEIL_POC_RESOLVED_BLOCK_ID"
+          echo "Nonce: $VEIL_POC_NONCE"
+          echo "Prover: localhost:3000"
+          echo "Private key: hidden"
+
+          START_TIME="$(date +%s)"
+
+          cd velix
+
+          set +e
+
+          timeout 300m \
+            /usr/bin/time \
+              -v \
+              -o ../veil-proof-time.log \
+            cargo run \
+              --release \
+              --manifest-path \
+              tools/privacy-set-viewing-key-poc/Cargo.toml \
+              -- \
+              prove \
+              --user-address "$USER_ADDRESS" \
+              --block-id "$VEIL_POC_RESOLVED_BLOCK_ID" \
+              --nonce "$VEIL_POC_NONCE" \
+            > /dev/null \
+            2> ../veil-proof-stderr.log
+
+          PROOF_STATUS=$?
+
+          set -e
+
+          END_TIME="$(date +%s)"
+          DURATION="$((END_TIME - START_TIME))"
+
+          echo "Proof process exit status: $PROOF_STATUS"
+          echo "Proof duration: ${DURATION} seconds"
+
+          echo
+          echo "================================"
+          echo "RESOURCE USAGE"
+          echo "================================"
+
+          cat ../veil-proof-time.log || true
+
+          if [ -s ../veil-proof-stderr.log ]; then
+            echo
+            echo "================================"
+            echo "PROOF STDERR"
+            echo "================================"
+
+            tail -n 200 ../veil-proof-stderr.log
+          fi
+
+          echo "duration_seconds=$DURATION" \
+            >> "$GITHUB_OUTPUT"
+
+          echo "exit_status=$PROOF_STATUS" \
+            >> "$GITHUB_OUTPUT"
+
+          if [ "$PROOF_STATUS" -eq 124 ]; then
+            echo "Proof melewati batas waktu 300 menit."
+            echo "result=PROOF_TIMEOUT" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$PROOF_STATUS" -eq 137 ]; then
+            echo "Proof dihentikan, kemungkinan kehabisan RAM."
+            echo "result=PROOF_KILLED_OR_OOM" \
+              >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$PROOF_STATUS" -ne 0 ]; then
+            echo "Proof gagal dengan status $PROOF_STATUS."
+            echo "result=PROOF_FAILED" >> "$GITHUB_OUTPUT"
+            exit "$PROOF_STATUS"
+          fi
+
+          PROOF_FILE="$VEIL_POC_OUT_DIR/prove-response.json"
+          SUMMARY_FILE="$GITHUB_WORKSPACE/veil-proof-summary.json"
+
+          if [ ! -s "$PROOF_FILE" ]; then
+            echo "prove-response.json tidak dibuat atau kosong."
+            echo "result=PROOF_ARTIFACT_MISSING" \
+              >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          python3 \
+            - "$PROOF_FILE" "$SUMMARY_FILE" \
+            <<'PY'
+          import json
+          import sys
+
+          proof_path = sys.argv[1]
+          summary_path = sys.argv[2]
+
+          with open(proof_path, "r", encoding="utf-8") as file:
+              result = json.load(file)
+
+          proof = result.get("proof", "")
+          proof_facts = result.get("proof_facts", [])
+          messages = result.get("l2_to_l1_messages", [])
+          facts_info = result.get("proof_facts_info", {})
+
+          summary = {
+              "proof_present": bool(proof),
+              "proof_length": len(proof),
+              "proof_facts_count": len(proof_facts),
+              "l2_to_l1_messages_count": len(messages),
+              "proof_facts_info": facts_info,
+          }
+
+          if not proof:
+              raise SystemExit("Prover menghasilkan proof kosong")
+
+          if not proof_facts:
+              raise SystemExit(
+                  "Prover menghasilkan proof_facts kosong"
+              )
+
+          with open(
+              summary_path,
+              "w",
+              encoding="utf-8",
+          ) as file:
+              json.dump(
+                  summary,
+                  file,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+
+          print("================================")
+          print("VEIL REAL PROOF VERDICT")
+          print("================================")
+          print("proof_present:", summary["proof_present"])
+          print("proof_length:", summary["proof_length"])
+          print(
+              "proof_facts_count:",
+              summary["proof_facts_count"],
+          )
+          print(
+              "l2_to_l1_messages_count:",
+              summary["l2_to_l1_messages_count"],
+          )
+          PY
+
+          echo
+          cat "$SUMMARY_FILE"
+
+          echo
+          echo "result=REAL_PROOF_GENERATED" \
+            >> "$GITHUB_OUTPUT"
+
+          echo "exit_status=0" >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # 11. FINAL VERDICT
+      # ============================================================
 
       - name: Final verdict
         if: always()
         shell: bash
         run: |
           echo "================================"
-          echo "FINAL GENERIC PROVER RESULT"
+          echo "FINAL VEIL PROVING RESULT"
           echo "================================"
-          echo "Result: ${{ steps.startup.outputs.result }}"
-          echo "Exit status: ${{ steps.startup.outputs.exit_status }}"
 
-      - name: Stop generic prover
+          echo "Input validation:"
+          echo "${{ steps.veil-inputs.outputs.result }}"
+
+          echo
+          echo "Resolved nonce:"
+          echo "${{ steps.veil-inputs.outputs.nonce }}"
+
+          echo
+          echo "Resolved block:"
+          echo "${{ steps.veil-inputs.outputs.block_id }}"
+
+          echo
+          echo "Prover server:"
+          echo "${{ steps.startup.outputs.result }}"
+
+          echo
+          echo "Prover server exit:"
+          echo "${{ steps.startup.outputs.exit_status }}"
+
+          echo
+          echo "VEIL proof:"
+          echo "${{ steps.veil-proof.outputs.result }}"
+
+          echo
+          echo "VEIL proof exit:"
+          echo "${{ steps.veil-proof.outputs.exit_status }}"
+
+          echo
+          echo "VEIL proof duration:"
+          echo "${{ steps.veil-proof.outputs.duration_seconds }} seconds"
+
+      # ============================================================
+      # 12. SAVE LOGS AND STOP PROVER
+      # ============================================================
+
+      - name: Save prover logs and stop container
         if: always()
         shell: bash
         run: |
-          echo "Saving final container logs..."
+          echo "Saving final prover logs..."
 
           docker logs veil-generic-prover \
-            > generic-startup.log 2>&1 || true
+            > generic-startup.log \
+            2>&1 || true
 
-          echo "Stopping container..."
+          echo "Saving final Docker statistics..."
 
-          docker rm -f veil-generic-prover || true
+          docker stats \
+            --no-stream \
+            veil-generic-prover \
+            > prover-docker-stats.txt \
+            2>&1 || true
 
-      - name: Upload logs
+          echo "Stopping prover container..."
+
+          docker rm -f \
+            veil-generic-prover || true
+
+      # ============================================================
+      # 13. UPLOAD RESULTS
+      # ============================================================
+
+      - name: Upload prover and VEIL proof artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: generic-stwo-prover-logs
+          name: veil-stwo-real-proof-results
           path: |
             generic-build.log
             generic-startup.log
+            prover-docker-stats.txt
             spec-version-response.json
+            veil-chain-id-response.json
+            veil-nonce-response.json
+            veil-poc-build.log
+            veil-validate-rpc.log
+            veil-proof-time.log
+            veil-proof-stderr.log
+            veil-proof-summary.json
+            veil-proof-artifacts/
           if-no-files-found: ignore
           retention-days: 7
