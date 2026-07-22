@@ -36,6 +36,7 @@
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "starknet": "9.4.2",
+    "starknet-proof": "npm:starknet@10.0.0-beta.6",
     "starkzap": "3.0.0",
     "swr": "2.4.2"
   },
