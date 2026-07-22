@@ -56,7 +56,6 @@ jobs:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          CONFIGURED_BLOCK_ID: ${{ secrets.VEIL_POC_BLOCK_ID }}
         run: |
           set -euo pipefail
 
@@ -88,18 +87,10 @@ jobs:
               ;;
           esac
 
-          BLOCK_ID="${CONFIGURED_BLOCK_ID:-latest}"
-
-          if [ "$BLOCK_ID" != "latest" ] && \
-             ! [[ "$BLOCK_ID" =~ ^[0-9]+$ ]]; then
-            echo "VEIL_POC_BLOCK_ID hanya boleh latest atau nomor block."
-            exit 1
-          fi
-
           echo "RPC secret tersedia."
           echo "Private key secret tersedia."
           echo "Account address tersedia."
-          echo "Block ID tersedia."
+          echo "Finalized block number akan dihitung dari current block."
           echo "Nilai rahasia tidak ditampilkan."
 
           echo
@@ -146,9 +137,6 @@ jobs:
           print("Chain ID:", chain_id)
           PY
 
-          echo "VEIL_POC_RESOLVED_BLOCK_ID=$BLOCK_ID" >> "$GITHUB_ENV"
-
-          echo "block_id=$BLOCK_ID" >> "$GITHUB_OUTPUT"
           echo "result=INPUTS_VALID" >> "$GITHUB_OUTPUT"
 
       # ============================================================
@@ -441,7 +429,6 @@ jobs:
           VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
-          VEIL_POC_BLOCK_ID: ${{ env.VEIL_POC_RESOLVED_BLOCK_ID }}
           VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-register-proof-summary.json
           VEIL_POC_ERROR_PATH: ${{ github.workspace }}/veil-proving-error.json
         run: |
@@ -467,7 +454,7 @@ jobs:
           echo "OFFICIAL SDK REAL VEIL REGISTER STWO PROOF"
           echo "================================"
           echo "User address tersedia."
-          echo "Block ID tersedia."
+          echo "Finalized block number: current block minus 10."
           echo "Prover: localhost:3000"
           echo "standard starknet.js signer for isolated VEIL PoC: configured"
           echo "LocalFailClosedDiscoveryProvider: configured"
@@ -622,6 +609,8 @@ jobs:
           ]
           if list(preflight) != expected_keys:
               raise SystemExit("Account preflight memiliki field yang tidak diizinkan")
+          if not isinstance(preflight.get("blockId"), str) or not preflight["blockId"].isdigit():
+              raise SystemExit("Account preflight blockId bukan nomor block final")
           if preflight.get("ownerMatch") is not True:
               raise SystemExit("Account owner tidak cocok dengan standard Stark signer")
           if preflight.get("signatureValidation") != "VALID":
@@ -703,10 +692,6 @@ jobs:
 
           echo "Input validation:"
           echo "${{ steps.veil-inputs.outputs.result }}"
-
-          echo
-          echo "Configured block:"
-          echo "${{ steps.veil-inputs.outputs.block_id }}"
 
           echo
           echo "Prover server:"

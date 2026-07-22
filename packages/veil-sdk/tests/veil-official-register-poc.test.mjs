@@ -32,7 +32,8 @@ import { constants, ec } from "starknet";
 const ACCOUNT_ADDRESS = 0x123n;
 const POOL_ADDRESS = 0x456n;
 const PRIVATE_KEY = "0x123456789abcdef";
-const ACTUAL_BLOCK_HASH = "0xabc";
+const CURRENT_BLOCK_NUMBER = 123;
+const FINALIZED_BLOCK_NUMBER = CURRENT_BLOCK_NUMBER - 10;
 const ACCOUNT_CLASS_HASH = "0xdef";
 
 function accountAbi({ ownerGetter = false, signatureValidation = false } = {}) {
@@ -65,9 +66,9 @@ function mockAccountProvider(options = {}) {
   const calls = [];
   return {
     calls,
-    async getBlock(blockId) {
-      calls.push({ method: "getBlock", blockId });
-      return { block_hash: ACTUAL_BLOCK_HASH, block_number: 123 };
+    async getBlockNumber() {
+      calls.push({ method: "getBlockNumber" });
+      return CURRENT_BLOCK_NUMBER;
     },
     async getClassHashAt(_address, blockId) {
       calls.push({ method: "getClassHashAt", blockId });
@@ -90,7 +91,7 @@ function mockAccountProvider(options = {}) {
   };
 }
 
-function mockProvingProvider() {
+function mockProvingProvider(options = {}) {
   return {
     async getDefaultDetails() {
       return {
@@ -111,8 +112,9 @@ function mockProvingProvider() {
         chainId: constants.StarknetChainId.SN_SEPOLIA,
       };
     },
-    async prove(invocation) {
+    async prove(invocation, provingBlockId) {
       assert.ok(invocation.signature.length > 0);
+      options.onProve?.(provingBlockId);
       return {
         data: Buffer.from("isolated-register-proof").toString("base64"),
         output: ["0x1"],
@@ -122,7 +124,7 @@ function mockProvingProvider() {
   };
 }
 
-test("account preflight pins latest to one actual block and matches the owner getter", async () => {
+test("account preflight pins current block minus ten across account state reads", async () => {
   const signer = createStandardPocSigner(PRIVATE_KEY);
   const publicKey = await signer.getPubKey();
   const provider = mockAccountProvider({ ownerPublicKey: publicKey });
@@ -130,14 +132,13 @@ test("account preflight pins latest to one actual block and matches the owner ge
     provider,
     accountAddress: ACCOUNT_ADDRESS,
     signer,
-    configuredBlockId: "latest",
     sensitiveValues: [PRIVATE_KEY],
   });
 
-  assert.equal(result.provingBlockId, ACTUAL_BLOCK_HASH);
+  assert.equal(result.provingBlockId, FINALIZED_BLOCK_NUMBER);
   assert.deepEqual(result.artifact, {
     accountAddress: "0x123",
-    blockId: ACTUAL_BLOCK_HASH,
+    blockId: String(FINALIZED_BLOCK_NUMBER),
     nonce: "0x7",
     classHash: ACCOUNT_CLASS_HASH,
     accountType: "SINGLE_OWNER_STARK_ACCOUNT",
@@ -146,8 +147,11 @@ test("account preflight pins latest to one actual block and matches the owner ge
     verdict: "SIGNER_PREFLIGHT_VALID",
   });
   assertAccountPreflightArtifactSafe(result.artifact, [PRIVATE_KEY, publicKey]);
-  const stateCalls = provider.calls.filter((call) => call.method !== "getBlock");
-  assert.equal(stateCalls.every((call) => call.blockId === ACTUAL_BLOCK_HASH), true);
+  const stateCalls = provider.calls.filter((call) => call.method !== "getBlockNumber");
+  assert.equal(
+    stateCalls.every((call) => call.blockId === FINALIZED_BLOCK_NUMBER),
+    true,
+  );
   assert.equal(
     provider.calls.filter((call) => call.method === "callContract").length,
     1,
@@ -182,7 +186,6 @@ test("account preflight validates a random non-transaction challenge when no own
     provider,
     accountAddress: ACCOUNT_ADDRESS,
     signer,
-    configuredBlockId: 123,
     sensitiveValues: [PRIVATE_KEY],
   });
 
@@ -220,7 +223,6 @@ test("account preflight emits every fail-closed account verdict", async () => {
       provider,
       accountAddress: ACCOUNT_ADDRESS,
       signer,
-      configuredBlockId: "latest",
       sensitiveValues: [PRIVATE_KEY],
     });
     assert.equal(result.artifact.verdict, verdict);
@@ -242,7 +244,6 @@ test("failed account preflight writes only the safe artifact and never creates t
         VEIL_POC_ACCOUNT_ADDRESS: "0x123",
         VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
         STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
-        VEIL_POC_BLOCK_ID: "latest",
         VEIL_POC_SUMMARY_PATH: summaryPath,
       }, {
         accountPreflightProvider: mockAccountProvider({
@@ -285,13 +286,14 @@ test("failed account preflight writes only the safe artifact and never creates t
   }
 });
 
-test("valid account preflight passes the same actual block hash to the official proof", async () => {
+test("valid account preflight passes the same finalized block number to the official proof", async () => {
   const directory = await mkdtemp(join(tmpdir(), "veil-account-proof-block-"));
   const preflightPath = join(directory, "veil-account-preflight.json");
   const summaryPath = join(directory, "veil-register-proof-summary.json");
   const signer = createStandardPocSigner(PRIVATE_KEY);
   const publicKey = await signer.getPubKey();
-  let proofBlockId;
+  let providerBlockId;
+  let sdkExecuteBlockId;
   let proverCreations = 0;
   try {
     const summary = await runVeilOfficialRegisterPoc({
@@ -299,23 +301,27 @@ test("valid account preflight passes the same actual block hash to the official 
       VEIL_POC_ACCOUNT_ADDRESS: "0x123",
       VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
       STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
-      VEIL_POC_BLOCK_ID: "latest",
       VEIL_POC_SUMMARY_PATH: summaryPath,
     }, {
       accountPreflightProvider: mockAccountProvider({ ownerPublicKey: publicKey }),
       accountPreflightPath: preflightPath,
       createProvingProvider(config) {
         proverCreations += 1;
-        proofBlockId = config.provingBlockId;
-        return mockProvingProvider();
+        providerBlockId = config.provingBlockId;
+        return mockProvingProvider({
+          onProve(blockId) {
+            sdkExecuteBlockId = blockId;
+          },
+        });
       },
     });
 
     assert.equal(proverCreations, 1);
-    assert.equal(proofBlockId, ACTUAL_BLOCK_HASH);
-    assert.equal(summary.provingBlockId, ACTUAL_BLOCK_HASH);
+    assert.equal(providerBlockId, FINALIZED_BLOCK_NUMBER);
+    assert.equal(sdkExecuteBlockId, FINALIZED_BLOCK_NUMBER);
+    assert.equal(summary.provingBlockId, String(FINALIZED_BLOCK_NUMBER));
     const preflight = JSON.parse(await readFile(preflightPath, "utf8"));
-    assert.equal(preflight.blockId, ACTUAL_BLOCK_HASH);
+    assert.equal(preflight.blockId, String(FINALIZED_BLOCK_NUMBER));
     assert.equal(preflight.verdict, "SIGNER_PREFLIGHT_VALID");
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -360,7 +366,7 @@ test("official register builder path does not invoke discovery", async () => {
     discoveryProvider,
     registry: createEmptyRegistry(),
     poolAddress: POOL_ADDRESS,
-    provingBlockId: "latest",
+    provingBlockId: FINALIZED_BLOCK_NUMBER,
   });
 
   assert.equal(result.callAndProof.proof.proofFacts.length, 1);
@@ -382,7 +388,7 @@ test("missing standard signer fails closed", async () => {
       discoveryProvider: new LocalFailClosedDiscoveryProvider(),
       registry: createEmptyRegistry(),
       poolAddress: POOL_ADDRESS,
-      provingBlockId: "latest",
+      provingBlockId: FINALIZED_BLOCK_NUMBER,
     }),
     new RegExp(ISOLATED_POC_SIGNER_LABEL),
   );
@@ -394,10 +400,46 @@ test("missing official prover URL fails closed", () => {
       proverUrl: "",
       rpcUrl: "https://rpc.example/rpc/v0_9",
       poolAddress: POOL_ADDRESS,
-      provingBlockId: "latest",
+      provingBlockId: FINALIZED_BLOCK_NUMBER,
     }),
     /Official prover URL is required/u,
   );
+});
+
+test("official prover request serializes the finalized number as block_number", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (_url, init) => {
+    request = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: request.id,
+      result: {
+        proof: Buffer.from("proof").toString("base64"),
+        proof_facts: [],
+        l2_to_l1_messages: [],
+      },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  try {
+    const provingProvider = createOfficialProvingProvider({
+      proverUrl: "http://127.0.0.1:3000",
+      rpcUrl: "https://rpc.example/rpc/v0_9",
+      poolAddress: POOL_ADDRESS,
+      provingBlockId: FINALIZED_BLOCK_NUMBER,
+    });
+    await provingProvider.prove({ sender_address: "0x456" });
+
+    assert.equal(request.method, "starknet_proveTransaction");
+    assert.deepEqual(request.params.block_id, {
+      block_number: FINALIZED_BLOCK_NUMBER,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("register proof summary contains only safe metadata", () => {
@@ -417,7 +459,7 @@ test("register proof summary contains only safe metadata", () => {
     },
     discoveryCalls: 0,
     accountAddress: ACCOUNT_ADDRESS,
-    provingBlockId: "latest",
+    provingBlockId: String(FINALIZED_BLOCK_NUMBER),
   });
   assertRegisterProofSummarySafe(summary, sensitive);
   assert.deepEqual(Object.keys(summary), [

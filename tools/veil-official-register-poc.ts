@@ -87,11 +87,11 @@ export interface VeilAccountPreflightArtifact {
 
 export interface AccountPreflightResult {
   artifact: VeilAccountPreflightArtifact;
-  provingBlockId: ProvingBlockId | undefined;
+  provingBlockId: number | undefined;
 }
 
 export interface AccountPreflightProvider {
-  getBlock(blockIdentifier: ProvingBlockId): Promise<unknown>;
+  getBlockNumber(): Promise<number>;
   getNonceForAddress(
     contractAddress: BigNumberish,
     blockIdentifier?: ProvingBlockId,
@@ -201,8 +201,6 @@ export interface VeilOfficialRegisterPocConfig {
   accountAddress: bigint;
   accountPrivateKey: string;
   poolAddress: bigint;
-  provingBlockId: ProvingBlockId;
-  provingBlockIdLabel: string;
   summaryPath: string;
 }
 
@@ -369,21 +367,6 @@ function parsePositiveFelt(value: string, label: string): bigint {
   return parsed;
 }
 
-function parseProvingBlockId(value: string): {
-  blockId: ProvingBlockId;
-  label: string;
-} {
-  if (value === "latest") return { blockId: "latest", label: "latest" };
-  if (!/^\d+$/u.test(value)) {
-    throw new Error("VEIL_POC_BLOCK_ID must be latest or a block number.");
-  }
-  const blockNumber = Number(value);
-  if (!Number.isSafeInteger(blockNumber)) {
-    throw new Error("VEIL_POC_BLOCK_ID is outside the safe integer range.");
-  }
-  return { blockId: blockNumber, label: String(blockNumber) };
-}
-
 function createEphemeralViewingKey(): bigint {
   const candidate = BigInt(`0x${randomBytes(32).toString("hex")}`)
     % MAX_VIEWING_KEY;
@@ -399,10 +382,6 @@ export function loadVeilOfficialRegisterPocConfig(
     `${ISOLATED_POC_SIGNER_LABEL} private key`,
   );
   const proverUrl = requiredEnv(env, "VEIL_POC_PROVER_URL", "Official prover URL");
-  const { blockId, label } = parseProvingBlockId(
-    env.VEIL_POC_BLOCK_ID?.trim() || "latest",
-  );
-
   return {
     rpcUrl: requiredEnv(env, "STARKNET_SEPOLIA_RPC_URL"),
     proverUrl,
@@ -415,8 +394,6 @@ export function loadVeilOfficialRegisterPocConfig(
       env.VEIL_POC_PRIVACY_POOL?.trim() || DEFAULT_POOL_ADDRESS,
       "VEIL_POC_PRIVACY_POOL",
     ),
-    provingBlockId: blockId,
-    provingBlockIdLabel: label,
     summaryPath:
       env.VEIL_POC_SUMMARY_PATH?.trim()
       || "veil-register-proof-summary.json",
@@ -453,21 +430,12 @@ function normalizeFeltHex(value: BigNumberish): string {
   return `0x${BigInt(value).toString(16)}`;
 }
 
-function configuredBlockIdLabel(blockId: ProvingBlockId): string {
-  if (typeof blockId === "string") return blockId;
-  if (typeof blockId === "number" || typeof blockId === "bigint") {
-    return String(blockId);
-  }
-  return "unsupported";
-}
-
 function emptyAccountPreflightArtifact(input: {
   accountAddress: bigint;
-  blockId: string;
 }): VeilAccountPreflightArtifact {
   return {
     accountAddress: normalizeFeltHex(input.accountAddress),
-    blockId: input.blockId,
+    blockId: "",
     nonce: "",
     classHash: "",
     accountType: "UNKNOWN_STARK_ACCOUNT",
@@ -635,36 +603,32 @@ export async function writeAccountPreflightArtifact(
   });
 }
 
-async function resolveActualProvingBlockId(
+async function resolveFinalizedProvingBlockNumber(
   provider: AccountPreflightProvider,
-  configuredBlockId: ProvingBlockId,
-): Promise<string> {
-  const block = await provider.getBlock(configuredBlockId);
-  if (!isRecord(block) || typeof block.block_hash !== "string") {
-    throw new Error("RPC did not return an actual block hash for preflight.");
+): Promise<number> {
+  const currentBlock = await provider.getBlockNumber();
+  if (!Number.isSafeInteger(currentBlock) || currentBlock < 10) {
+    throw new Error("RPC did not return a usable current block number.");
   }
-  return normalizeFeltHex(block.block_hash);
+  return currentBlock - 10;
 }
 
 export async function preflightVeilPocAccount(input: {
   provider: AccountPreflightProvider;
   accountAddress: bigint;
   signer: StandardPocSigner;
-  configuredBlockId: ProvingBlockId;
   sensitiveValues?: readonly string[];
 }): Promise<AccountPreflightResult> {
   const sensitiveValues = [...(input.sensitiveValues ?? [])];
   let artifact = emptyAccountPreflightArtifact({
     accountAddress: input.accountAddress,
-    blockId: configuredBlockIdLabel(input.configuredBlockId),
   });
-  let actualBlockId: string;
+  let actualBlockId: number;
   try {
-    actualBlockId = await resolveActualProvingBlockId(
-      input.provider,
-      input.configuredBlockId,
-    );
-    artifact = createPreflightArtifact(artifact, { blockId: actualBlockId });
+    actualBlockId = await resolveFinalizedProvingBlockNumber(input.provider);
+    artifact = createPreflightArtifact(artifact, {
+      blockId: String(actualBlockId),
+    });
   } catch {
     assertAccountPreflightArtifactSafe(artifact, sensitiveValues);
     return { artifact, provingBlockId: undefined };
@@ -943,7 +907,6 @@ export async function runVeilOfficialRegisterPoc(
       ?? createAccountPreflightProvider(config.rpcUrl),
     accountAddress: config.accountAddress,
     signer,
-    configuredBlockId: config.provingBlockId,
     sensitiveValues: [config.accountPrivateKey],
   });
   await writeAccountPreflightArtifact(
