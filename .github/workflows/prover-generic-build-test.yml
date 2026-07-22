@@ -517,6 +517,7 @@ jobs:
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
           VEIL_POC_BLOCK_ID: ${{ env.VEIL_POC_RESOLVED_BLOCK_ID }}
           VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-register-proof-summary.json
+          VEIL_POC_ERROR_PATH: ${{ github.workspace }}/veil-proving-error.json
         run: |
           set -euo pipefail
 
@@ -591,6 +592,15 @@ jobs:
             echo "================================"
 
             tail -n 300 ../veil-proof-stderr.log
+          fi
+
+          if [ -s "$GITHUB_WORKSPACE/veil-proving-error.json" ]; then
+            echo
+            echo "================================"
+            echo "SAFE PROVING SERVICE ERROR"
+            echo "================================"
+
+            cat "$GITHUB_WORKSPACE/veil-proving-error.json"
           fi
 
           echo "duration_seconds=$DURATION" \
@@ -811,6 +821,7 @@ jobs:
             veil-sdk-proof.log
             veil-proof-time.log
             veil-proof-stderr.log
+            veil-proving-error.json
             veil-register-proof-summary.json
           if-no-files-found: ignore
           retention-days: 7
