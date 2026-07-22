@@ -44,11 +44,10 @@ jobs:
           ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          PROVER_URL: ${{ secrets.VEIL_POC_PROVER_URL }}
         run: |
           set -euo pipefail
 
-          for name in ACCOUNT_ADDRESS ACCOUNT_PRIVATE_KEY VIEWING_KEY RPC_URL PROVER_URL; do
+          for name in ACCOUNT_ADDRESS ACCOUNT_PRIVATE_KEY VIEWING_KEY RPC_URL; do
             if [ -z "${!name:-}" ]; then
               echo "A required VEIL shielded-message identity secret is unavailable."
               exit 1
@@ -78,5 +77,5 @@ jobs:
           VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          VEIL_POC_PROVER_URL: ${{ secrets.VEIL_POC_PROVER_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
         run: node --experimental-strip-types tools/veil-official-shielded-message-poc.ts

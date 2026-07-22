@@ -267,7 +267,6 @@ test("shielded-message workflow accepts true/true after persistent identity vali
     ACCOUNT_PRIVATE_KEY: "synthetic-account-private-key",
     VIEWING_KEY: "synthetic-viewing-key",
     RPC_URL: "synthetic-rpc-url",
-    PROVER_URL: "synthetic-prover-url",
   };
   const identityOutput = execFileSync(
     "bash",
@@ -280,6 +279,11 @@ test("shielded-message workflow accepts true/true after persistent identity vali
   for (const secret of Object.values(syntheticSecrets)) {
     assert.equal(identityOutput.includes(secret), false);
   }
+  assert.equal(workflow.includes("secrets.VEIL_POC_PROVER_URL"), false);
+  assert.equal(
+    workflow.includes("VEIL_POC_PROVER_URL: http://127.0.0.1:3000"),
+    true,
+  );
 });
 
 test("historical write-once account is documented as excluded from message PoCs", async () => {
