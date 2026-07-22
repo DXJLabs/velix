@@ -16,10 +16,8 @@ export function createWalletService({
   setVeilClient,
   createClient,
   createEncryptionAdapter,
-  createOnchainContracts,
   getDirectTransport,
   setDirectTransport,
-  setOnchainContracts,
   currentChannelId,
   ensurePrivyAuthenticated,
   fetchPrivyStarknetWallet,
@@ -258,11 +256,6 @@ export function createWalletService({
     encryptionRegistrationAccount = account;
     setDirectTransport(directTransport);
     setVeilClient(createClient(directTransport, encryptionSetup.adapter));
-    setOnchainContracts(createOnchainContracts({
-      account,
-      provider: readProvider,
-    }));
-
     if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
       return failWalletInitialization(new Error("Helper contract verification failed on the configured RPC/network."), traceId, {
         where: "connectWallet",

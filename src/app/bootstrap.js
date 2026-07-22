@@ -16,7 +16,6 @@ import {
   EncryptionPublicKeyRegistryService,
   VeilEncryptionIdentityService,
   createVeilClientFactory,
-  createVeilOnchainContracts,
 } from "../services/veil-client-service.js";
 import { createDealStorage } from "../services/storage/deal-storage.js";
 import { readJsonStorage, writeJsonStorage } from "../services/storage-service.js";
@@ -58,12 +57,13 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
   const veilClientFactory = createVeilClientFactory({ config, channelKeyConfig, logger });
   const encryptionIdentity = new VeilEncryptionIdentityService(new BrowserEncryptionIdentityStore());
   let directTransport;
-  let onchainContracts;
   let veilClient = veilClientFactory.createClient();
 
   const api = {
     getVeilClient: () => veilClient,
-    getOnchainContracts: () => onchainContracts,
+    // Public Offer/Escrow contracts are intentionally unavailable in the
+    // production runtime. Private flows use the official Privacy SDK path.
+    getOnchainContracts: () => null,
     setElementText: (selector, value) => setElementText(dom.document, selector, value),
     setLucideIcon,
     transactionExplorerUrl,
@@ -75,7 +75,6 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
     settlementProofMeta: (channel = store.currentChannel()) => registry.createSettlementProofMeta(channel),
     resetClientConnection: () => {
       directTransport = undefined;
-      onchainContracts = undefined;
       starkZapAdapter?.resetStarkZap();
       veilClient = veilClientFactory.createClient();
     },
@@ -229,22 +228,9 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
         },
       }) };
     },
-    createOnchainContracts: ({ account, provider }) => {
-      if (!config.offerAddress || !config.escrowAddress || !config.settlementHelperAddress) return null;
-      return createVeilOnchainContracts({
-        offerAddress: config.offerAddress,
-        escrowAddress: config.escrowAddress,
-        settlementHelperAddress: config.settlementHelperAddress,
-        account,
-        ...(provider ? { provider } : {}),
-      });
-    },
     getDirectTransport: () => directTransport,
     setDirectTransport: (nextTransport) => {
       directTransport = nextTransport;
-    },
-    setOnchainContracts: (nextContracts) => {
-      onchainContracts = nextContracts;
     },
     currentChannelId: () => store.state.channelId,
     ensurePrivyAuthenticated: privyBridgeAdapter.ensurePrivyAuthenticated,

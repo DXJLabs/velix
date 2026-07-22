@@ -399,17 +399,6 @@ export {
   type Strk20WalletCapabilities,
 } from "./privacy/wallet-api";
 export {
-  VeilOnchainContracts,
-  createVeilDealCommitments,
-  createVeilOnchainContracts,
-  type VeilDealCommitmentInput,
-  type VeilDealCommitments,
-  type VeilEscrowTransactionResult,
-  type VeilOfferTransactionResult,
-  type VeilOnchainContractsConfig,
-  type VeilOnchainTransactionResult,
-} from "./onchain_contracts";
-export {
   decodeChannelEvent,
   decodeInvokeExternalEvent,
   decodeNoteEvent,

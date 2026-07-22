@@ -50,37 +50,6 @@ pub mod claim_escrow {
     }
 }
 
-#[path("../contracts/deal_escrow/deal_escrow_errors.cairo")]
-pub mod deal_escrow_errors;
-#[path("../contracts/deal_escrow/deal_escrow_events.cairo")]
-pub mod deal_escrow_events;
-#[path("../contracts/deal_escrow/deal_escrow_interfaces.cairo")]
-pub mod deal_escrow_interfaces;
-#[path("../contracts/deal_escrow/deal_escrow_types.cairo")]
-pub mod deal_escrow_types;
-#[path("../contracts/deal_escrow/veil_deal_escrow.cairo")]
-pub mod veil_deal_escrow;
-#[path("../contracts/deal_escrow/test_mocks/mock_deal_erc20.cairo")]
-pub mod mock_deal_erc20;
-#[path("../contracts/deal_escrow/test_mocks/mock_deal_erc721.cairo")]
-pub mod mock_deal_erc721;
-#[path("../contracts/deal_escrow/test_mocks/mock_deal_privacy_pool.cairo")]
-pub mod mock_deal_privacy_pool;
-
-pub mod deal_escrow {
-    pub use crate::deal_escrow_errors;
-    pub use crate::deal_escrow_events;
-    pub use crate::deal_escrow_interfaces;
-    pub use crate::deal_escrow_types;
-    pub use crate::veil_deal_escrow;
-
-    pub mod test_mocks {
-        pub use crate::mock_deal_erc20;
-        pub use crate::mock_deal_erc721;
-        pub use crate::mock_deal_privacy_pool;
-    }
-}
-
 #[path("../contracts/offers/offer_commitments.cairo")]
 pub mod offer_commitments;
 #[path("../contracts/offers/offer_events.cairo")]
@@ -152,25 +121,6 @@ pub mod private_escrow_settlement {
     pub mod test_mocks {
         pub use crate::mock_private_escrow_settlement_privacy_pool;
     }
-}
-
-#[path("../contracts/settlement/settlement_events.cairo")]
-pub mod settlement_events;
-#[path("../contracts/settlement/settlement_interfaces.cairo")]
-pub mod settlement_interfaces;
-#[path("../contracts/settlement/settlement_types.cairo")]
-pub mod settlement_types;
-#[path("../contracts/settlement/settlement_validation.cairo")]
-pub mod settlement_validation;
-#[path("../contracts/settlement/veil_settlement_helper.cairo")]
-pub mod veil_settlement_helper;
-
-pub mod settlement {
-    pub use crate::settlement_events;
-    pub use crate::settlement_interfaces;
-    pub use crate::settlement_types;
-    pub use crate::settlement_validation;
-    pub use crate::veil_settlement_helper;
 }
 
 #[path("../contracts/events/escrow_events.cairo")]
