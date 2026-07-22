@@ -61,6 +61,7 @@ jobs:
         env:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
         run: |
           set -euo pipefail
@@ -76,6 +77,11 @@ jobs:
 
           if [ -z "${ACCOUNT_PRIVATE_KEY:-}" ]; then
             echo "Secret VEIL_POC_ACCOUNT_PRIVATE_KEY belum tersedia."
+            exit 1
+          fi
+
+          if [ -z "${VIEWING_KEY:-}" ]; then
+            echo "Secret VEIL_POC_VIEWING_KEY belum tersedia."
             exit 1
           fi
 
@@ -95,6 +101,7 @@ jobs:
 
           echo "RPC secret tersedia."
           echo "Private key secret tersedia."
+          echo "Viewing key secret tersedia."
           echo "Account address tersedia."
           echo "Finalized block number akan dihitung dari current block."
           echo "Nilai rahasia tidak ditampilkan."
@@ -433,6 +440,7 @@ jobs:
         env:
           VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
           VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-register-proof-summary.json
@@ -455,6 +463,12 @@ jobs:
           if [ -z "${VEIL_POC_ACCOUNT_ADDRESS:-}" ]; then
             echo "VEIL_POC_ACCOUNT_ADDRESS kosong."
             echo "result=ADDRESS_MISSING" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ -z "${VEIL_POC_VIEWING_KEY:-}" ]; then
+            echo "VEIL_POC_VIEWING_KEY kosong."
+            echo "result=SECRET_MISSING" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 

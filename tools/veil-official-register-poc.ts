@@ -3,7 +3,6 @@ import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import {
-  MAX_VIEWING_KEY,
   ProvingServiceError,
   ProvingServiceProofProvider,
   createEmptyRegistry,
@@ -35,6 +34,11 @@ import {
   TransactionExecutionStatus,
   TransactionFinalityStatus,
 } from "starknet-proof";
+import {
+  collectVeilPocIdentitySensitiveValues,
+  loadVeilPocIdentityConfig,
+} from "./veil-poc-identity.ts";
+import type { VeilPocIdentityConfig } from "./veil-poc-identity.ts";
 import type {
   Call as ProofCall,
   UniversalDetails as ProofExecutionDetails,
@@ -239,11 +243,9 @@ export interface VeilRegisterSubmissionSummary {
   proofFactsCount: number;
 }
 
-export interface VeilOfficialRegisterPocConfig {
+export interface VeilOfficialRegisterPocConfig extends VeilPocIdentityConfig {
   rpcUrl: string;
   proverUrl: string;
-  accountAddress: bigint;
-  accountPrivateKey: string;
   poolAddress: bigint;
   summaryPath: string;
   submitOnchain: boolean;
@@ -284,8 +286,17 @@ function isSensitiveDiagnosticKey(key: string): boolean {
     || sensitiveFragments.some((fragment) => normalized.includes(fragment));
 }
 
-export function sanitizeProvingDiagnosticText(value: string): string {
-  const sanitized = value
+export function sanitizeProvingDiagnosticText(
+  value: string,
+  sensitiveValues: readonly string[] = [],
+): string {
+  let redacted = value;
+  for (const sensitiveValue of [...sensitiveValues]
+    .filter((entry) => entry.length > 0)
+    .sort((left, right) => right.length - left.length)) {
+    redacted = redacted.replaceAll(sensitiveValue, REDACTED);
+  }
+  const sanitized = redacted
     .replace(/\b(?:https?|wss?):\/\/[^\s"'<>]+/giu, REDACTED_URL)
     .replace(/\b(?:bearer|basic)\s+[a-z0-9._~+/=-]+/giu, REDACTED)
     .replace(
@@ -318,25 +329,30 @@ function parseJsonDiagnosticString(value: string): unknown {
 export function sanitizeProvingDiagnosticData(
   value: unknown,
   depth = 0,
+  sensitiveValues: readonly string[] = [],
 ): SafeDiagnosticValue {
   if (depth > MAX_DIAGNOSTIC_DEPTH) return TRUNCATED;
   if (value === null || value === undefined) return null;
   if (typeof value === "string") {
     const parsed = parseJsonDiagnosticString(value);
     return parsed === value
-      ? sanitizeProvingDiagnosticText(value)
-      : sanitizeProvingDiagnosticData(parsed, depth + 1);
+      ? sanitizeProvingDiagnosticText(value, sensitiveValues)
+      : sanitizeProvingDiagnosticData(parsed, depth + 1, sensitiveValues);
   }
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return Number.isFinite(value) ? value : String(value);
   if (typeof value === "bigint") {
-    return sanitizeProvingDiagnosticText(value.toString());
+    return sanitizeProvingDiagnosticText(value.toString(), sensitiveValues);
   }
   if (value instanceof Uint8Array) return REDACTED;
   if (Array.isArray(value)) {
     const items = value
       .slice(0, MAX_DIAGNOSTIC_ARRAY_ITEMS)
-      .map((item) => sanitizeProvingDiagnosticData(item, depth + 1));
+      .map((item) => sanitizeProvingDiagnosticData(
+        item,
+        depth + 1,
+        sensitiveValues,
+      ));
     if (value.length > MAX_DIAGNOSTIC_ARRAY_ITEMS) items.push(TRUNCATED);
     return items;
   }
@@ -349,9 +365,10 @@ export function sanitizeProvingDiagnosticData(
         redacted = true;
         continue;
       }
-      safe[sanitizeProvingDiagnosticText(key)] = sanitizeProvingDiagnosticData(
+      safe[sanitizeProvingDiagnosticText(key, sensitiveValues)] = sanitizeProvingDiagnosticData(
         entryValue,
         depth + 1,
+        sensitiveValues,
       );
     }
     if (redacted) safe.redacted = true;
@@ -360,11 +377,12 @@ export function sanitizeProvingDiagnosticData(
     }
     return safe;
   }
-  return sanitizeProvingDiagnosticText(String(value));
+  return sanitizeProvingDiagnosticText(String(value), sensitiveValues);
 }
 
 export function formatSafeProvingServiceError(
   error: ProvingServiceError,
+  sensitiveValues: readonly string[] = [],
 ): SafeProvingServiceErrorDiagnostic {
   const dataSuffix = error.data ? `: ${error.data}` : "";
   const rpcMessage = dataSuffix && error.message.endsWith(dataSuffix)
@@ -372,18 +390,19 @@ export function formatSafeProvingServiceError(
     : error.message;
 
   return {
-    name: sanitizeProvingDiagnosticText(error.name),
+    name: sanitizeProvingDiagnosticText(error.name, sensitiveValues),
     code: error.code,
-    message: sanitizeProvingDiagnosticText(rpcMessage),
-    data: sanitizeProvingDiagnosticData(error.data),
+    message: sanitizeProvingDiagnosticText(rpcMessage, sensitiveValues),
+    data: sanitizeProvingDiagnosticData(error.data, 0, sensitiveValues),
   };
 }
 
 export async function writeSafeProvingServiceError(
   error: ProvingServiceError,
   outputPath = DEFAULT_PROVING_ERROR_PATH,
+  sensitiveValues: readonly string[] = [],
 ): Promise<SafeProvingServiceErrorDiagnostic> {
-  const diagnostic = formatSafeProvingServiceError(error);
+  const diagnostic = formatSafeProvingServiceError(error, sensitiveValues);
   await writeFile(outputPath, `${JSON.stringify(diagnostic, null, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -422,29 +441,15 @@ function parseBooleanEnv(value: string | undefined, label: string): boolean {
   throw new Error(`${label} must be true or false.`);
 }
 
-function createEphemeralViewingKey(): bigint {
-  const candidate = BigInt(`0x${randomBytes(32).toString("hex")}`)
-    % MAX_VIEWING_KEY;
-  return candidate === 0n ? 1n : candidate;
-}
-
 export function loadVeilOfficialRegisterPocConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): VeilOfficialRegisterPocConfig {
-  const accountPrivateKey = requiredEnv(
-    env,
-    "VEIL_POC_ACCOUNT_PRIVATE_KEY",
-    `${ISOLATED_POC_SIGNER_LABEL} private key`,
-  );
+  const identity = loadVeilPocIdentityConfig(env);
   const proverUrl = requiredEnv(env, "VEIL_POC_PROVER_URL", "Official prover URL");
   return {
+    ...identity,
     rpcUrl: requiredEnv(env, "STARKNET_SEPOLIA_RPC_URL"),
     proverUrl,
-    accountAddress: parsePositiveFelt(
-      requiredEnv(env, "VEIL_POC_ACCOUNT_ADDRESS"),
-      "VEIL_POC_ACCOUNT_ADDRESS",
-    ),
-    accountPrivateKey,
     poolAddress: parsePositiveFelt(
       env.VEIL_POC_PRIVACY_POOL?.trim() || DEFAULT_POOL_ADDRESS,
       "VEIL_POC_PRIVACY_POOL",
@@ -1102,13 +1107,14 @@ export async function runVeilOfficialRegisterPoc(
   dependencies: VeilOfficialRegisterPocDependencies = {},
 ): Promise<VeilRegisterProofSummary> {
   const config = loadVeilOfficialRegisterPocConfig(env);
+  const sensitiveValues = collectVeilPocIdentitySensitiveValues(env, config);
   const signer = createStandardPocSigner(config.accountPrivateKey);
   const preflight = await preflightVeilPocAccount({
     provider: dependencies.accountPreflightProvider
       ?? createAccountPreflightProvider(config.rpcUrl),
     accountAddress: config.accountAddress,
     signer,
-    sensitiveValues: [config.accountPrivateKey],
+    sensitiveValues,
   });
   await writeAccountPreflightArtifact(
     preflight.artifact,
@@ -1119,7 +1125,6 @@ export async function runVeilOfficialRegisterPoc(
     throw new AccountPreflightError(preflight.artifact);
   }
 
-  const viewingKey = createEphemeralViewingKey();
   const discoveryProvider = new LocalFailClosedDiscoveryProvider();
   const provingBlockId = preflight.provingBlockId;
   const provingProviderFactory = dependencies.createProvingProvider
@@ -1133,7 +1138,7 @@ export async function runVeilOfficialRegisterPoc(
   const result = await executeOfficialRegisterProof({
     accountAddress: config.accountAddress,
     signer,
-    viewingKey,
+    viewingKey: config.viewingKey,
     provingProvider,
     discoveryProvider,
     registry: createEmptyRegistry(),
@@ -1147,10 +1152,7 @@ export async function runVeilOfficialRegisterPoc(
     accountAddress: config.accountAddress,
     provingBlockId: preflight.artifact.blockId,
   });
-  assertRegisterProofSummarySafe(summary, [
-    config.accountPrivateKey,
-    viewingKey.toString(),
-  ]);
+  assertRegisterProofSummarySafe(summary, sensitiveValues);
   await writeFile(config.summaryPath, `${JSON.stringify(summary, null, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -1180,11 +1182,7 @@ export async function runVeilOfficialRegisterPoc(
     await writeRegisterSubmissionSummary(
       submissionSummary,
       config.submissionSummaryPath,
-      [
-        config.accountPrivateKey,
-        viewingKey.toString(),
-        result.callAndProof.proof.data,
-      ],
+      [...sensitiveValues, result.callAndProof.proof.data],
     );
   }
   return summary;
@@ -1206,7 +1204,11 @@ if (isMainModule()) {
     } else if (error instanceof ProvingServiceError) {
       const errorPath = process.env.VEIL_POC_ERROR_PATH?.trim()
         || DEFAULT_PROVING_ERROR_PATH;
-      const diagnostic = await writeSafeProvingServiceError(error, errorPath);
+      const diagnostic = await writeSafeProvingServiceError(
+        error,
+        errorPath,
+        collectVeilPocIdentitySensitiveValues(process.env),
+      );
       console.error(JSON.stringify(diagnostic));
     } else if (error instanceof LocalDiscoveryAccessError) {
       console.error(`VEIL register PoC failed closed; discovery method called: ${error.method}`);

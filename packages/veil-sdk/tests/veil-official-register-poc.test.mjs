@@ -34,6 +34,7 @@ import { constants, ec } from "starknet";
 const ACCOUNT_ADDRESS = 0x123n;
 const POOL_ADDRESS = 0x456n;
 const PRIVATE_KEY = "0x123456789abcdef";
+const VIEWING_KEY = "0x777";
 const CURRENT_BLOCK_NUMBER = 123;
 const FINALIZED_BLOCK_NUMBER = CURRENT_BLOCK_NUMBER - 10;
 const ACCOUNT_CLASS_HASH = "0xdef";
@@ -272,6 +273,7 @@ test("failed account preflight writes only the safe artifact and never creates t
       () => runVeilOfficialRegisterPoc({
         VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
         VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+        VEIL_POC_VIEWING_KEY: VIEWING_KEY,
         VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
         STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
         VEIL_POC_SUMMARY_PATH: summaryPath,
@@ -304,6 +306,7 @@ test("failed account preflight writes only the safe artifact and never creates t
     assert.equal(artifact.verdict, "PRIVATE_KEY_OWNER_MISMATCH");
     for (const secret of [
       PRIVATE_KEY,
+      VIEWING_KEY,
       publicKey,
       "synthetic-api-key",
       "https://rpc.example/rpc/v0_9/synthetic-api-key",
@@ -329,6 +332,7 @@ test("valid account preflight passes the same finalized block number to the offi
     const summary = await runVeilOfficialRegisterPoc({
       VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
       VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+      VEIL_POC_VIEWING_KEY: VIEWING_KEY,
       VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
       STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
       VEIL_POC_SUMMARY_PATH: summaryPath,
@@ -370,6 +374,7 @@ test("submit_onchain=false keeps the PoC proof-only", async () => {
     await runVeilOfficialRegisterPoc({
       VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
       VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+      VEIL_POC_VIEWING_KEY: VIEWING_KEY,
       VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
       STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
       VEIL_POC_SUMMARY_PATH: summaryPath,
@@ -406,6 +411,7 @@ test("submit_onchain=true writes only the safe accepted submission summary", asy
     await runVeilOfficialRegisterPoc({
       VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
       VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+      VEIL_POC_VIEWING_KEY: VIEWING_KEY,
       VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
       STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
       VEIL_POC_SUMMARY_PATH: summaryPath,
@@ -449,6 +455,7 @@ test("submit_onchain=true writes only the safe accepted submission summary", asy
     assert.equal(artifact.provingBlockId, String(FINALIZED_BLOCK_NUMBER));
     for (const sensitive of [
       PRIVATE_KEY,
+      VIEWING_KEY,
       "isolated-register-proof",
       Buffer.from("isolated-register-proof").toString("base64"),
       "synthetic-api-key",
@@ -668,7 +675,7 @@ test("official prover request serializes the finalized number as block_number", 
 });
 
 test("register proof summary contains only safe metadata", () => {
-  const sensitive = [PRIVATE_KEY, "viewing-material", "signature-material"];
+  const sensitive = [PRIVATE_KEY, VIEWING_KEY, "signature-material"];
   const summary = createRegisterProofSummary({
     result: {
       callAndProof: {
@@ -721,7 +728,7 @@ test("register submission summary contains no raw proof or secret", async () => 
     provingBlockId: String(FINALIZED_BLOCK_NUMBER),
   });
 
-  assertRegisterSubmissionSummarySafe(summary, [rawProof, secret]);
+  assertRegisterSubmissionSummarySafe(summary, [rawProof, secret, VIEWING_KEY]);
   assert.deepEqual(Object.keys(summary), [
     "result",
     "transactionHash",
@@ -735,6 +742,7 @@ test("register submission summary contains no raw proof or secret", async () => 
   const serialized = JSON.stringify(summary);
   assert.equal(serialized.includes(rawProof), false);
   assert.equal(serialized.includes(secret), false);
+  assert.equal(serialized.includes(VIEWING_KEY), false);
   assert.equal(Object.hasOwn(summary, "proof"), false);
   assert.equal(Object.hasOwn(summary, "proofFacts"), false);
 });
@@ -794,6 +802,7 @@ test("ProvingServiceError formatter and artifact expose only safe fields", async
   const sensitiveUrl = "https://rpc.example/v0_9/synthetic-api-key";
   const errorData = JSON.stringify({
     reason: "Signature validation failed",
+    diagnosticReference: VIEWING_KEY,
     rpcUrl: sensitiveUrl,
     apiKey: "synthetic-api-key",
     signature: sensitiveHex,
@@ -801,7 +810,7 @@ test("ProvingServiceError formatter and artifact expose only safe fields", async
     context: { expected: sensitiveHex, stage: "validate" },
   });
   const error = new ProvingServiceError(55, "Account validation failed", errorData);
-  const diagnostic = formatSafeProvingServiceError(error);
+  const diagnostic = formatSafeProvingServiceError(error, [VIEWING_KEY]);
 
   assert.deepEqual(Object.keys(diagnostic), ["name", "code", "message", "data"]);
   assert.equal(diagnostic.name, "ProvingServiceError");
@@ -810,14 +819,24 @@ test("ProvingServiceError formatter and artifact expose only safe fields", async
   assert.equal(diagnostic.data.reason, "Signature validation failed");
 
   const serialized = JSON.stringify(diagnostic);
-  for (const sensitive of [sensitiveUrl, "synthetic-api-key", sensitiveHex, errorData]) {
+  for (const sensitive of [
+    sensitiveUrl,
+    "synthetic-api-key",
+    sensitiveHex,
+    errorData,
+    VIEWING_KEY,
+  ]) {
     assert.equal(serialized.includes(sensitive), false);
   }
 
   const directory = await mkdtemp(join(tmpdir(), "veil-proving-error-"));
   const outputPath = join(directory, "veil-proving-error.json");
   try {
-    const written = await writeSafeProvingServiceError(error, outputPath);
+    const written = await writeSafeProvingServiceError(
+      error,
+      outputPath,
+      [VIEWING_KEY],
+    );
     const artifact = JSON.parse(await readFile(outputPath, "utf8"));
     assert.deepEqual(written, diagnostic);
     assert.deepEqual(artifact, diagnostic);

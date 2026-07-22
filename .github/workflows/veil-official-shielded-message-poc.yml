@@ -1,0 +1,87 @@
+name: Validate Official SDK Shielded Message Identity
+
+on:
+  workflow_dispatch:
+    inputs:
+      generate_proof:
+        description: Reserved for the shielded-message proof phase after identity registration
+        required: true
+        type: boolean
+        default: false
+      submit_onchain:
+        description: Reserved for on-chain submission after proof generation is enabled
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate-identity:
+    name: Validate persistent VEIL PoC identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Reject transaction modes during identity remediation
+        shell: bash
+        env:
+          GENERATE_PROOF: ${{ inputs.generate_proof }}
+          SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+        run: |
+          set -euo pipefail
+
+          if [ "$SUBMIT_ONCHAIN" = "true" ] && [ "$GENERATE_PROOF" != "true" ]; then
+            echo "submit_onchain=true requires generate_proof=true."
+            exit 1
+          fi
+
+          if [ "$GENERATE_PROOF" = "true" ] || [ "$SUBMIT_ONCHAIN" = "true" ]; then
+            echo "Shielded-message proof and submission remain disabled until the new persistent identity is registered."
+            exit 1
+          fi
+
+      - name: Validate VEIL identity secrets before setup
+        shell: bash
+        env:
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          PROVER_URL: ${{ secrets.VEIL_POC_PROVER_URL }}
+        run: |
+          set -euo pipefail
+
+          for name in ACCOUNT_ADDRESS ACCOUNT_PRIVATE_KEY VIEWING_KEY RPC_URL PROVER_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "A required VEIL shielded-message identity secret is unavailable."
+              exit 1
+            fi
+          done
+
+          echo "VEIL shielded-message identity secrets are configured; values are not displayed."
+
+      - name: Checkout VEIL source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci
+
+      - name: Typecheck PoC tools
+        run: npm run typecheck:poc
+
+      - name: Verify registered persistent identity read-only
+        env:
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: ${{ secrets.VEIL_POC_PROVER_URL }}
+        run: node --experimental-strip-types tools/veil-official-shielded-message-poc.ts
