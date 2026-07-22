@@ -45,11 +45,11 @@ jobs:
           df -h /
 
       # ============================================================
-      # 2. VALIDATE SECRETS, ADDRESS, RPC, AND FETCH NONCE
+      # 2. VALIDATE SECRETS, ADDRESS, RPC, AND BLOCK INPUT
       # This runs before the prover build.
       # ============================================================
 
-      - name: Validate VEIL inputs and fetch account nonce
+      - name: Validate VEIL account inputs
         id: veil-inputs
         shell: bash
         env:
@@ -146,82 +146,8 @@ jobs:
           print("Chain ID:", chain_id)
           PY
 
-          echo
-          echo "================================"
-          echo "FETCH CURRENT ACCOUNT NONCE"
-          echo "================================"
-
-          NONCE_PAYLOAD="$(
-            python3 - "$USER_ADDRESS" "$BLOCK_ID" <<'PY'
-          import json
-          import sys
-
-          account_address = sys.argv[1]
-          block_id_input = sys.argv[2]
-
-          if block_id_input == "latest":
-              block_id = "latest"
-          else:
-              block_id = {
-                  "block_number": int(block_id_input)
-              }
-
-          request = {
-              "jsonrpc": "2.0",
-              "id": 2,
-              "method": "starknet_getNonce",
-              "params": {
-                  "block_id": block_id,
-                  "contract_address": account_address,
-              },
-          }
-
-          print(json.dumps(request))
-          PY
-          )"
-
-          NONCE_RESPONSE="$(
-            curl --fail-with-body -sS \
-              --connect-timeout 10 \
-              --max-time 30 \
-              -X POST "$RPC_URL" \
-              -H "Content-Type: application/json" \
-              -d "$NONCE_PAYLOAD"
-          )"
-
-          echo "$NONCE_RESPONSE" > veil-nonce-response.json
-
-          NONCE="$(
-            python3 - veil-nonce-response.json <<'PY'
-          import json
-          import sys
-
-          path = sys.argv[1]
-
-          with open(path, "r", encoding="utf-8") as file:
-              response = json.load(file)
-
-          if response.get("error"):
-              raise SystemExit(
-                  "RPC getNonce error: "
-                  + json.dumps(response["error"], ensure_ascii=False)
-              )
-
-          nonce = response.get("result")
-
-          if nonce is None:
-              raise SystemExit("RPC tidak mengembalikan nonce akun")
-
-          print(nonce)
-          PY
-          )"
-
-          echo "Account nonce berhasil diambil."
-
-          echo "VEIL_POC_NONCE=$NONCE" >> "$GITHUB_ENV"
           echo "VEIL_POC_RESOLVED_BLOCK_ID=$BLOCK_ID" >> "$GITHUB_ENV"
 
-          echo "nonce=$NONCE" >> "$GITHUB_OUTPUT"
           echo "block_id=$BLOCK_ID" >> "$GITHUB_OUTPUT"
           echo "result=INPUTS_VALID" >> "$GITHUB_OUTPUT"
 
@@ -603,6 +529,17 @@ jobs:
             cat "$GITHUB_WORKSPACE/veil-proving-error.json"
           fi
 
+          PREFLIGHT_FILE="$GITHUB_WORKSPACE/velix/veil-account-preflight.json"
+
+          if [ -s "$PREFLIGHT_FILE" ]; then
+            echo
+            echo "================================"
+            echo "SAFE ACCOUNT PREFLIGHT"
+            echo "================================"
+
+            cat "$PREFLIGHT_FILE"
+          fi
+
           echo "duration_seconds=$DURATION" \
             >> "$GITHUB_OUTPUT"
 
@@ -657,6 +594,43 @@ jobs:
             echo "result=PROOF_FAILED" >> "$GITHUB_OUTPUT"
             exit "$PROOF_STATUS"
           fi
+
+          if [ ! -s "$PREFLIGHT_FILE" ]; then
+            echo "veil-account-preflight.json tidak dibuat atau kosong."
+            echo "result=ACCOUNT_PREFLIGHT_ARTIFACT_MISSING" \
+              >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          python3 - "$PREFLIGHT_FILE" <<'PY'
+          import json
+          import sys
+
+          preflight_path = sys.argv[1]
+          with open(preflight_path, "r", encoding="utf-8") as file:
+              preflight = json.load(file)
+
+          expected_keys = [
+              "accountAddress",
+              "blockId",
+              "nonce",
+              "classHash",
+              "accountType",
+              "ownerMatch",
+              "signatureValidation",
+              "verdict",
+          ]
+          if list(preflight) != expected_keys:
+              raise SystemExit("Account preflight memiliki field yang tidak diizinkan")
+          if preflight.get("ownerMatch") is not True:
+              raise SystemExit("Account owner tidak cocok dengan standard Stark signer")
+          if preflight.get("signatureValidation") != "VALID":
+              raise SystemExit("Standard Stark signer tidak valid untuk account")
+          if preflight.get("verdict") != "SIGNER_PREFLIGHT_VALID":
+              raise SystemExit("Account preflight gagal tertutup")
+
+          print("Account signer preflight: SIGNER_PREFLIGHT_VALID")
+          PY
 
           SUMMARY_FILE="$GITHUB_WORKSPACE/veil-register-proof-summary.json"
 
@@ -731,11 +705,7 @@ jobs:
           echo "${{ steps.veil-inputs.outputs.result }}"
 
           echo
-          echo "Resolved nonce:"
-          echo "${{ steps.veil-inputs.outputs.nonce }}"
-
-          echo
-          echo "Resolved block:"
+          echo "Configured block:"
           echo "${{ steps.veil-inputs.outputs.block_id }}"
 
           echo
@@ -815,12 +785,12 @@ jobs:
             prover-container-inspect.json
             spec-version-response.json
             veil-chain-id-response.json
-            veil-nonce-response.json
             veil-sdk-install.log
             veil-sdk-build.log
             veil-sdk-proof.log
             veil-proof-time.log
             veil-proof-stderr.log
+            velix/veil-account-preflight.json
             veil-proving-error.json
             veil-register-proof-summary.json
           if-no-files-found: ignore

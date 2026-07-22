@@ -6,15 +6,19 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import {
+  AccountPreflightError,
   ISOLATED_POC_SIGNER_LABEL,
   LocalDiscoveryAccessError,
   LocalFailClosedDiscoveryProvider,
+  assertAccountPreflightArtifactSafe,
   assertRegisterProofSummarySafe,
   createOfficialProvingProvider,
   createRegisterProofSummary,
   createStandardPocSigner,
   executeOfficialRegisterProof,
   formatSafeProvingServiceError,
+  preflightVeilPocAccount,
+  runVeilOfficialRegisterPoc,
   sanitizeProvingDiagnosticData,
   sanitizeProvingDiagnosticText,
   writeSafeProvingServiceError,
@@ -23,11 +27,68 @@ import {
   ProvingServiceError,
   createEmptyRegistry,
 } from "@starkware-libs/starknet-privacy-sdk";
-import { constants } from "starknet";
+import { constants, ec } from "starknet";
 
 const ACCOUNT_ADDRESS = 0x123n;
 const POOL_ADDRESS = 0x456n;
 const PRIVATE_KEY = "0x123456789abcdef";
+const ACTUAL_BLOCK_HASH = "0xabc";
+const ACCOUNT_CLASS_HASH = "0xdef";
+
+function accountAbi({ ownerGetter = false, signatureValidation = false } = {}) {
+  const items = [];
+  if (ownerGetter) {
+    items.push({
+      type: "function",
+      name: "get_public_key",
+      inputs: [],
+      outputs: [{ name: "public_key", type: "core::felt252" }],
+      state_mutability: "view",
+    });
+  }
+  if (signatureValidation) {
+    items.push({
+      type: "function",
+      name: "is_valid_signature",
+      inputs: [
+        { name: "hash", type: "core::felt252" },
+        { name: "signature", type: "core::array::Span::<core::felt252>" },
+      ],
+      outputs: [{ type: "core::felt252" }],
+      state_mutability: "view",
+    });
+  }
+  return [{ type: "interface", name: "account", items }];
+}
+
+function mockAccountProvider(options = {}) {
+  const calls = [];
+  return {
+    calls,
+    async getBlock(blockId) {
+      calls.push({ method: "getBlock", blockId });
+      return { block_hash: ACTUAL_BLOCK_HASH, block_number: 123 };
+    },
+    async getClassHashAt(_address, blockId) {
+      calls.push({ method: "getClassHashAt", blockId });
+      if (options.notDeployed) throw { code: 20 };
+      return ACCOUNT_CLASS_HASH;
+    },
+    async getNonceForAddress(_address, blockId) {
+      calls.push({ method: "getNonceForAddress", blockId });
+      return "0x7";
+    },
+    async getClass(classHash, blockId) {
+      calls.push({ method: "getClass", classHash, blockId });
+      return { abi: options.abi ?? accountAbi({ ownerGetter: true }) };
+    },
+    async callContract(call, blockId) {
+      calls.push({ method: "callContract", call, blockId });
+      if (options.callContract) return options.callContract(call, blockId);
+      return [options.ownerPublicKey ?? "0x0"];
+    },
+  };
+}
 
 function mockProvingProvider() {
   return {
@@ -60,6 +121,206 @@ function mockProvingProvider() {
     },
   };
 }
+
+test("account preflight pins latest to one actual block and matches the owner getter", async () => {
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  const provider = mockAccountProvider({ ownerPublicKey: publicKey });
+  const result = await preflightVeilPocAccount({
+    provider,
+    accountAddress: ACCOUNT_ADDRESS,
+    signer,
+    configuredBlockId: "latest",
+    sensitiveValues: [PRIVATE_KEY],
+  });
+
+  assert.equal(result.provingBlockId, ACTUAL_BLOCK_HASH);
+  assert.deepEqual(result.artifact, {
+    accountAddress: "0x123",
+    blockId: ACTUAL_BLOCK_HASH,
+    nonce: "0x7",
+    classHash: ACCOUNT_CLASS_HASH,
+    accountType: "SINGLE_OWNER_STARK_ACCOUNT",
+    ownerMatch: true,
+    signatureValidation: "VALID",
+    verdict: "SIGNER_PREFLIGHT_VALID",
+  });
+  assertAccountPreflightArtifactSafe(result.artifact, [PRIVATE_KEY, publicKey]);
+  const stateCalls = provider.calls.filter((call) => call.method !== "getBlock");
+  assert.equal(stateCalls.every((call) => call.blockId === ACTUAL_BLOCK_HASH), true);
+  assert.equal(
+    provider.calls.filter((call) => call.method === "callContract").length,
+    1,
+  );
+});
+
+test("account preflight validates a random non-transaction challenge when no owner getter exists", async () => {
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  const fullPublicKey = ec.starkCurve.getPublicKey(PRIVATE_KEY);
+  let challengeHash;
+  let signatureFelts;
+  const provider = mockAccountProvider({
+    abi: accountAbi({ signatureValidation: true }),
+    callContract(call) {
+      assert.equal(call.entrypoint, "is_valid_signature");
+      challengeHash = call.calldata[0];
+      assert.equal(call.calldata[1], "0x2");
+      signatureFelts = call.calldata.slice(2);
+      const signature = new ec.starkCurve.Signature(
+        BigInt(signatureFelts[0]),
+        BigInt(signatureFelts[1]),
+      );
+      assert.equal(
+        ec.starkCurve.verify(signature, challengeHash, fullPublicKey),
+        true,
+      );
+      return ["0x1"];
+    },
+  });
+  const result = await preflightVeilPocAccount({
+    provider,
+    accountAddress: ACCOUNT_ADDRESS,
+    signer,
+    configuredBlockId: 123,
+    sensitiveValues: [PRIVATE_KEY],
+  });
+
+  assert.equal(result.artifact.accountType, "SRC6_STARK_ACCOUNT");
+  assert.equal(result.artifact.ownerMatch, true);
+  assert.equal(result.artifact.signatureValidation, "VALID");
+  assert.equal(result.artifact.verdict, "SIGNER_PREFLIGHT_VALID");
+  const serialized = JSON.stringify(result.artifact);
+  for (const secret of [PRIVATE_KEY, publicKey, challengeHash, ...signatureFelts]) {
+    assert.equal(serialized.includes(secret), false);
+  }
+});
+
+test("account preflight emits every fail-closed account verdict", async () => {
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  const cases = [
+    [
+      mockAccountProvider({ ownerPublicKey: `0x${(BigInt(publicKey) + 1n).toString(16)}` }),
+      "PRIVATE_KEY_OWNER_MISMATCH",
+    ],
+    [
+      mockAccountProvider({
+        abi: accountAbi({ signatureValidation: true }),
+        callContract() { return ["0x0"]; },
+      }),
+      "STANDARD_SIGNER_INCOMPATIBLE",
+    ],
+    [mockAccountProvider({ abi: accountAbi() }), "ACCOUNT_PREFLIGHT_UNSUPPORTED"],
+    [mockAccountProvider({ notDeployed: true }), "ACCOUNT_NOT_DEPLOYED"],
+  ];
+
+  for (const [provider, verdict] of cases) {
+    const result = await preflightVeilPocAccount({
+      provider,
+      accountAddress: ACCOUNT_ADDRESS,
+      signer,
+      configuredBlockId: "latest",
+      sensitiveValues: [PRIVATE_KEY],
+    });
+    assert.equal(result.artifact.verdict, verdict);
+    assert.notEqual(result.artifact.verdict, "SIGNER_PREFLIGHT_VALID");
+  }
+});
+
+test("failed account preflight writes only the safe artifact and never creates the prover", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "veil-account-preflight-"));
+  const preflightPath = join(directory, "veil-account-preflight.json");
+  const summaryPath = join(directory, "veil-register-proof-summary.json");
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  let proverCreations = 0;
+  try {
+    await assert.rejects(
+      () => runVeilOfficialRegisterPoc({
+        VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
+        VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+        VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
+        STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
+        VEIL_POC_BLOCK_ID: "latest",
+        VEIL_POC_SUMMARY_PATH: summaryPath,
+      }, {
+        accountPreflightProvider: mockAccountProvider({
+          ownerPublicKey: `0x${(BigInt(publicKey) + 1n).toString(16)}`,
+        }),
+        accountPreflightPath: preflightPath,
+        createProvingProvider() {
+          proverCreations += 1;
+          return mockProvingProvider();
+        },
+      }),
+      (error) => error instanceof AccountPreflightError
+        && error.artifact.verdict === "PRIVATE_KEY_OWNER_MISMATCH",
+    );
+    assert.equal(proverCreations, 0);
+    const artifactText = await readFile(preflightPath, "utf8");
+    const artifact = JSON.parse(artifactText);
+    assert.deepEqual(Object.keys(artifact), [
+      "accountAddress",
+      "blockId",
+      "nonce",
+      "classHash",
+      "accountType",
+      "ownerMatch",
+      "signatureValidation",
+      "verdict",
+    ]);
+    assert.equal(artifact.verdict, "PRIVATE_KEY_OWNER_MISMATCH");
+    for (const secret of [
+      PRIVATE_KEY,
+      publicKey,
+      "synthetic-api-key",
+      "https://rpc.example/rpc/v0_9/synthetic-api-key",
+    ]) {
+      assert.equal(artifactText.includes(secret), false);
+    }
+    await assert.rejects(() => readFile(summaryPath, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("valid account preflight passes the same actual block hash to the official proof", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "veil-account-proof-block-"));
+  const preflightPath = join(directory, "veil-account-preflight.json");
+  const summaryPath = join(directory, "veil-register-proof-summary.json");
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  let proofBlockId;
+  let proverCreations = 0;
+  try {
+    const summary = await runVeilOfficialRegisterPoc({
+      VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
+      VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+      VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
+      STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
+      VEIL_POC_BLOCK_ID: "latest",
+      VEIL_POC_SUMMARY_PATH: summaryPath,
+    }, {
+      accountPreflightProvider: mockAccountProvider({ ownerPublicKey: publicKey }),
+      accountPreflightPath: preflightPath,
+      createProvingProvider(config) {
+        proverCreations += 1;
+        proofBlockId = config.provingBlockId;
+        return mockProvingProvider();
+      },
+    });
+
+    assert.equal(proverCreations, 1);
+    assert.equal(proofBlockId, ACTUAL_BLOCK_HASH);
+    assert.equal(summary.provingBlockId, ACTUAL_BLOCK_HASH);
+    const preflight = JSON.parse(await readFile(preflightPath, "utf8"));
+    assert.equal(preflight.blockId, ACTUAL_BLOCK_HASH);
+    assert.equal(preflight.verdict, "SIGNER_PREFLIGHT_VALID");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("LocalFailClosedDiscoveryProvider never performs a network request", async () => {
   const originalFetch = globalThis.fetch;
