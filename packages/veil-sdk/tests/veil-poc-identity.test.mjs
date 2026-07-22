@@ -200,12 +200,86 @@ test("workflows validate persistent viewing key before expensive or transactiona
     messageWorkflow.indexOf("Validate VEIL identity secrets before setup")
       < messageWorkflow.indexOf("Install pinned dependencies"),
   );
+  assert.equal(messageWorkflow.includes("proof and submission remain disabled"), false);
   assert.equal(
-    messageWorkflow.includes("proof and submission remain disabled"),
-    true,
+    messageWorkflow.includes(
+      'if [ "$GENERATE_PROOF" = "true" ] || [ "$SUBMIT_ONCHAIN" = "true" ]',
+    ),
+    false,
   );
   assert.equal(messageWorkflow.includes("generate-veil-viewing-key"), false);
   assert.equal(registerWorkflow.includes("generate-veil-viewing-key"), false);
+});
+
+test("shielded-message workflow accepts true/true after persistent identity validation", async () => {
+  const workflow = await readFile(
+    ".github/workflows/veil-official-shielded-message-poc.yml",
+    "utf8",
+  );
+  const extractRunScript = (stepName) => {
+    const stepMarker = `      - name: ${stepName}\n`;
+    const stepStart = workflow.indexOf(stepMarker);
+    assert.ok(stepStart >= 0, `missing workflow step: ${stepName}`);
+    const nextStep = workflow.indexOf("\n      - name:", stepStart + stepMarker.length);
+    const step = workflow.slice(stepStart, nextStep < 0 ? workflow.length : nextStep);
+    const runMarker = "        run: |\n";
+    const runStart = step.indexOf(runMarker);
+    assert.ok(runStart >= 0, `missing run block: ${stepName}`);
+    return step
+      .slice(runStart + runMarker.length)
+      .split("\n")
+      .map((line) => line.startsWith("          ") ? line.slice(10) : line)
+      .join("\n");
+  };
+
+  const modeOutput = execFileSync(
+    "bash",
+    ["-c", extractRunScript("Validate shielded-message workflow inputs")],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GENERATE_PROOF: "true",
+        SUBMIT_ONCHAIN: "true",
+      },
+    },
+  );
+  assert.equal(modeOutput, "");
+  assert.throws(
+    () => execFileSync(
+      "bash",
+      ["-c", extractRunScript("Validate shielded-message workflow inputs")],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GENERATE_PROOF: "false",
+          SUBMIT_ONCHAIN: "true",
+        },
+      },
+    ),
+    (error) => error.status === 1
+      && error.stdout.includes("submit_onchain=true requires generate_proof=true"),
+  );
+
+  const syntheticSecrets = {
+    ACCOUNT_ADDRESS: "synthetic-account-address",
+    ACCOUNT_PRIVATE_KEY: "synthetic-account-private-key",
+    VIEWING_KEY: "synthetic-viewing-key",
+    RPC_URL: "synthetic-rpc-url",
+    PROVER_URL: "synthetic-prover-url",
+  };
+  const identityOutput = execFileSync(
+    "bash",
+    ["-c", extractRunScript("Validate VEIL identity secrets before setup")],
+    {
+      encoding: "utf8",
+      env: { ...process.env, ...syntheticSecrets },
+    },
+  );
+  for (const secret of Object.values(syntheticSecrets)) {
+    assert.equal(identityOutput.includes(secret), false);
+  }
 });
 
 test("historical write-once account is documented as excluded from message PoCs", async () => {

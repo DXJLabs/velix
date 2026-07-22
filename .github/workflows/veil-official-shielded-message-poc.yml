@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Reject transaction modes during identity remediation
+      - name: Validate shielded-message workflow inputs
         shell: bash
         env:
           GENERATE_PROOF: ${{ inputs.generate_proof }}
@@ -34,11 +34,6 @@ jobs:
 
           if [ "$SUBMIT_ONCHAIN" = "true" ] && [ "$GENERATE_PROOF" != "true" ]; then
             echo "submit_onchain=true requires generate_proof=true."
-            exit 1
-          fi
-
-          if [ "$GENERATE_PROOF" = "true" ] || [ "$SUBMIT_ONCHAIN" = "true" ]; then
-            echo "Shielded-message proof and submission remain disabled until the new persistent identity is registered."
             exit 1
           fi
 
