@@ -24,11 +24,23 @@ import {
 import type { CreateVeilSessionInput, VeilSessionPermission } from "./session-key-types";
 import { computeTimelinePayloadHash, encodeInvokeCalldata } from "./timeline";
 import {
+  buildCanonicalHelperPayload,
+  VEIL_CANONICAL_OPERATION_DOMAINS,
+  type VeilCanonicalOperation,
+} from "./privacy/canonical-payload";
+import {
+  createMessageLocatorResolver,
+  generateMessageLocator,
+  type MessageLocatorResolver,
+} from "./privacy/message-locator";
+import { VeilPrivacyError } from "./privacy/errors";
+import {
   VeilEventType,
   type EncryptedPayload,
   type AttachProofInput,
   type CreateChannelInput,
   type CreateChannelResult,
+  type CanonicalMessageIdentityInput,
   type EncryptionAdapter,
   type EscrowStatusInput,
   type InvokeExternalInput,
@@ -63,6 +75,36 @@ export function createStrk20RuntimeUnavailableError(): Error & { code: "STRK20_R
   return Object.assign(new Error("Shielded messaging via STRK20 is coming soon."), {
     code: "STRK20_RUNTIME_UNAVAILABLE" as const,
   });
+}
+
+function canonicalOperationForEvent(
+  eventType: VeilEventType,
+): VeilCanonicalOperation {
+  switch (eventType) {
+    case VeilEventType.CHAT:
+      return "message";
+    case VeilEventType.PAYMENT_MEMO:
+      return "payment_memo";
+    case VeilEventType.OFFER:
+      return "offer";
+    case VeilEventType.COUNTER_OFFER:
+      return "counter_offer";
+    case VeilEventType.ACCEPT_OFFER:
+    case VeilEventType.REJECT_OFFER:
+      return "offer_decision";
+    case VeilEventType.ESCROW_CREATED:
+    case VeilEventType.ESCROW_DEPOSITED:
+    case VeilEventType.ESCROW_SETTLED:
+    case VeilEventType.ESCROW_CANCELLED:
+      return "escrow_coordination";
+    case VeilEventType.PROOF_ATTACHED:
+      return "settlement_evidence";
+    default:
+      throw new VeilPrivacyError(
+        "PAYLOAD_MALFORMED",
+        "Unsupported canonical VEIL event type.",
+      );
+  }
 }
 
 function mergePrivacyPoolInputs(
@@ -102,6 +144,7 @@ export class VeilClient {
   readonly #privateFeeBalance: VeilClientConfig["privateFeeBalance"];
   readonly #feeEstimator: VeilClientConfig["feeEstimator"];
   readonly #gasEstimate: VeilClientConfig["gasEstimate"];
+  readonly #messageLocatorResolver: MessageLocatorResolver;
 
   constructor(config: VeilClientConfig) {
     this.privacyPoolAddress = config.privacyPoolAddress;
@@ -115,6 +158,8 @@ export class VeilClient {
     this.#privateFeeBalance = config.privateFeeBalance;
     this.#feeEstimator = config.feeEstimator;
     this.#gasEstimate = config.gasEstimate;
+    this.#messageLocatorResolver =
+      config.messageLocatorResolver ?? createMessageLocatorResolver();
     if (!config.encryption && !this.#allowMock) {
       throw new Error("VeilClient requires a production encryption adapter. Set allowMock only for mock mode.");
     }
@@ -161,7 +206,7 @@ export class VeilClient {
       kind: "chat",
       message: input.message,
       sender: input.sender ?? "you",
-    }, mode, input.privacyPool);
+    }, mode, input.privacyPool, input);
   }
 
   async sendShieldedMessage(input: Omit<SendMessageInput, "mode">): Promise<TimelineItem> {
@@ -179,7 +224,7 @@ export class VeilClient {
       ...(input.amount ? { amount: input.amount } : {}),
       ...(input.mode ? { mode: input.mode } : {}),
       sender: input.sender ?? "you",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, input.mode ?? "unshield", input.privacyPool, input);
   }
 
   async createOffer(input: OfferInput): Promise<TimelineItem> {
@@ -189,7 +234,7 @@ export class VeilClient {
       ...(input.currency ? { currency: input.currency } : {}),
       ...(input.terms ? { terms: input.terms } : {}),
       sender: input.sender ?? "seller",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, input.mode ?? "unshield", input.privacyPool, input);
   }
 
   async counterOffer(input: OfferInput): Promise<TimelineItem> {
@@ -199,7 +244,7 @@ export class VeilClient {
       ...(input.currency ? { currency: input.currency } : {}),
       ...(input.terms ? { terms: input.terms } : {}),
       sender: input.sender ?? "seller",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, input.mode ?? "unshield", input.privacyPool, input);
   }
 
   async acceptOffer(input: OfferDecisionInput): Promise<TimelineItem> {
@@ -208,7 +253,7 @@ export class VeilClient {
       ...(input.offerId ? { offerId: input.offerId } : {}),
       ...(input.reason ? { reason: input.reason } : {}),
       sender: input.sender ?? "buyer",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, input.mode ?? "unshield", input.privacyPool, input);
   }
 
   async rejectOffer(input: OfferDecisionInput): Promise<TimelineItem> {
@@ -217,7 +262,7 @@ export class VeilClient {
       ...(input.offerId ? { offerId: input.offerId } : {}),
       ...(input.reason ? { reason: input.reason } : {}),
       sender: input.sender ?? "buyer",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, input.mode ?? "unshield", input.privacyPool, input);
   }
 
   async recordEscrowStatus(input: EscrowStatusInput): Promise<TimelineItem> {
@@ -242,7 +287,7 @@ export class VeilClient {
       proofRef: input.proofRef,
       ...(input.label ? { label: input.label } : {}),
       sender: input.sender ?? "system",
-    }, input.mode ?? "unshield", input.privacyPool);
+    }, input.mode ?? "unshield", input.privacyPool, input);
   }
 
   async getTimeline(query: TimelineQuery): Promise<TimelineItem[]> {
@@ -449,6 +494,7 @@ export class VeilClient {
     payload: VeilTimelinePayload,
     mode: VeilMessageMode,
     privacyPool: SendMessageInput["privacyPool"] | undefined,
+    identity?: CanonicalMessageIdentityInput,
   ): Promise<TimelineItem> {
     const session = await this.#requirePermission(this.#permissionForEvent(eventType), channelId);
     const encrypted = await this.encryption.encryptPayload(payload, { channelId, eventType });
@@ -478,7 +524,55 @@ export class VeilClient {
         : {}),
       timestamp: this.#now(),
     };
-    const calldata = encodeInvokeCalldata(item, { conversationTag });
+    const shielded = mode === "shield" || mode === "strk20-shielded";
+    let calldata: readonly string[];
+    let canonicalMessage: InvokeExternalInput["canonicalMessage"];
+
+    if (shielded) {
+      const suppliedReference = identity?.messageReference;
+      if (suppliedReference !== undefined && !suppliedReference.trim()) {
+        throw new VeilPrivacyError(
+          "PAYLOAD_MALFORMED",
+          "messageReference cannot be empty.",
+        );
+      }
+      if (!encrypted.canonicalEnvelope) {
+        throw new VeilPrivacyError(
+          "PAYLOAD_MALFORMED",
+          "Shield encryption did not provide a canonical ciphertext envelope.",
+        );
+      }
+
+      const messageReference =
+        suppliedReference?.trim()
+        ?? `veil-message:${generateMessageLocator()}`;
+
+      const messageLocator = this.#messageLocatorResolver.resolve({
+        messageId: messageReference,
+        ...(identity?.messageLocator !== undefined
+          ? { explicitLocator: identity.messageLocator }
+          : {}),
+      });
+
+      const operation = canonicalOperationForEvent(eventType);
+      const canonicalPayload = buildCanonicalHelperPayload({
+        operation,
+        keyDomain: VEIL_CANONICAL_OPERATION_DOMAINS[operation],
+        envelope: encrypted.canonicalEnvelope,
+        messageLocator,
+      });
+
+      calldata = canonicalPayload.calldata;
+      canonicalMessage = Object.freeze({
+        messageReference,
+        messageLocator: canonicalPayload.messageLocator,
+        payloadCommitment: canonicalPayload.payloadCommitment,
+        helperCalldata: canonicalPayload.calldata,
+      });
+    } else {
+      calldata = encodeInvokeCalldata(item, { conversationTag });
+    }
+
     const invokeInput: InvokeExternalInput = {
       privacyPoolAddress: this.privacyPoolAddress,
       helperAddress: this.helperAddress,
@@ -488,6 +582,9 @@ export class VeilClient {
     };
     if (privacyPoolInput) {
       invokeInput.privacyPool = privacyPoolInput;
+    }
+    if (canonicalMessage) {
+      invokeInput.canonicalMessage = canonicalMessage;
     }
     if (session) {
       invokeInput.session = session;

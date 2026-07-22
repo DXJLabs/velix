@@ -5,6 +5,7 @@ import {
 import {
   decryptMessage,
   encryptMessage,
+  resolvePrivacyPoolMessageSalt,
 } from "./ecdh";
 import {
   computePrivacyPoolChannelKey,
@@ -140,17 +141,27 @@ export class PrivacyPoolChannelBootstrapEncryptionAdapter implements EncryptionA
       ephemeralSecret: material.ephemeralSecret,
       replayProtection: material.replayProtection,
     });
+    const messageSalt = await resolvePrivacyPoolMessageSalt({
+      channelId: requiredContext.channelId,
+      ...(material.messageKeySalt !== undefined
+        ? { salt: material.messageKeySalt }
+        : {}),
+    });
+
     const messageKey = await deriveMessageKey({
       channelKey,
       channelId: requiredContext.channelId,
-      ...(material.messageKeyInfo !== undefined ? { info: material.messageKeyInfo } : {}),
-      ...(material.messageKeySalt !== undefined ? { salt: material.messageKeySalt } : {}),
+      ...(material.messageKeyInfo !== undefined
+        ? { info: material.messageKeyInfo }
+        : {}),
+      salt: messageSalt,
     });
     const encrypted = await encryptMessage({
       payload,
       key: messageKey,
       context: requiredContext,
       payloadStore: this.#payloadStore,
+      canonicalSalt: messageSalt,
       ...(this.#keyId !== undefined ? { keyId: this.#keyId } : {}),
       ...(this.#now !== undefined ? { now: this.#now } : {}),
     });

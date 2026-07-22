@@ -1,38 +1,6 @@
-# Settlement Adapter
+# Privacy And Security Boundaries
 
-`ISettlementAdapter` is the extension interface for concrete settlement implementations.
-
-The interface includes:
-
-```text
-validate_settlement(...)
-finalize_settlement(...)
-```
-
-The adapter receives commitment-based Escrow context such as:
-
-- `escrow_id`
-- `conversation_tag`
-- `offer_id`
-- `asset_type_commitment`
-- `asset_commitment`
-- `payment_commitment`
-- `buyer_deposit_commitment`
-- `seller_deposit_commitment`
-
-`finalize_settlement(...)` returns an adapter-defined:
-
-```text
-settlement_result
-```
-
-The interface itself does not guarantee token custody.
-
-Concrete custody and execution semantics depend on the Settlement Adapter implementation.
-
----
-
-# Relationship To Canonical Privacy Pool
+## Relationship To Canonical Privacy Pool
 
 VEIL is an application layer.
 
@@ -46,8 +14,7 @@ VEIL adds:
 - encrypted conversation payload commitments,
 - private execution-compatible helper entrypoint,
 - offer negotiation state,
-- escrow workflow state,
-- settlement orchestration.
+- private escrow workflow state.
 
 The primary integration point is:
 
@@ -109,18 +76,18 @@ This path does not provide Privacy Pool anonymity.
 
 ---
 
-## Stateful Offer And Escrow Path
+## Stateful Offer Path
 
-Current `VeilOffer` and `VeilEscrow` authorization relies on:
+Current `VeilOffer` authorization relies on:
 
 ```text
 ContractAddress
 get_caller_address()
 ```
 
-Therefore the current stateful Offer and Escrow contracts should be described as direct/stateful authorization components.
+Therefore the current stateful Offer contract should be described as a direct/stateful authorization component.
 
-A future fully shielded stateful Offer/Escrow flow requires proof-backed anonymous authorization rather than simply routing calls through a Privacy Pool helper.
+A future fully shielded stateful Offer flow requires proof-backed anonymous authorization rather than simply routing calls through a Privacy Pool helper.
 
 ---
 
@@ -144,18 +111,17 @@ Instead, timeline storage uses:
 - Poseidon payload commitments,
 - encrypted payload chunks.
 
-Offer and Escrow state uses commitment-based fields where practical:
+Offer state uses commitment-based fields where practical:
 
 - `asset_type_commitment`
 - `asset_commitment`
 - `payment_commitment`
 - `price_commitment`
 - `terms_hash`
-- deposit commitments
 
-However, the current stateful Offer and Escrow contracts still store direct participant addresses for authorization.
+However, the current stateful Offer contract still stores direct participant addresses for authorization.
 
-Therefore VEIL should not claim that all Offer/Escrow state is anonymous.
+Therefore VEIL should not claim that all Offer state is anonymous.
 
 ---
 
@@ -183,16 +149,6 @@ Does not claim Privacy Pool anonymity.
 
 Uses maker/taker `ContractAddress`.
 
-### Stateful Escrow authorization
-
-Uses buyer/seller `ContractAddress`.
-
-### Settlement
-
-Delegated to configured `ISettlementAdapter`.
-
----
-
 # Current Limitations
 
 The current contracts do not:
@@ -202,9 +158,7 @@ The current contracts do not:
 - replace Privacy Pool nullifier logic,
 - provide their own prover,
 - guarantee anonymous authorization for stateful Offer actions,
-- guarantee anonymous authorization for stateful Escrow actions,
 - automatically make direct `invoke(...)` calls private,
-- guarantee token custody without a concrete settlement implementation,
 - hide public blockchain transaction timing.
 
 A complete application also requires supporting client infrastructure such as:
@@ -230,7 +184,7 @@ VEIL contracts follow these principles:
 
 2. **Conversation-first architecture**
 
-   Messages, Offers, Escrow, and Settlement belong to one application flow.
+   Messages, Offers, and private escrow actions belong to one application flow.
 
 3. **Encrypted timeline semantics**
 
@@ -242,7 +196,7 @@ VEIL contracts follow these principles:
 
 5. **Explicit lifecycle state machines**
 
-   Offer and Escrow transitions are validated.
+   Offer transitions are validated.
 
 6. **Separation of shielded and direct provenance**
 
@@ -251,12 +205,6 @@ VEIL contracts follow these principles:
 7. **No fake anonymous authorization claims**
 
    Stateful ContractAddress-based authorization is documented honestly.
-
-8. **Modular settlement**
-
-   Concrete settlement logic is delegated through `ISettlementAdapter`.
-
----
 
 # Development Status
 
@@ -268,9 +216,6 @@ Before production deployment, the project should complete:
 - Starknet Foundry unit tests,
 - Offer lifecycle tests,
 - counter-offer chain tests,
-- Offer-to-Escrow binding tests,
-- Escrow funding tests,
-- Settlement Adapter tests,
 - access-control tests,
 - replay and duplicate-action tests,
 - direct timeline spam/authorization review,

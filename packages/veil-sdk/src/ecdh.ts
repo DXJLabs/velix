@@ -78,6 +78,7 @@ export interface EncryptMessageInput {
   payloadStore?: EncryptedPayloadStore;
   keyId?: string;
   now?: () => number;
+  canonicalSalt?: Uint8Array;
 }
 
 export interface DecryptMessageInput {
@@ -98,6 +99,13 @@ function assertWebCrypto(): SubtleCrypto {
 function bytesToBase64(bytes: Uint8Array): string {
   const binary = [...bytes].map((byte) => String.fromCharCode(byte)).join("");
   return btoa(binary);
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
 }
 
 function base64ToBytes(value: string): Uint8Array {
@@ -201,14 +209,36 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-async function defaultHkdfSalt(input: DeriveSharedSecretInput): Promise<Uint8Array> {
+async function defaultHkdfSalt(
+  input: Pick<DeriveSharedSecretInput, "channelId">,
+): Promise<Uint8Array> {
   const saltMaterial = stableJson({
     channelId: input.channelId,
     protocol: "STRK20_PRIVACY_POOL",
     purpose: "VEIL_MESSAGE_ENCRYPTION",
   });
-  const digest = await assertWebCrypto().digest("SHA-256", textEncoder.encode(saltMaterial));
+  const digest = await assertWebCrypto().digest(
+    "SHA-256",
+    textEncoder.encode(saltMaterial),
+  );
   return new Uint8Array(digest);
+}
+
+export async function resolvePrivacyPoolMessageSalt(
+  input: Pick<DeriveSharedSecretInput, "channelId" | "salt">,
+): Promise<Uint8Array> {
+  const salt =
+    input.salt !== undefined
+      ? secretMaterialToBytes(input.salt, "HKDF salt")
+      : await defaultHkdfSalt(input);
+
+  if (salt.byteLength !== 32) {
+    throw new Error(
+      "Canonical Privacy Pool message HKDF salt must be exactly 32 bytes.",
+    );
+  }
+
+  return salt;
 }
 
 export async function generateEcdhKeyPair(): Promise<EcdhKeyPair> {
@@ -241,9 +271,7 @@ export async function deriveSharedSecret(input: DeriveSharedSecretInput): Promis
   const hkdfKey = await subtle.importKey("raw", bytesToArrayBuffer(secretBytes), HKDF_ALGORITHM, false, [
     "deriveKey",
   ]);
-  const salt = input.salt
-    ? secretMaterialToBytes(input.salt, "HKDF salt")
-    : await defaultHkdfSalt(input);
+  const salt = await resolvePrivacyPoolMessageSalt(input);
   const info = textEncoder.encode(input.info ?? "veil:privacy-pool-message:v1");
 
   return subtle.deriveKey(
@@ -275,6 +303,17 @@ export async function encryptMessage(input: EncryptMessageInput): Promise<Encryp
   );
   const ciphertext = bytesToBase64(ciphertextBytes);
   const nonceValue = bytesToBase64(nonce);
+  const canonicalEnvelope =
+    input.canonicalSalt === undefined
+      ? undefined
+      : Object.freeze({
+          version: 1 as const,
+          algorithm: "A256GCM" as const,
+          salt: bytesToBase64Url(input.canonicalSalt),
+          nonce: bytesToBase64Url(nonce),
+          ciphertext: bytesToBase64Url(ciphertextBytes),
+        });
+
   const envelopeHash = await hashToFelt(
     `veil:privacy-pool:ciphertext:${ciphertext}:nonce:${nonceValue}:aad:${stableJson(input.context ?? {})}`,
   );
@@ -304,6 +343,7 @@ export async function encryptMessage(input: EncryptMessageInput): Promise<Encryp
     envelopeHash,
     nonce: nonceValue,
     payloadChunks: stringToFeltChunks(JSON.stringify(envelope)),
+    ...(canonicalEnvelope ? { canonicalEnvelope } : {}),
   };
 }
 
@@ -373,6 +413,7 @@ export class PrivacyPoolChannelEncryptionAdapter implements EncryptionAdapter {
     if (context) input.context = context;
     if (this.#config.keyId) input.keyId = this.#config.keyId;
     if (this.#config.now) input.now = this.#config.now;
+    input.canonicalSalt = await resolvePrivacyPoolMessageSalt(this.#config);
     return encryptMessage(input);
   }
 

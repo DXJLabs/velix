@@ -8,7 +8,6 @@ export function createOfferController({
   chatDisplayMode,
   defaultOfferAmount,
   currentDealId,
-  currentChannel,
   channelMessages,
   estimateVeilFee,
   rewardPoints,
@@ -17,19 +16,11 @@ export function createOfferController({
   renderChainMeta,
   escapeHtml,
   iconRefresh,
-  safeSubmit,
-  getVeilClient,
-  getOnchainContracts,
-  demoCounterpartyAddress,
-  transactionTransportMode,
-  awardReward,
-  addLocalItem,
-  confirmedTimelineMeta,
-  renderWorkflowProgress,
-  showScreen,
+  showToast,
   fallbackOfferTime = () => Date.now(),
-  now = () => Date.now(),
 }) {
+  const publicOfferRemovedMessage = "Public offer and escrow execution has been removed. Use the private workflow.";
+
   function currentOfferProofItem() {
     return currentOfferProofItemFromMessages(channelMessages(), {
       fallbackTime: fallbackOfferTime(),
@@ -60,38 +51,6 @@ export function createOfferController({
   function createOfferTermsValue() {
     return document.querySelector("#create-offer-terms")?.value.trim()
       || "Buyer deposits funds, seller deposits the asset. Both remain locked until release.";
-  }
-
-  function createOfferCounterpartyValue() {
-    return document.querySelector("#create-offer-counterparty")?.value.trim() || "";
-  }
-
-  function isStarknetAddress(value) {
-    return /^0x[0-9a-fA-F]{1,64}$/.test(String(value || "").trim());
-  }
-
-  function resolveCounterpartyAddress(value = createOfferCounterpartyValue()) {
-    if (isStarknetAddress(value)) return value;
-    if (demoCounterpartyAddress) return demoCounterpartyAddress;
-    throw new Error("Set VITE_DEMO_COUNTERPARTY_ADDRESS or enter a Starknet address for the counterparty.");
-  }
-
-  function requireOnchainContracts() {
-    const contracts = getOnchainContracts();
-    if (!contracts) {
-      throw new Error("Connect a Starknet wallet before submitting offer transactions.");
-    }
-    return contracts;
-  }
-
-  function requireLatestOffer() {
-    if (!state.latestOfferId || !state.latestOfferCommitments) {
-      throw new Error("Create or load an onchain offer before continuing.");
-    }
-    return {
-      offerId: state.latestOfferId,
-      commitments: state.latestOfferCommitments,
-    };
   }
 
   function currentDealOfferAmount() {
@@ -189,164 +148,18 @@ export function createOfferController({
   }
 
   async function createOffer() {
-    const amount = createOfferAmountValue();
-    const amountLabel = `${amount} STRK`;
-    const asset = createOfferAssetValue();
-    const terms = createOfferTermsValue();
-    let onchainResult;
-    let taker;
-    const submitted = await safeSubmit(
-      async () => {
-        taker = resolveCounterpartyAddress();
-        onchainResult = await requireOnchainContracts().createOffer({
-          channelId: state.channelId,
-          taker,
-          amount,
-          currency: "STRK",
-          asset,
-          terms,
-        });
-        return onchainResult;
-      },
-      {
-        type: "offer",
-        title: "Alice created an offer",
-        actor: "Alice",
-        amount: amountLabel,
-        subtitle: asset,
-        time: now(),
-      },
-      "Offer created.",
-      {
-        actionLabel: "Creating Offer",
-        successTitle: "Offer Created",
-        successSubtitle: `${amountLabel} offer recorded in the private channel.`,
-      },
-    );
-    if (!submitted) return;
-    state.latestOfferId = onchainResult?.offerId;
-    state.latestOfferCommitments = onchainResult?.commitments;
-    state.latestOfferSellerAddress = state.walletAddress || taker;
-    state.latestEscrowId = "";
-    awardReward("createOffer");
-    state.offerAccepted = false;
-    state.escrowDeposits = { buyer: false, seller: false };
-    state.escrowConfirmations = { buyer: false, seller: false };
-    state.escrowReleased = false;
-    state.escrowActivated = false;
-    state.negotiationStep = "waiting";
-    state.initialOfferAmount = amountLabel;
-    state.latestOfferAmount = amountLabel;
-    currentChannel().status = "Negotiation Active";
-    renderDeal();
-    renderWorkflowProgress();
+    showToast(publicOfferRemovedMessage);
+    return false;
   }
 
   async function counterOffer() {
-    const amount = createOfferAmountValue();
-    const amountLabel = `${amount} STRK`;
-    const asset = createOfferAssetValue();
-    const terms = createOfferTermsValue();
-    let onchainResult;
-    const submitted = await safeSubmit(
-      async () => {
-        const latestOffer = requireLatestOffer();
-        onchainResult = await requireOnchainContracts().counterOffer({
-          channelId: state.channelId,
-          offerId: latestOffer.offerId,
-          baseCommitments: latestOffer.commitments,
-          amount,
-          currency: "STRK",
-          asset,
-          terms,
-        });
-        return onchainResult;
-      },
-      {
-        type: "offer",
-        title: "Bob created a counter offer",
-        actor: "Bob",
-        amount: amountLabel,
-        subtitle: asset,
-        time: now(),
-      },
-      "Counter sent.",
-      {
-        actionLabel: "Creating Counter Offer",
-        successTitle: "Counter Offer Sent",
-        successSubtitle: `${amountLabel} counter offer recorded in the private channel.`,
-      },
-    );
-    if (!submitted) return;
-    state.latestOfferId = onchainResult?.offerId;
-    state.latestOfferCommitments = onchainResult?.commitments;
-    state.latestOfferSellerAddress = state.walletAddress || resolveCounterpartyAddress();
-    state.latestEscrowId = "";
-    awardReward("counterOffer");
-    state.offerAccepted = false;
-    state.escrowDeposits = { buyer: false, seller: false };
-    state.escrowConfirmations = { buyer: false, seller: false };
-    state.escrowReleased = false;
-    state.escrowActivated = false;
-    state.negotiationStep = "decision";
-    state.latestOfferAmount = amountLabel;
-    currentChannel().status = "Negotiation Active";
-    currentChannel().last = `Bob created a counter offer`;
-    renderDeal();
-    renderWorkflowProgress();
+    showToast(publicOfferRemovedMessage);
+    return false;
   }
 
   async function acceptOffer() {
-    let onchainResult;
-    const submitted = await safeSubmit(
-      async () => {
-        const latestOffer = requireLatestOffer();
-        const seller = state.latestOfferSellerAddress || resolveCounterpartyAddress();
-        onchainResult = await requireOnchainContracts().acceptOfferAndCreateEscrow({
-          channelId: state.channelId,
-          offerId: latestOffer.offerId,
-          seller,
-          commitments: latestOffer.commitments,
-        });
-        return onchainResult;
-      },
-      {
-        type: "inline",
-        title: "Alice accepted Bob's counter offer",
-        subtitle: "Negotiation completed. Escrow contract created.",
-        actor: "Alice",
-        time: now(),
-      },
-      "Counter offer accepted.",
-      {
-        actionLabel: "Accepting Proposal",
-        successTitle: "Proposal Accepted",
-        successSubtitle: "Escrow contract created.",
-      },
-    );
-    if (!submitted) return;
-    state.latestEscrowId = onchainResult?.escrowId;
-    awardReward("acceptProposal");
-    state.offerAccepted = true;
-    state.negotiationStep = "accepted";
-    state.escrowDeposits = { buyer: false, seller: false };
-    state.escrowConfirmations = { buyer: false, seller: false };
-    state.escrowReleased = false;
-    state.escrowActivated = false;
-    state.escrowDisputeOpened = false;
-    currentChannel().status = "Escrow Active";
-    currentChannel().last = "Waiting for escrow deposits";
-    addLocalItem({
-      type: "inline",
-      title: "Waiting for escrow deposits",
-      subtitle: `Waiting for: Alice deposits ${currentDealOfferAmount()}; Bob locks NFT.`,
-      actor: "System",
-      time: now(),
-      ...confirmedTimelineMeta(`${state.channelId}-waiting-deposits`, 20),
-    });
-    renderDeal();
-    renderWorkflowProgress();
-    showScreen("escrow");
+    showToast(publicOfferRemovedMessage);
+    return false;
   }
 
   return {

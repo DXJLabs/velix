@@ -75,6 +75,7 @@ describe("VEIL transport confirmation and direct helper", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           return { execute: async () => ({ transaction_hash: "0xconfirmedshield" }) };

@@ -6,6 +6,15 @@ export const FEATURE_STATUS = Object.freeze({
   DISABLED: "DISABLED",
 });
 
+export const PRIVACY_TRANSPORT_STATUS = Object.freeze({
+  DIRECT_ENCRYPTED_LEGACY: "DIRECT_ENCRYPTED_LEGACY",
+  CANONICAL_PREPARED: "CANONICAL_PREPARED",
+  CANONICAL_UNAVAILABLE: "CANONICAL_UNAVAILABLE",
+  CANONICAL_FAILED: "CANONICAL_FAILED",
+  CANONICAL_SUBMITTED: "CANONICAL_SUBMITTED",
+  CANONICAL_ACCEPTED: "CANONICAL_ACCEPTED",
+});
+
 const FEATURE_STATUS_VALUES = Object.freeze(Object.values(FEATURE_STATUS));
 
 export function isFeatureStatus(value) {
@@ -30,11 +39,23 @@ export const VEIL_PHASE1_FEATURE_STATUS = createFeatureStatusModel({
   privacyWalletApi: FEATURE_STATUS.UNVERIFIED,
   shield: FEATURE_STATUS.BLOCKED,
   privateTransfer: FEATURE_STATUS.BLOCKED,
-  withdraw: FEATURE_STATUS.UNVERIFIED,
+  unshield: FEATURE_STATUS.DISABLED,
   shieldedPaymentMemo: FEATURE_STATUS.BLOCKED,
   pureShieldedChat: FEATURE_STATUS.UNVERIFIED,
+  officialPrivacyTransport: FEATURE_STATUS.BLOCKED,
   offer: FEATURE_STATUS.DISABLED,
-  legacyEscrow: FEATURE_STATUS.DISABLED,
-  unsafeSettlement: FEATURE_STATUS.DISABLED,
   paymaster: FEATURE_STATUS.DISABLED,
+});
+
+export const VEIL_PHASE3_PRIVACY_TRANSPORT_STATE = Object.freeze({
+  legacy: Object.freeze({
+    status: PRIVACY_TRANSPORT_STATUS.DIRECT_ENCRYPTED_LEGACY,
+    label: "Direct encrypted",
+  }),
+  canonical: Object.freeze({
+    status: PRIVACY_TRANSPORT_STATUS.CANONICAL_UNAVAILABLE,
+    prepared: false,
+    liveVerified: false,
+  }),
+  unshield: Object.freeze({ available: false }),
 });

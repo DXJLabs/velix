@@ -11,7 +11,6 @@ export const WALLET_PRIVACY_CAPABILITY = Object.freeze({
   REGISTRATION: "registration",
   SHIELD: "shield",
   PRIVATE_TRANSFER: "privateTransfer",
-  WITHDRAW: "withdraw",
   CUSTOM_ANONYMIZER_INVOCATION: "customAnonymizerInvocation",
   WALLET_PROOF_MANAGEMENT: "walletProofManagement",
   SCREENING_CAPABLE_DEPOSIT: "screeningCapableDeposit",

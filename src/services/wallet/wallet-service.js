@@ -16,10 +16,8 @@ export function createWalletService({
   setVeilClient,
   createClient,
   createEncryptionAdapter,
-  createOnchainContracts,
   getDirectTransport,
   setDirectTransport,
-  setOnchainContracts,
   currentChannelId,
   ensurePrivyAuthenticated,
   fetchPrivyStarknetWallet,
@@ -46,7 +44,6 @@ export function createWalletService({
       registration: detected.registration,
       shield: detected.shield && config.privacyRuntime.screening.capable,
       privateTransfer: detected.privateTransfer,
-      withdraw: detected.withdraw,
       customAnonymizerInvocation: detected.customInvoke,
       walletProofManagement: detected.walletProofManagement,
       screeningCapableDeposit: detected.screeningCapableDeposit && config.privacyRuntime.screening.capable,
@@ -67,7 +64,7 @@ export function createWalletService({
     try {
       const client = new Strk20WalletApiClient({
         wallet,
-        allowedInvokeContracts: [config.helperAddress, config.offerAddress, config.escrowAddress].filter(Boolean),
+        allowedInvokeContracts: [config.helperAddress, config.offerAddress].filter(Boolean),
         ...(detected.apiVersion ? { apiVersion: detected.apiVersion } : {}),
       });
       const balances = await client.balances(assets.map((asset) => asset.contractAddress));
@@ -259,11 +256,6 @@ export function createWalletService({
     encryptionRegistrationAccount = account;
     setDirectTransport(directTransport);
     setVeilClient(createClient(directTransport, encryptionSetup.adapter));
-    setOnchainContracts(createOnchainContracts({
-      account,
-      provider: readProvider,
-    }));
-
     if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
       return failWalletInitialization(new Error("Helper contract verification failed on the configured RPC/network."), traceId, {
         where: "connectWallet",

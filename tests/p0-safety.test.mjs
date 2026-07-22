@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { bindClickEvents } from "../src/app/events/click-events.js";
 import { estimateVeilFee } from "../src/domain/fees.js";
 import { hasRealTransactionHash } from "../src/features/escrow/escrow-feature.js";
+import { buildEscrowController } from "../src/features/escrow/escrow-controller.js";
+import { createOfferController } from "../src/features/offer/offer-controller.js";
 import { createPaymentController } from "../src/features/payment/payment-controller.js";
 import { createBootstrapData } from "../src/state/bootstrap-data.js";
 import { createDealStorage } from "../src/services/storage/deal-storage.js";
@@ -91,6 +93,87 @@ test("production deal storage is fail-closed and writes no plaintext local cache
   storage.saveLocalChannels();
   assert.equal(reads, 0);
   assert.equal(writes, 0);
+});
+
+test("removed public offer and escrow actions fail closed without changing state", async () => {
+  const state = {
+    channelId: "private-channel",
+    latestOfferId: "offer-1",
+    latestEscrowId: "escrow-1",
+    offerAccepted: false,
+    escrowDeposits: { buyer: false, seller: false },
+    escrowConfirmations: { buyer: false, seller: false },
+    escrowReleased: false,
+    escrowActivated: false,
+  };
+  const initialState = structuredClone(state);
+  const messages = [];
+  const showToast = (message) => messages.push(message);
+  const document = { querySelector: () => null, querySelectorAll: () => [] };
+
+  const offerController = createOfferController({
+    state,
+    document,
+    offerReviewModal: null,
+    chatDisplayMode: "encrypted-direct",
+    defaultOfferAmount: "500 STRK",
+    currentDealId: () => "deal-1",
+    currentChannel: () => ({ status: "Negotiation Active" }),
+    channelMessages: () => [],
+    estimateVeilFee,
+    rewardPoints: { acceptProposal: 0 },
+    setElementText() {},
+    statusPillClass() {},
+    renderChainMeta() {},
+    escapeHtml: String,
+    iconRefresh() {},
+    showToast,
+  });
+  const escrowController = buildEscrowController({
+    state,
+    document,
+    escrowReviewModal: null,
+    messageInput: null,
+    chatDisplayMode: "encrypted-direct",
+    currentDealId: () => "deal-1",
+    currentDealOfferAmount: () => "500 STRK",
+    currentChannel: () => ({ status: "Negotiation Active" }),
+    channelMessages: () => [],
+    estimateVeilFee,
+    rewardPoints: { escrowCompleted: 0 },
+    setElementText() {},
+    statusPillClass() {},
+    escapeHtml: String,
+    renderChainMeta() {},
+    setLucideIcon() {},
+    iconRefresh() {},
+    addLocalItem() {},
+    confirmedTimelineMeta: () => ({}),
+    renderWorkflowProgress() {},
+    showScreen() {},
+    showToast,
+    resetDealStateForPendingChannel() {},
+    saveLocalChannels() {},
+    renderConversationList() {},
+    renderChannel() {},
+    requestAnimationFrame() {},
+  });
+
+  for (const action of [
+    offerController.createOffer,
+    offerController.counterOffer,
+    offerController.acceptOffer,
+    escrowController.submitEscrowDeposit,
+    escrowController.approveEscrowRelease,
+    escrowController.releaseEscrow,
+    escrowController.cancelEscrow,
+  ]) {
+    assert.equal(await action(), false);
+  }
+
+  assert.deepEqual(state, initialState);
+  assert.equal(messages.length, 7);
+  assert.ok(messages.every((message) => /removed/i.test(message)));
 });
 
 test("memo-only payment never marks assets paid or opens settlement", async () => {

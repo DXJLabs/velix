@@ -1,4 +1,4 @@
-﻿import { describe, it } from "node:test";
+import { describe, it } from "node:test";
 import { assert, createFeeProvider, sdk } from "./production-messaging.helpers.mjs";
 
 const {
@@ -37,6 +37,7 @@ describe("VEIL shield transport submission", () => {
     const calls = [];
     let sdkMessageInput;
     let applyInput;
+    const locatorReads = { exists: 0, message: 0, chunks: 0 };
     const transport = new StarknetPrivacyPoolTransport({
       privacyPoolAddress: "0xpool",
       helperAddress: "0xhelper",
@@ -44,6 +45,29 @@ describe("VEIL shield transport submission", () => {
         async callContract(call) {
           if (call.entrypoint === "get_fee_amount") return ["10"];
           if (call.entrypoint === "get_fee_collector") return ["0xfee"];
+
+          if (call.entrypoint === "message_exists") {
+            locatorReads.exists += 1;
+            assert.equal(
+              call.calldata[0],
+              sdkMessageInput.canonicalMessage.messageLocator,
+            );
+            return ["1"];
+          }
+
+          if (call.entrypoint === "get_message") {
+            locatorReads.message += 1;
+            return sdkMessageInput.canonicalMessage.helperCalldata.slice(0, 4);
+          }
+
+          if (call.entrypoint === "get_payload_chunk") {
+            locatorReads.chunks += 1;
+            const index = Number(call.calldata[1]);
+            return [
+              sdkMessageInput.canonicalMessage.helperCalldata[4 + index],
+            ];
+          }
+
           return [];
         },
         async waitForTransaction(transactionHash) {
@@ -53,22 +77,11 @@ describe("VEIL shield transport submission", () => {
       },
       privateFeeBalance: "10",
       readTransport: {
-        async getEventCount(channelId) {
-          calls.push(`count:${channelId}`);
-          return 0;
+        async getEventCount() {
+          throw new Error("legacy event count must not be used");
         },
-        async getEvent(channelId, index) {
-          calls.push(`event:${channelId}:${index}`);
-          assert.equal(channelId, "123");
-          assert.equal(index, 0);
-          return {
-            ...sdkMessageInput.item,
-            eventId: "1",
-            timestamp: 1710000000000,
-            mode: "shield",
-            status: "confirmed",
-            optimistic: false,
-          };
+        async getEvent() {
+          throw new Error("legacy indexed event must not be used");
         },
         async getTimeline() {
           return [];
@@ -114,16 +127,35 @@ describe("VEIL shield transport submission", () => {
         },
       },
     });
+    const mockEncryption = new MockEncryptionAdapter();
     const client = new VeilClient({
       privacyPoolAddress: "0xpool",
       helperAddress: "0xhelper",
       rpcUrl: "http://localhost",
-      encryption: new MockEncryptionAdapter(),
+      encryption: {
+        async encryptPayload(payload, context) {
+          const encrypted = await mockEncryption.encryptPayload(payload, context);
+          return {
+            ...encrypted,
+            canonicalEnvelope: {
+              version: 1,
+              algorithm: "A256GCM",
+              salt: Buffer.alloc(32, 1).toString("base64url"),
+              nonce: Buffer.alloc(12, 2).toString("base64url"),
+              ciphertext: Buffer.alloc(64, 3).toString("base64url"),
+            },
+          };
+        },
+        async decryptPayload(item, context) {
+          return mockEncryption.decryptPayload(item, context);
+        },
+      },
       transport,
     });
 
     const item = await client.sendShieldedMessage({
       channelId: "123",
+      messageReference: "production-shield-message-1",
       message: "real shield pipeline",
       privacyPool: {
         createEncNote: {
@@ -141,20 +173,24 @@ describe("VEIL shield transport submission", () => {
     assert.equal(item.status, "confirmed");
     assert.equal(item.optimistic, false);
     assert.equal(item.blockNumber, 99);
-    assert.equal(item.timestamp, 1710000000000);
+    assert.equal(typeof item.timestamp, "number");
     assert.equal(sdkMessageInput.helperCall.entrypoint, "privacy_invoke");
     assert.equal(sdkMessageInput.helperCall.contractAddress, "0xhelper");
+    assert.equal(locatorReads.exists, 1);
+    assert.equal(locatorReads.message, 1);
+    assert.equal(
+      locatorReads.chunks,
+      sdkMessageInput.canonicalMessage.helperCalldata.length - 4,
+    );
     assert.equal(applyInput.proof.raw.proof, true);
     assert.equal(applyInput.applyActionsCall.entrypoint, "apply_actions");
     assert.equal(applyInput.applyActionsCall.contractAddress, "0xpool");
     assert.deepEqual(calls, [
-      "count:123",
       "compile",
       "proof",
       "build-apply",
       "paymaster",
       "wait:0xshielded",
-      "event:123:0",
     ]);
   });
 
@@ -178,6 +214,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           throw new Error("not used");
@@ -227,6 +264,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           return { transaction: { kind: "privacy-pool-apply" } };
@@ -292,6 +330,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           throw new Error("not used");
@@ -353,6 +392,7 @@ describe("VEIL shield transport submission", () => {
           throw new Error("not used");
         },
       },
+      transportRoute: "legacy-test-only",
       actionBuilder: {
         async buildVeilMessageAction() {
           throw new Error("not used");

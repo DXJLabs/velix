@@ -10,7 +10,9 @@ import {
 import { createRuntimeConfig } from "../../../src/app/runtime-config.js";
 import {
   FEATURE_STATUS,
+  PRIVACY_TRANSPORT_STATUS,
   VEIL_PHASE1_FEATURE_STATUS,
+  VEIL_PHASE3_PRIVACY_TRANSPORT_STATE,
   createFeatureStatusModel,
 } from "../../../src/domain/feature-status.js";
 import {
@@ -35,10 +37,6 @@ describe("Phase 1 Sepolia configuration lock", () => {
     );
     assert.equal(VEIL_SEPOLIA_CONFIG.privacyPool.compatibility, "legacy-pre-screening");
     assert.equal(VEIL_SEPOLIA_CONFIG.privacyPool.screeningCapable, false);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.unsafeSettlementHelper.runtimeDefault, false);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.unsafeSettlementHelper.unsafe, true);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.legacyEscrow.runtimeDefault, false);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.legacyEscrow.unsafeOrIncomplete, true);
     assert.equal(VEIL_SEPOLIA_CONFIG.contracts.offer.runtimeDefault, false);
     assert.equal(VEIL_SEPOLIA_CONFIG.contracts.offer.unsafeOrIncomplete, true);
 
@@ -94,34 +92,31 @@ describe("Phase 1 Sepolia configuration lock", () => {
   it("keeps unsafe and unverified runtime routes off by default", () => {
     const defaults = createRuntimeConfig({}, "");
     assert.equal(defaults.expectedChainId, "SN_SEPOLIA");
-    assert.equal(defaults.settlementHelperAddress, "");
-    assert.equal(defaults.unsafeSettlementEnabled, false);
-    assert.equal(defaults.escrowAddress, "");
     assert.equal(defaults.offerAddress, "");
     assert.equal(defaults.avnuPaymasterEnabled, false);
     assert.equal(defaults.onchainPayloads, false);
     assert.equal(defaults.privacyRuntime.sdk.enabled, false);
     assert.equal(defaults.privacyRuntime.sdk.installed, true);
+    assert.equal(defaults.privacyRuntime.sdk.compatible, true);
+    assert.equal(defaults.privacyRuntime.wallet.capable, false);
+    assert.equal(defaults.privacyRuntime.pool.compatible, false);
+    assert.equal(defaults.privacyRuntime.legacy.status, "DIRECT_ENCRYPTED_LEGACY");
+    assert.equal(defaults.privacyRuntime.legacy.label, "Direct encrypted");
+    assert.equal(defaults.privacyRuntime.canonical.status, "CANONICAL_UNAVAILABLE");
+    assert.equal(defaults.privacyRuntime.canonical.prepared, false);
+    assert.equal(defaults.privacyRuntime.canonical.liveVerified, false);
+    assert.equal(defaults.privacyRuntime.unshield.available, false);
     assert.equal(defaults.privacyRuntime.prover.mode, "disabled");
+    assert.equal(defaults.privacyRuntime.prover.configured, false);
+    assert.equal(defaults.privacyRuntime.prover.localVerified, false);
+    assert.equal(defaults.privacyRuntime.prover.liveVerified, false);
+    assert.equal(defaults.privacyRuntime.prover.broadcastEnabled, false);
     assert.equal(defaults.privacyRuntime.discovery.provider, "contract");
     assert.equal(defaults.privacyRuntime.screening.capable, false);
 
     const explicitlyEnabled = createRuntimeConfig({ VITE_VEIL_ONCHAIN_PAYLOADS: "true" }, "");
     assert.equal(explicitlyEnabled.onchainPayloads, true);
     assert.equal(explicitlyEnabled.avnuPaymasterEnabled, false);
-    assert.equal(explicitlyEnabled.settlementHelperAddress, "");
-
-    assert.throws(() => createRuntimeConfig({
-      VITE_VEIL_SETTLEMENT_HELPER_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.unsafeSettlementHelper.address,
-    }, ""), /security-disabled/);
-    assert.throws(
-      () => createRuntimeConfig({ VITE_VEIL_UNSAFE_SETTLEMENT_ENABLED: "true" }, ""),
-      /security-disabled/,
-    );
-    assert.throws(
-      () => createRuntimeConfig({ VITE_VEIL_ESCROW_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.legacyEscrow.address }, ""),
-      /not a safe DealEscrow/,
-    );
     assert.throws(
       () => createRuntimeConfig({ VITE_VEIL_OFFER_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.offer.address }, ""),
       /predates the hardened VeilOffer/,
@@ -138,6 +133,35 @@ describe("Phase 1 Sepolia configuration lock", () => {
       () => createRuntimeConfig({ VITE_STRK20_SDK_ENABLED: "true" }, ""),
       /foundation is installed/,
     );
+    assert.throws(
+      () => createRuntimeConfig({
+        VITE_STRK20_PROVER_MODE: "self-hosted",
+        VITE_STRK20_PROVER_URL: "https://prover.example",
+      }, ""),
+      /loopback endpoint only/,
+    );
+    assert.throws(
+      () => createRuntimeConfig({
+        VITE_STRK20_PROVER_MODE: "hosted",
+        VITE_STRK20_PROVER_URL: "http://prover.example",
+      }, ""),
+      /requires HTTPS/,
+    );
+    assert.throws(
+      () => createRuntimeConfig({
+        VITE_STRK20_PROVER_MODE: "hosted",
+        VITE_STRK20_PROVER_URL: "https://user:secret@prover.example",
+      }, ""),
+      /cannot contain credentials/,
+    );
+    const localProver = createRuntimeConfig({
+      VITE_STRK20_PROVER_MODE: "self-hosted",
+      VITE_STRK20_PROVER_URL: "http://127.0.0.1:3000",
+    }, "");
+    assert.equal(localProver.privacyRuntime.prover.configured, true);
+    assert.equal(localProver.privacyRuntime.prover.localVerified, false);
+    assert.equal(localProver.privacyRuntime.canonical.prepared, false);
+    assert.equal(localProver.privacyRuntime.canonical.liveVerified, false);
   });
 });
 
@@ -168,8 +192,15 @@ describe("Phase 1 privacy capability and feature status models", () => {
     ]);
     assert.equal(VEIL_PHASE1_FEATURE_STATUS.directEncryptedMessaging, FEATURE_STATUS.WORKING);
     assert.equal(VEIL_PHASE1_FEATURE_STATUS.shield, FEATURE_STATUS.BLOCKED);
-    assert.equal(VEIL_PHASE1_FEATURE_STATUS.unsafeSettlement, FEATURE_STATUS.DISABLED);
+    assert.equal(VEIL_PHASE1_FEATURE_STATUS.unshield, FEATURE_STATUS.DISABLED);
+    assert.equal(VEIL_PHASE1_FEATURE_STATUS.officialPrivacyTransport, FEATURE_STATUS.BLOCKED);
     assert.equal(Object.isFrozen(VEIL_PHASE1_FEATURE_STATUS), true);
+    assert.equal(
+      VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.legacy.status,
+      PRIVACY_TRANSPORT_STATUS.DIRECT_ENCRYPTED_LEGACY,
+    );
+    assert.equal(VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.canonical.prepared, false);
+    assert.equal(VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.canonical.liveVerified, false);
     assert.throws(() => createFeatureStatusModel({ shield: "working" }), /Invalid status/);
   });
 });

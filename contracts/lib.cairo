@@ -16,22 +16,5 @@ pub mod offers {
     pub mod veil_offer;
 }
 
-pub mod escrow {
-    pub mod escrow_commitments;
-    pub mod escrow_payload;
-    pub mod escrow_types;
-    pub mod escrow_validation;
-    pub mod veil_escrow;
-}
-
-pub mod settlement {
-    pub mod settlement_events;
-    pub mod settlement_interfaces;
-    pub mod settlement_types;
-    pub mod settlement_validation;
-    pub mod veil_settlement_helper;
-}
-
-pub mod events { pub mod escrow_events; }
-pub mod interfaces { pub mod escrow_interfaces; pub mod privacy_pool_types; }
+pub mod interfaces { pub mod privacy_pool_types; }
 pub mod utils { pub mod constants; pub mod errors; pub mod hashing; pub mod time; pub mod validation; }

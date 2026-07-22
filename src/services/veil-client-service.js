@@ -5,7 +5,6 @@ import {
   EncryptionPublicKeyRegistryService,
   VeilEncryptionIdentityService,
   VeilClient,
-  createVeilOnchainContracts,
   detectStrk20WalletCapabilities,
   Strk20WalletApiClient,
 } from "../../packages/veil-sdk/src/index.ts";
@@ -18,7 +17,6 @@ export {
   VeilEncryptionIdentityService,
   detectStrk20WalletCapabilities,
   Strk20WalletApiClient,
-  createVeilOnchainContracts,
 };
 
 export function createVeilClientFactory({

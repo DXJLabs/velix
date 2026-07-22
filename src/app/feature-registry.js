@@ -1,6 +1,6 @@
 import { createChatController } from "../features/chat/chat-controller.js";
 import { createDealRoomController } from "../features/deals/deal-room-controller.js";
-import { createEscrowController } from "../features/escrow/escrow-controller.js";
+import { buildEscrowController } from "../features/escrow/escrow-controller.js";
 import { createInviteController } from "../features/invite/invite-controller.js";
 import { counterpartyAvatar, resolveCounterparty } from "../features/invite/invite-feature.js";
 import { createOfferController } from "../features/offer/offer-controller.js";
@@ -165,7 +165,6 @@ export function createFeatureRegistry({
     chatDisplayMode: CHAT_DISPLAY_MODE,
     defaultOfferAmount: DEAL_OFFER_AMOUNT,
     currentDealId: store.currentDealId,
-    currentChannel: store.currentChannel,
     channelMessages: store.channelMessages,
     estimateVeilFee,
     rewardPoints: VEIL_REWARD_POINTS,
@@ -174,16 +173,7 @@ export function createFeatureRegistry({
     renderChainMeta: chainMetaUi.renderChainMeta,
     escapeHtml,
     iconRefresh: call(api, "iconRefresh"),
-    safeSubmit: call(api, "safeSubmit"),
-    getVeilClient: call(api, "getVeilClient"),
-    getOnchainContracts: call(api, "getOnchainContracts"),
-    demoCounterpartyAddress: config.demoCounterpartyAddress,
-    transactionTransportMode: call(chatController, "transactionTransportMode"),
-    awardReward: call(rewardsController, "awardReward"),
-    addLocalItem: call(chatController, "addLocalItem"),
-    confirmedTimelineMeta: data.confirmedTimelineMeta,
-    renderWorkflowProgress: call(dealRoomController, "renderWorkflowProgress"),
-    showScreen: call(api, "showScreen"),
+    showToast: call(api, "showToast"),
     fallbackOfferTime: () => Date.now() - 2 * data.minute,
   });
 
@@ -197,13 +187,12 @@ export function createFeatureRegistry({
     iconRefresh: call(api, "iconRefresh"),
     safeSubmit: call(api, "safeSubmit"),
     getVeilClient: call(api, "getVeilClient"),
-    getOnchainContracts: call(api, "getOnchainContracts"),
     transactionTransportMode: call(chatController, "transactionTransportMode"),
     renderWorkflowProgress: call(dealRoomController, "renderWorkflowProgress"),
     showScreen: call(api, "showScreen"),
   });
 
-  const escrowController = createEscrowController({
+  const escrowController = buildEscrowController({
     state: store.state,
     document: dom.document,
     escrowReviewModal: dom.escrowReviewModal,
@@ -221,15 +210,11 @@ export function createFeatureRegistry({
     renderChainMeta: chainMetaUi.renderChainMeta,
     setLucideIcon: api.setLucideIcon,
     iconRefresh: call(api, "iconRefresh"),
-    safeSubmit: call(api, "safeSubmit"),
-    getVeilClient: call(api, "getVeilClient"),
-    awardReward: call(rewardsController, "awardReward"),
     addLocalItem: call(chatController, "addLocalItem"),
     confirmedTimelineMeta: data.confirmedTimelineMeta,
     renderWorkflowProgress: call(dealRoomController, "renderWorkflowProgress"),
     showScreen: call(api, "showScreen"),
     showToast: call(api, "showToast"),
-    settlementProofMeta: call(api, "settlementProofMeta"),
     resetDealStateForPendingChannel: call(inviteController, "resetDealStateForPendingChannel"),
     saveLocalChannels: call(api, "saveLocalChannels"),
     renderConversationList: call(dealRoomController, "renderConversationList"),
