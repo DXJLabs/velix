@@ -356,6 +356,14 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
   assert.equal(BigInt(invocation.sender_address), BigInt(POOL_ADDRESS));
   assert.equal(invocation.calldata.some((felt) => BigInt(felt) === BigInt(SEPOLIA_HELPER_ADDRESS)), true);
   assert.equal(invocation.calldata.some((felt) => BigInt(felt) === BigInt(prepared.messageLocator)), true);
+  const expectedHelperSpan = [
+    BigInt(prepared.helperCalldata.length),
+    ...prepared.helperCalldata.map((felt) => BigInt(felt)),
+  ];
+  const invocationCalldata = invocation.calldata.map((felt) => BigInt(felt));
+  assert.equal(invocationCalldata.some((_, start) =>
+    expectedHelperSpan.every((felt, offset) =>
+      invocationCalldata[start + offset] === felt)), true);
   assert.equal(result.callAndProof.call.entrypoint, "apply_actions");
 });
 
@@ -409,9 +417,9 @@ test("submission resource bounds use the finalized block and no fee simulation",
   });
   assert.deepEqual(reads, [PROVING_BLOCK]);
   assert.deepEqual(bounds, {
-    l1_gas: { max_amount: 0n, max_price_per_unit: 30n },
-    l1_data_gas: { max_amount: 4096n, max_price_per_unit: 15n },
-    l2_gas: { max_amount: 145000000n, max_price_per_unit: 45n },
+    l1_gas: { max_amount: 0n, max_price_per_unit: 28n },
+    l1_data_gas: { max_amount: 1024n, max_price_per_unit: 14n },
+    l2_gas: { max_amount: 110000000n, max_price_per_unit: 42n },
   });
 });
 

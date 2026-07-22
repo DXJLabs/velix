@@ -17,12 +17,16 @@ Run modes:
   `MessageCommitted` event and stored ciphertext chunks, then decrypt locally.
 
 For the submission mode, the PoC supplies bounded resource limits derived from
-the successful register transaction's measured gas usage and gas prices at the
-same finalized block used for proving. A 50% price margin is applied. This
+the accepted shielded-message attempt's measured gas usage and gas prices at
+the same finalized block used for proving. A 40% price margin is applied. This
 avoids the account client's automatic proof-bearing fee estimate; the deployed
 Privacy Pool rejects the SDK's call-only `compile_actions` simulation with
 `SENDER_NOT_AUTHENTICATED`. No simulation fallback or direct helper call is
 used.
+
+The Official SDK `InvokeExternal` action receives the ABI-encoded argument for
+`VeilChannelHelper.privacy_invoke`: the ciphertext payload is prefixed with its
+felt count because the helper entrypoint accepts one `Span<felt252>`.
 
 A successful submission verdict proves a real Official Privacy Pool
 `InvokeExternal` call reached `VeilChannelHelper.privacy_invoke`, the real proof

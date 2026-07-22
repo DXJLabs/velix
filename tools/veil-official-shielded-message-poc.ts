@@ -523,7 +523,12 @@ function createOfficialShieldedMessageBuilder(
     .setup(context.accountAddress)
     .invoke(() => ({
       contractAddress: feltHex(input.config.helperAddress),
-      calldata: [...input.prepared.helperCalldata],
+      // InvokeExternal carries raw entrypoint calldata. privacy_invoke accepts
+      // one Span<felt252>, so its ABI length prefix must be included here.
+      calldata: [
+        String(input.prepared.helperCalldata.length),
+        ...input.prepared.helperCalldata,
+      ],
     }));
 }
 
@@ -555,10 +560,10 @@ export function createOfficialShieldedMessageSubmissionAccount(config: {
   };
 }
 
-const SHIELDED_MESSAGE_L1_DATA_GAS_MAX_AMOUNT = 4_096n;
-const SHIELDED_MESSAGE_L2_GAS_MAX_AMOUNT = 145_000_000n;
-const GAS_PRICE_MARGIN_NUMERATOR = 3n;
-const GAS_PRICE_MARGIN_DENOMINATOR = 2n;
+const SHIELDED_MESSAGE_L1_DATA_GAS_MAX_AMOUNT = 1_024n;
+const SHIELDED_MESSAGE_L2_GAS_MAX_AMOUNT = 110_000_000n;
+const GAS_PRICE_MARGIN_NUMERATOR = 7n;
+const GAS_PRICE_MARGIN_DENOMINATOR = 5n;
 
 function addGasPriceMargin(price: bigint): bigint {
   if (price <= 0n) throw new Error("Starknet gas price must be positive.");
@@ -577,9 +582,9 @@ export async function createShieldedMessageResourceBounds(input: {
   const provider = input.provider
     ?? new ProofRpcProvider({ nodeUrl: input.rpcUrl });
   const prices = await provider.getGasPrices(input.provingBlockId);
-  // The successful register transaction consumed 78,617,920 L2 gas and 576
-  // L1-data gas. These caps leave headroom for the helper's ciphertext writes
-  // while keeping the maximum fee bounded for the funded CI account.
+  // The accepted shielded-message attempt consumed 76,265,280 L2 gas before
+  // reverting at helper ABI decoding. These caps leave execution headroom
+  // while keeping the maximum fee within the funded CI account's balance.
   return {
     l1_gas: {
       max_amount: 0n,
@@ -820,6 +825,8 @@ export async function submitShieldedMessage(input: {
     if (!transaction.transaction_hash) {
       throw new Error("Shielded-message submission returned no transaction hash.");
     }
+    console.log("SHIELDED_MESSAGE_TRANSACTION_SUBMITTED");
+    console.log(transaction.transaction_hash);
     const waited = await input.account.waitForTransaction(
       transaction.transaction_hash,
       {
