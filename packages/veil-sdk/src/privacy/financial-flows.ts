@@ -1,6 +1,9 @@
 import {
+  Open,
   WarningCode,
   type ExecuteResult,
+  type InvokeOpenNote,
+  type InvokeWithdrawal,
   type Note,
   type PrivateRegistry,
   type PrivateTransfersInterface,
@@ -10,6 +13,15 @@ import { assertSpendableBalance, computePrivateBalance, isNoteMature } from "./b
 import { VeilPrivacyError, asPrivacyError } from "./errors.js";
 import { normalizeAddressBigint } from "./namespace.js";
 import { assertScreeningCapableDeposit, mapSetupRequirement } from "./official-sdk.js";
+import {
+  buildPrivateEscrowFundingPlan,
+  buildPrivateEscrowRefundCalldata,
+  buildPrivateEscrowReleaseCalldata,
+  normalizePrivateEscrowFelt,
+  normalizePrivateEscrowSettlement,
+  type PrivateEscrowFundingInput,
+  type PrivateEscrowSettlementInput,
+} from "./private-escrow-settlement.js";
 import {
   serializeProofSubmission,
   submitWithFreshProof,
@@ -114,6 +126,18 @@ export interface WithdrawInput {
 export interface PrivatePaymentMemoInput extends PrivateTransferInput {
   helperAddress: string | bigint;
   encryptedMemoCalldata: readonly (string | bigint)[];
+}
+
+export type FundPrivateEscrowCustodyInput = PrivateEscrowFundingInput;
+
+export interface ReleasePrivateEscrowCustodyInput
+  extends Omit<PrivateEscrowSettlementInput, "secret"> {
+  releaseSecret: string | bigint;
+}
+
+export interface RefundPrivateEscrowCustodyInput
+  extends Omit<PrivateEscrowSettlementInput, "secret"> {
+  refundSecret: string | bigint;
 }
 
 export class OfficialPrivacyFlows {
@@ -275,6 +299,72 @@ export class OfficialPrivacyFlows {
     );
   }
 
+  async fundPrivateEscrowCustody(
+    input: FundPrivateEscrowCustodyInput,
+  ): Promise<PrivateFlowResult> {
+    const plan = buildPrivateEscrowFundingPlan(input);
+    const notes = await this.#selectMatureNotes(plan.token, plan.amount);
+
+    return this.#executePrivate(
+      (provingBlockId) =>
+        this.#context.transfers
+          .build({ registry: this.#context.registry, registryConst: true })
+          .with(plan.token)
+          .inputs(...notes)
+          .withdraw({
+            recipient: plan.settlementAddress,
+            amount: plan.amount,
+          })
+          .surplusTo(this.#account)
+          .done()
+          .invoke(({ withdrawals }) => {
+            assertExactPrivateEscrowWithdrawal(withdrawals, plan);
+            return {
+              contractAddress: toContractAddress(plan.settlementAddress),
+              calldata: [...plan.calldata],
+            };
+          })
+          .execute({ provingBlockId }),
+      async (warnings) => this.#confirmLinkageWarnings(warnings),
+    );
+  }
+
+  async releasePrivateEscrowCustody(
+    input: ReleasePrivateEscrowCustodyInput,
+  ): Promise<PrivateFlowResult> {
+    const settlement = normalizePrivateEscrowSettlement({
+      ...input,
+      secret: input.releaseSecret,
+    });
+
+    return this.#settlePrivateEscrowCustody(
+      settlement,
+      (outputNoteId) => buildPrivateEscrowReleaseCalldata({
+        custodyCommitment: settlement.custodyCommitment,
+        releaseSecret: settlement.secret,
+        outputNoteId,
+      }),
+    );
+  }
+
+  async refundPrivateEscrowCustody(
+    input: RefundPrivateEscrowCustodyInput,
+  ): Promise<PrivateFlowResult> {
+    const settlement = normalizePrivateEscrowSettlement({
+      ...input,
+      secret: input.refundSecret,
+    });
+
+    return this.#settlePrivateEscrowCustody(
+      settlement,
+      (outputNoteId) => buildPrivateEscrowRefundCalldata({
+        custodyCommitment: settlement.custodyCommitment,
+        refundSecret: settlement.secret,
+        outputNoteId,
+      }),
+    );
+  }
+
   async payWithEncryptedMemo(input: PrivatePaymentMemoInput): Promise<PrivateFlowResult> {
     assertPositiveAmount(input.amount, "amount");
     if (input.encryptedMemoCalldata.length === 0) {
@@ -332,6 +422,38 @@ export class OfficialPrivacyFlows {
     const receipt = await this.#waitForAccepted(transactionHash, "APPROVAL_NOT_CONFIRMED");
     this.#stage("approval-confirmed");
     return { required: true, transactionHash, receipt };
+  }
+
+  async #settlePrivateEscrowCustody(
+    settlement: ReturnType<typeof normalizePrivateEscrowSettlement>,
+    buildCalldata: (outputNoteId: string | bigint) => readonly bigint[],
+  ): Promise<PrivateFlowResult> {
+    return this.#executePrivate((provingBlockId) =>
+      this.#context.transfers
+        .build({
+          registry: this.#context.registry,
+          registryConst: true,
+          autoDiscover: { channels: "refresh" },
+          autoSetup: true,
+        })
+        .with(settlement.token)
+        .transfer({
+          recipient: settlement.recipient,
+          amount: Open,
+        })
+        .done()
+        .invoke(({ openNotes }) => {
+          const outputNoteId = exactPrivateEscrowOutputNoteId(
+            openNotes,
+            settlement.token,
+          );
+          return {
+            contractAddress: toContractAddress(settlement.settlementAddress),
+            calldata: [...buildCalldata(outputNoteId)],
+          };
+        })
+        .execute({ provingBlockId }),
+    );
   }
 
   async #selectMatureNotes(token: bigint, amount: bigint): Promise<Note[]> {
@@ -470,6 +592,49 @@ function normalizeFelt(value: string | bigint, label: string): bigint {
     throw new VeilPrivacyError("DECRYPTION_FAILED", `${label} is outside the Starknet felt range.`);
   }
   return felt;
+}
+
+function assertExactPrivateEscrowWithdrawal(
+  withdrawals: readonly InvokeWithdrawal[],
+  expected: {
+    settlementAddress: bigint;
+    token: bigint;
+    amount: bigint;
+  },
+): void {
+  const matches = withdrawals.filter((withdrawal) =>
+    withdrawal.recipient === expected.settlementAddress
+    && withdrawal.token === expected.token
+    && withdrawal.amount === expected.amount,
+  );
+
+  if (withdrawals.length !== 1 || matches.length !== 1) {
+    throw new VeilPrivacyError(
+      "INVALID_ESCROW_STATE",
+      "Private escrow funding requires exactly one matching withdrawal.",
+    );
+  }
+}
+
+function exactPrivateEscrowOutputNoteId(
+  openNotes: readonly InvokeOpenNote[],
+  token: bigint,
+): bigint {
+  const matches = openNotes.filter((note) => note.token === token);
+  if (openNotes.length !== 1 || matches.length !== 1) {
+    throw new VeilPrivacyError(
+      "INVALID_ESCROW_STATE",
+      "Private escrow settlement requires exactly one matching official Open output.",
+    );
+  }
+  return normalizePrivateEscrowFelt(
+    String(matches[0]!.noteId),
+    "outputNoteId",
+  );
+}
+
+function toContractAddress(value: bigint): string {
+  return `0x${value.toString(16)}`;
 }
 
 function extractSubmittedHash(value: string | { transactionHash: string }): string {
