@@ -64,7 +64,7 @@ export function createWalletService({
     try {
       const client = new Strk20WalletApiClient({
         wallet,
-        allowedInvokeContracts: [config.helperAddress, config.offerAddress, config.escrowAddress].filter(Boolean),
+        allowedInvokeContracts: [config.helperAddress, config.offerAddress].filter(Boolean),
         ...(detected.apiVersion ? { apiVersion: detected.apiVersion } : {}),
       });
       const balances = await client.balances(assets.map((asset) => asset.contractAddress));

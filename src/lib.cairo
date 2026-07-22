@@ -123,13 +123,6 @@ pub mod private_escrow_settlement {
     }
 }
 
-#[path("../contracts/events/escrow_events.cairo")]
-pub mod escrow_events;
-
-pub mod events {
-    pub use crate::escrow_events;
-}
-
 #[path("../contracts/interfaces/privacy_pool_types.cairo")]
 pub mod privacy_pool_types;
 

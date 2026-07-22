@@ -235,7 +235,6 @@ Contract yang tetap menjadi tanggung jawab tim VEIL:
 
 - `VeilChannelHelper`;
 - `VeilOffer`;
-- legacy `VeilEscrow`;
 - `VeilClaimEscrow`;
 - `VeilDealEscrow`;
 - `VeilSettlementHelper`;
@@ -412,7 +411,6 @@ Nama di atas hanya konteks. Agent wajib memakai path aktual.
 
 - `VeilChannelHelper`;
 - `VeilOffer`;
-- `VeilEscrow`;
 - interface;
 - event;
 - state machine;
@@ -587,7 +585,7 @@ Agent harus membuat tabel berdasarkan audit:
 | Message | `DirectHelperTransport` submits client-encrypted ciphertext directly | `StarknetPrivacyPoolTransport` + one allowlisted InvokeExternal is prepared | legacy locally verified; canonical live unverified |
 | Offer | deployed legacy address is runtime-disabled | hardened source exists but current Cairo build is broken and deployment is unverified | blocked |
 | Payment memo | direct encrypted memo is not a private payment | `financial-flows.ts::payWithEncryptedMemo` composes transfer + invoke locally | canonical E2E blocked |
-| Escrow coordination | legacy escrow/settlement runtime is disabled | separate Claim/Deal source exists; no verified live deployment/E2E | blocked |
+| Escrow coordination | removed public runtime | private Claim and custody-settlement sources exist; no verified live deployment/E2E | blocked |
 | Discovery | bounded application indexer by opaque tag | official discovery adapter/private registry foundation exists | partial; durable indexer missing |
 | Encryption | browser Direct ECDH fallback | wallet-owned privacy state plus domain-separated application encryption | local only/live unverified |
 | Proof | no Pool proof on direct helper path | official SDK/Wallet API proof boundary is prepared | no canonical live evidence |

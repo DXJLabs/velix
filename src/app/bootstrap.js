@@ -61,9 +61,6 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
 
   const api = {
     getVeilClient: () => veilClient,
-    // Public Offer/Escrow contracts are intentionally unavailable in the
-    // production runtime. Private flows use the official Privacy SDK path.
-    getOnchainContracts: () => null,
     setElementText: (selector, value) => setElementText(dom.document, selector, value),
     setLucideIcon,
     transactionExplorerUrl,

@@ -10,7 +10,7 @@ import {
 } from "./escrow-feature.js";
 import { hideEscrowReviewModal, renderEscrowView, showEscrowReviewModal } from "../../ui/escrow/escrow-ui.js";
 
-export function createEscrowController({
+export function buildEscrowController({
   state,
   document,
   escrowReviewModal,
@@ -28,16 +28,11 @@ export function createEscrowController({
   renderChainMeta,
   setLucideIcon,
   iconRefresh,
-  safeSubmit,
-  getVeilClient,
-  getOnchainContracts,
-  awardReward,
   addLocalItem,
   confirmedTimelineMeta,
   renderWorkflowProgress,
   showScreen,
   showToast,
-  settlementProofMeta,
   resetDealStateForPendingChannel,
   saveLocalChannels,
   renderConversationList,
@@ -46,6 +41,8 @@ export function createEscrowController({
   fallbackFundingTime = () => Date.now(),
   now = () => Date.now(),
 }) {
+  const publicEscrowRemovedMessage = "Public escrow execution has been removed. Use the private escrow workflow.";
+
   function renderEscrowTransactionSummary() {
     const fee = estimateVeilFee("escrow", currentDealOfferAmount(), {
       shielded: false,
@@ -94,21 +91,6 @@ export function createEscrowController({
 
   function renderEscrowProofMeta(item) {
     return hasRealTransactionHash(item) ? renderChainMeta(item) : "";
-  }
-
-  function requireOnchainContracts() {
-    const contracts = getOnchainContracts();
-    if (!contracts) {
-      throw new Error("Connect a Starknet wallet before submitting escrow transactions.");
-    }
-    return contracts;
-  }
-
-  function requireEscrowId() {
-    if (!state.latestEscrowId) {
-      throw new Error("Create an onchain escrow before funding or settling.");
-    }
-    return state.latestEscrowId;
   }
 
   function escrowDepositComplete(key) {
@@ -175,189 +157,24 @@ export function createEscrowController({
     });
   }
 
-  async function submitEscrowDeposit(key) {
-    const isBuyer = key === "buyer";
-    if (!isBuyer && !escrowDepositComplete("buyer")) {
-      showToast("Buyer deposit is required first.");
-      renderEscrow();
-      return;
-    }
-    if (!(key in state.escrowDeposits) || escrowDepositComplete(key)) {
-      renderEscrow();
-      return;
-    }
-    const amount = currentDealOfferAmount();
-    const title = isBuyer ? `Alice deposited ${amount}` : "Bob locked Rights Package NFT";
-    const subtitle = isBuyer ? `${amount} locked in escrow.` : "Asset secured in escrow.";
-    const submitted = await safeSubmit(
-      () => {
-        const contracts = requireOnchainContracts();
-        const escrowId = requireEscrowId();
-        return isBuyer
-          ? contracts.confirmBuyerDeposit({ escrowId })
-          : contracts.confirmSellerDeposit({ escrowId });
-      },
-      {
-        type: "inline",
-        title,
-        subtitle,
-        actor: isBuyer ? "Alice" : "Bob",
-        time: now(),
-        mode: chatDisplayMode,
-      },
-      isBuyer ? "Buyer deposit recorded." : "Seller asset locked.",
-      {
-        actionLabel: isBuyer ? "Locking Funds" : "Locking Asset",
-        successTitle: isBuyer ? "Public Escrow Deposit Confirmed" : "On-chain Asset Locked",
-        successSubtitle: isBuyer ? `${amount} locked in escrow.` : "Rights Package NFT locked in escrow.",
-      },
-    );
-    if (!submitted) return;
-    state.escrowDeposits[key] = true;
-    if (isBuyer) awardReward("escrowCreated");
-    currentChannel().status = "Escrow Active";
-    currentChannel().last = title;
-    if (!isBuyer && escrowFundingComplete()) {
-      addLocalItem({
-        type: "inline",
-        title: "Escrow funded",
-        subtitle: "Waiting for approvals.",
-        actor: "System",
-        time: now(),
-        ...confirmedTimelineMeta(`${state.channelId}-escrow-funded`, 30),
-      });
-    }
-    renderEscrow();
-    renderWorkflowProgress();
+  async function submitEscrowDeposit() {
+    showToast(publicEscrowRemovedMessage);
+    return false;
   }
 
-  async function approveEscrowRelease(key) {
-    if (!escrowFundingComplete()) {
-      showToast("Complete escrow funding first.");
-      renderEscrow();
-      return;
-    }
-    if (!(key in state.escrowConfirmations) || escrowApprovalComplete(key)) {
-      renderEscrow();
-      return;
-    }
-    const isBuyer = key === "buyer";
-    const title = state.escrowActivated ? (isBuyer ? "Alice approved release" : "Bob approved release") : "Escrow activated";
-    const submitted = await safeSubmit(
-      () => state.escrowActivated
-        ? Promise.resolve({
-          transactionHash: "",
-          status: "confirmed",
-          timestamp: now(),
-        })
-        : requireOnchainContracts().activateEscrow({ escrowId: requireEscrowId() }),
-      {
-        type: "inline",
-        title,
-        subtitle: state.escrowActivated ? "Release approval recorded" : "Both deposits are active on VeilEscrow.",
-        actor: isBuyer ? "Alice" : "Bob",
-        time: now(),
-        mode: chatDisplayMode,
-      },
-      state.escrowActivated ? "Approval recorded." : "Escrow activated.",
-      {
-        actionLabel: state.escrowActivated ? "Approving Release" : "Activating Escrow",
-        successTitle: state.escrowActivated ? "Release Approved" : "Escrow Activated",
-        successSubtitle: state.escrowActivated ? `${title}.` : "Escrow is active on Starknet Sepolia.",
-      },
-    );
-    if (!submitted) return;
-    state.escrowActivated = true;
-    state.escrowConfirmations = { buyer: true, seller: true };
-    currentChannel().status = "Escrow Active";
-    currentChannel().last = title;
-    renderEscrow();
-    renderWorkflowProgress();
+  async function approveEscrowRelease() {
+    showToast(publicEscrowRemovedMessage);
+    return false;
   }
 
   async function releaseEscrow() {
-    if (!escrowFundingComplete() && !state.escrowReleased) {
-      showToast("Complete escrow funding first.");
-      renderEscrow();
-      return;
-    }
-    if (!escrowConfirmationsComplete() && !state.escrowReleased) {
-      showToast("Complete confirmations before release.");
-      renderEscrow();
-      return;
-    }
-    const amount = currentDealOfferAmount();
-    const submitted = await safeSubmit(
-      () => requireOnchainContracts().settleEscrow({ escrowId: requireEscrowId() }),
-      {
-        type: "inline",
-        title: "Assets released",
-        subtitle: `${amount} to Bob. NFT to Alice.`,
-        actor: "System",
-        time: now(),
-      },
-      "Assets released.",
-      {
-        actionLabel: "Releasing Assets",
-        successTitle: "Assets Released",
-        successSubtitle: `${amount} to Bob. NFT to Alice.`,
-      },
-    );
-    if (!submitted) return;
-    awardReward("escrowCompleted");
-    state.escrowReleased = true;
-    currentChannel().status = "Deal Completed";
-    currentChannel().last = "Secure deal completed";
-    addLocalItem({
-      type: "inline",
-      title: "Settlement transaction confirmed",
-      subtitle: "No separate cryptographic settlement proof was generated.",
-      actor: "System",
-      time: now() + 1,
-      ...confirmedTimelineMeta(`${state.channelId}-settlement-proof`, 39),
-    });
-    addLocalItem({
-      type: "inline",
-      title: "Secure deal completed.",
-      subtitle: "Encrypted channel remains available.",
-      actor: "System",
-      channelActions: true,
-      time: now() + 3,
-      ...confirmedTimelineMeta(`${state.channelId}-secure-channel-open`, 41),
-    });
-    renderEscrow();
-    renderWorkflowProgress();
-    showScreen("settlement");
+    showToast(publicEscrowRemovedMessage);
+    return false;
   }
 
   async function cancelEscrow() {
-    if (state.escrowReleased) {
-      showToast("Escrow is already settled.");
-      return;
-    }
-    const submitted = await safeSubmit(
-      () => requireOnchainContracts().cancelEscrow({ escrowId: requireEscrowId() }),
-      {
-        type: "inline",
-        title: "Escrow cancelled",
-        subtitle: "Escrow cancellation recorded on VeilEscrow.",
-        actor: "System",
-        time: now(),
-      },
-      "Escrow cancelled.",
-      {
-        actionLabel: "Cancelling Escrow",
-        successTitle: "Escrow Cancelled",
-        successSubtitle: "Cancellation recorded on Starknet Sepolia.",
-      },
-    );
-    if (!submitted) return;
-    state.escrowDisputeOpened = true;
-    state.escrowReleased = false;
-    currentChannel().status = "Cancelled";
-    currentChannel().last = "Escrow cancelled";
-    renderEscrow();
-    renderWorkflowProgress();
+    showToast(publicEscrowRemovedMessage);
+    return false;
   }
 
   function continueCompletedChannel() {

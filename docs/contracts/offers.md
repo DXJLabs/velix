@@ -107,7 +107,7 @@ Current direct rules include:
 - current taker may reject,
 - current maker may cancel,
 - expiration may be materialized after the deadline,
-- only the configured `VeilEscrow` contract may bind an accepted Offer to an Escrow.
+- only the configured trusted coordinator may bind an accepted Offer to an Escrow.
 
 ---
 
@@ -118,7 +118,7 @@ After an Offer is accepted:
 ```text
 OfferStatus::Accepted
         ↓
-VeilEscrow creates escrow
+Trusted coordinator creates escrow
         ↓
 VeilOffer.mark_converted_to_escrow(...)
         ↓
@@ -155,12 +155,12 @@ Offer ↔ Escrow
 | `reject_offer(offer_id)` | Rejects an Open, non-expired Offer. |
 | `cancel_offer(offer_id)` | Allows the maker to cancel an Open Offer. |
 | `expire_offer(offer_id)` | Materializes expiry after the configured deadline. |
-| `mark_converted_to_escrow(offer_id, escrow_id)` | Trusted VeilEscrow-only binding. |
+| `mark_converted_to_escrow(offer_id, escrow_id)` | Trusted-coordinator-only binding. |
 | `get_offer(offer_id)` | Returns complete Offer state. |
 | `get_offer_status(offer_id)` | Returns current Offer status. |
 | `get_escrow_id(offer_id)` | Returns the bound Escrow id. |
 | `get_offer_count()` | Returns total Offer records. |
-| `get_escrow_contract()` | Returns the trusted VeilEscrow contract. |
+| `get_escrow_contract()` | Returns the trusted coordinator contract. |
 
 ---
 

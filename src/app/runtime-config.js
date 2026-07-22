@@ -290,22 +290,6 @@ export function createRuntimeConfig(
     throw new Error("VITE_VEIL_OFFER_ADDRESS is disabled: the deployed offer predates the hardened VeilOffer source.");
   }
   const offerAddress = "";
-  const configuredEscrowAddress = String(env.VITE_VEIL_ESCROW_ADDRESS || "").trim();
-  if (configuredEscrowAddress) {
-    throw new Error("VITE_VEIL_ESCROW_ADDRESS is disabled: the deployed legacy escrow is not a safe DealEscrow.");
-  }
-  const escrowAddress = "";
-  const unsafeSettlementEnabled = readBooleanEnv(
-    env.VITE_VEIL_UNSAFE_SETTLEMENT_ENABLED,
-    "VITE_VEIL_UNSAFE_SETTLEMENT_ENABLED",
-    false,
-  );
-  const configuredSettlementAddress = String(env.VITE_VEIL_SETTLEMENT_HELPER_ADDRESS || "").trim();
-  if (unsafeSettlementEnabled || configuredSettlementAddress) {
-    throw new Error("The deployed VeilSettlementHelper is security-disabled and cannot be enabled by environment flags.");
-  }
-  const settlementHelperAddress = "";
-
   const configuredRpcUrl = env.VITE_STARKNET_RPC_URL || "";
   const rpcUrl = assertRpcNamespace(
     reliableRpcUrl(configuredRpcUrl, defaultStarknetRpcUrl(expectedChainId)),
@@ -348,9 +332,6 @@ export function createRuntimeConfig(
     removedPrivyLoginMethods: configuredPrivyLoginMethods.filter((method) => !privyLoginMethods.includes(method)),
     helperAddress,
     offerAddress,
-    escrowAddress,
-    settlementHelperAddress,
-    unsafeSettlementEnabled,
     privacyPoolAddress,
     encryptionKeyRegistryAddress,
     demoCounterpartyAddress,

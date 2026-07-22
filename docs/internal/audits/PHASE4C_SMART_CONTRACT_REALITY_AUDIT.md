@@ -35,7 +35,6 @@ Offer dan Escrow tidak dapat dikompilasi karena tipe dan modul yang hilang.
 |---|---|---|
 | VeilChannelHelper | `contracts/messaging/veil_channel_helper.cairo` | Sumber ada; tidak dideploy; mismatch dengan helper lama |
 | VeilOffer | `contracts/offers/veil_offer.cairo` | Build-blocked; unverified; bukan produksi kanonikal |
-| VeilEscrow | `contracts/escrow/veil_escrow.cairo` | Legacy; dinonaktifkan; bukan kandidat produksi |
 | VeilDealEscrow | `contracts/deal_escrow/veil_deal_escrow.cairo` | Kandidat rekber tunggal; perlu redesign + audit |
 | VeilClaimEscrow | `contracts/claim_escrow/veil_claim_escrow.cairo` | Eksperimental; dinonaktifkan; di luar MVP |
 | VeilSettlementHelper | `contracts/settlement/veil_settlement_helper.cairo` | Sumber ada |
@@ -48,9 +47,7 @@ Offer dan Escrow tidak dapat dikompilasi karena tipe dan modul yang hilang.
 | Blokir | Dampak |
 |---|---|
 | `contracts/offers/offer_payload.cairo` TIDAK ADA — direferensikan di `src/lib.cairo:90` | Mencegah kompilasi modul offers |
-| `OfferStatus` enum TIDAK ADA di `offer_types.cairo` | VeilEscrow.create_escrow tidak dapat dikompilasi |
 | `Offer` struct TIDAK ADA di `offer_types.cairo` | Escrow creation tidak memiliki tipe Offer untuk di-query |
-| `IVeilOfferDispatcher` / `IVeilOfferDispatcherTrait` TIDAK ADA di `offer_interfaces.cairo` | VeilEscrow tidak dapat dispatch ke VeilOffer |
 
 **Full Cairo build: TIDAK TERVERIFIKASI.**
 
@@ -178,7 +175,6 @@ Deal fields bersifat publik: `buyer`, `seller`, `payment_token`, `payment_amount
 |---|---|
 | **VeilChannelHelper** | Kandidat sumber messaging kanonikal saat ini; belum dideploy; mismatch sumber/deploy dengan helper lama; isolated build belum diverifikasi; audit keamanan belum lengkap |
 | **VeilOffer** | Build-blocked; unverified; bukan produksi kanonikal |
-| **VeilEscrow** | Legacy; dinonaktifkan; bukan kandidat produksi |
 | **VeilDealEscrow** | Kandidat rekber tunggal saat ini; memerlukan redesign, verifikasi build, pengujian, dan tinjauan keamanan sebelum deployment; field deal publik berarti tidak boleh digambarkan sebagai eksekusi rekber privat |
 | **VeilClaimEscrow** | Eksperimental; dinonaktifkan; di luar MVP; desain secret-in-calldata tidak kompatibel dengan ekspektasi klaim privat |
 
@@ -269,12 +265,6 @@ FASE_5_STARTED=false
 | `contracts/offers/offer_validation.cairo` | Fungsi validasi offer |
 | `contracts/offers/offer_commitments.cairo` | Komputasi commitment offer |
 | `contracts/offers/offer_events.cairo` | OfferActionCommitted event |
-| `contracts/escrow/veil_escrow.cairo` | Sumber escrow legacy |
-| `contracts/escrow/escrow_types.cairo` | Escrow struct + EscrowStatus |
-| `contracts/escrow/escrow_creation_actions.cairo` | Logika pembuatan escrow |
-| `contracts/escrow/escrow_payload.cairo` | Payload escrow |
-| `contracts/escrow/escrow_validation.cairo` | Validasi escrow |
-| `contracts/escrow/escrow_commitments.cairo` | Komitmen escrow |
 | `contracts/deal_escrow/veil_deal_escrow.cairo` | Sumber deal escrow |
 | `contracts/deal_escrow/deal_escrow_types.cairo` | Deal struct + DealStatus |
 | `contracts/deal_escrow/deal_escrow_errors.cairo` | Error deal escrow |
@@ -297,8 +287,6 @@ FASE_5_STARTED=false
 | `contracts/utils/time.cairo` | Fungsi waktu |
 | `contracts/utils/validation.cairo` | Fungsi validasi umum |
 | `contracts/interfaces/privacy_pool_types.cairo` | OpenNoteDeposit |
-| `contracts/interfaces/escrow_interfaces.cairo` | Interface escrow umum |
-| `contracts/events/escrow_events.cairo` | Event escrow legacy |
 
 ---
 

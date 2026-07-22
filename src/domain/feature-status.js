@@ -44,8 +44,6 @@ export const VEIL_PHASE1_FEATURE_STATUS = createFeatureStatusModel({
   pureShieldedChat: FEATURE_STATUS.UNVERIFIED,
   officialPrivacyTransport: FEATURE_STATUS.BLOCKED,
   offer: FEATURE_STATUS.DISABLED,
-  legacyEscrow: FEATURE_STATUS.DISABLED,
-  unsafeSettlement: FEATURE_STATUS.DISABLED,
   paymaster: FEATURE_STATUS.DISABLED,
 });
 

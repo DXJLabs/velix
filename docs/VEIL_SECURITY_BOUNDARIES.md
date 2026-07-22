@@ -162,7 +162,7 @@ Every VEIL-owned contract must enforce:
 
 For token/protocol output, snapshot the balance, execute, calculate and validate the actual nonzero delta, perform checked conversion, approve exactly, and construct the exact private output. Never trust a frontend-supplied amount without checking funds received.
 
-`VeilClaimEscrow` must store only a domain-separated commitment, reject duplicates, mark a valid claim before the external interaction, and prevent double claim. `VeilDealEscrow` must enforce roles, lifecycle, exact accounting, one-time settlement/refund, and expiry independently. A legacy generic `VeilEscrow` does not satisfy either boundary by name alone.
+`VeilClaimEscrow` must store only a domain-separated commitment, reject duplicates, mark a valid claim before the external interaction, and prevent double claim. Private custody settlement must enforce roles, lifecycle, exact accounting, one-time settlement/refund, and expiry independently.
 
 ## 9. Logging, Telemetry, and Error Handling
 

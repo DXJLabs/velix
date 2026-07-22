@@ -37,10 +37,6 @@ describe("Phase 1 Sepolia configuration lock", () => {
     );
     assert.equal(VEIL_SEPOLIA_CONFIG.privacyPool.compatibility, "legacy-pre-screening");
     assert.equal(VEIL_SEPOLIA_CONFIG.privacyPool.screeningCapable, false);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.unsafeSettlementHelper.runtimeDefault, false);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.unsafeSettlementHelper.unsafe, true);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.legacyEscrow.runtimeDefault, false);
-    assert.equal(VEIL_SEPOLIA_CONFIG.contracts.legacyEscrow.unsafeOrIncomplete, true);
     assert.equal(VEIL_SEPOLIA_CONFIG.contracts.offer.runtimeDefault, false);
     assert.equal(VEIL_SEPOLIA_CONFIG.contracts.offer.unsafeOrIncomplete, true);
 
@@ -96,9 +92,6 @@ describe("Phase 1 Sepolia configuration lock", () => {
   it("keeps unsafe and unverified runtime routes off by default", () => {
     const defaults = createRuntimeConfig({}, "");
     assert.equal(defaults.expectedChainId, "SN_SEPOLIA");
-    assert.equal(defaults.settlementHelperAddress, "");
-    assert.equal(defaults.unsafeSettlementEnabled, false);
-    assert.equal(defaults.escrowAddress, "");
     assert.equal(defaults.offerAddress, "");
     assert.equal(defaults.avnuPaymasterEnabled, false);
     assert.equal(defaults.onchainPayloads, false);
@@ -124,19 +117,6 @@ describe("Phase 1 Sepolia configuration lock", () => {
     const explicitlyEnabled = createRuntimeConfig({ VITE_VEIL_ONCHAIN_PAYLOADS: "true" }, "");
     assert.equal(explicitlyEnabled.onchainPayloads, true);
     assert.equal(explicitlyEnabled.avnuPaymasterEnabled, false);
-    assert.equal(explicitlyEnabled.settlementHelperAddress, "");
-
-    assert.throws(() => createRuntimeConfig({
-      VITE_VEIL_SETTLEMENT_HELPER_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.unsafeSettlementHelper.address,
-    }, ""), /security-disabled/);
-    assert.throws(
-      () => createRuntimeConfig({ VITE_VEIL_UNSAFE_SETTLEMENT_ENABLED: "true" }, ""),
-      /security-disabled/,
-    );
-    assert.throws(
-      () => createRuntimeConfig({ VITE_VEIL_ESCROW_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.legacyEscrow.address }, ""),
-      /not a safe DealEscrow/,
-    );
     assert.throws(
       () => createRuntimeConfig({ VITE_VEIL_OFFER_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.offer.address }, ""),
       /predates the hardened VeilOffer/,
@@ -214,7 +194,6 @@ describe("Phase 1 privacy capability and feature status models", () => {
     assert.equal(VEIL_PHASE1_FEATURE_STATUS.shield, FEATURE_STATUS.BLOCKED);
     assert.equal(VEIL_PHASE1_FEATURE_STATUS.unshield, FEATURE_STATUS.DISABLED);
     assert.equal(VEIL_PHASE1_FEATURE_STATUS.officialPrivacyTransport, FEATURE_STATUS.BLOCKED);
-    assert.equal(VEIL_PHASE1_FEATURE_STATUS.unsafeSettlement, FEATURE_STATUS.DISABLED);
     assert.equal(Object.isFrozen(VEIL_PHASE1_FEATURE_STATUS), true);
     assert.equal(
       VEIL_PHASE3_PRIVACY_TRANSPORT_STATE.legacy.status,
