@@ -27,7 +27,6 @@ import {
   TransactionFinalityStatus,
 } from "starknet-proof";
 import type {
-  Call as ProofCall,
   UniversalDetails as ProofExecutionDetails,
   waitForTransactionOptions,
 } from "starknet-proof";
@@ -77,8 +76,6 @@ export const SHIELDED_MESSAGE_PROOF_RESULT =
   "OFFICIAL_SDK_SHIELDED_MESSAGE_PROOF_GENERATED";
 export const SHIELDED_MESSAGE_SUBMISSION_RESULT =
   "OFFICIAL_SDK_SHIELDED_MESSAGE_SUBMITTED_ONCHAIN";
-export const SHIELDED_MESSAGE_SUBMISSION_PREFLIGHT_VALID =
-  "OFFICIAL_SDK_SHIELDED_MESSAGE_SUBMISSION_PREFLIGHT_VALID";
 export const MESSAGE_EVENT_FOUND = "MESSAGE_EVENT_FOUND";
 export const MESSAGE_STORAGE_VERIFIED = "MESSAGE_STORAGE_VERIFIED";
 export const LOCAL_DECRYPT_VERIFIED = "LOCAL_DECRYPT_VERIFIED";
@@ -103,7 +100,6 @@ export interface VeilShieldedMessagePocConfig {
   helperClassHash: bigint;
   generateProof: boolean;
   submitOnchain: boolean;
-  preflightSubmission: boolean;
   summaryPath: string;
 }
 
@@ -153,11 +149,12 @@ export interface ShieldedMessageProofExecutor {
 
 type ProofResourceBounds = NonNullable<ProofExecutionDetails["resourceBounds"]>;
 
-export interface ShieldedMessageSubmissionAccount extends RegisterSubmissionAccount {
-  estimateInvokeFee(
-    call: ProofCall,
-    details: ProofExecutionDetails,
-  ): Promise<{ resourceBounds: ProofResourceBounds }>;
+export interface ShieldedMessageGasPriceProvider {
+  getGasPrices(blockIdentifier: number): Promise<{
+    l1DataGasPrice: bigint;
+    l1GasPrice: bigint;
+    l2GasPrice: bigint;
+  }>;
 }
 
 export interface VeilShieldedMessageSummary {
@@ -189,8 +186,8 @@ export interface VeilShieldedMessagePocDependencies {
     rpcUrl: string;
     accountAddress: bigint;
     accountPrivateKey: string;
-  }) => ShieldedMessageSubmissionAccount;
-  preflightSubmission?: typeof preflightShieldedMessageSubmission;
+  }) => RegisterSubmissionAccount;
+  createSubmissionResourceBounds?: typeof createShieldedMessageResourceBounds;
   accountPreflightPath?: string;
 }
 
@@ -260,10 +257,6 @@ export function loadVeilShieldedMessagePocConfig(
     env.VEIL_POC_SUBMIT_ONCHAIN,
     "VEIL_POC_SUBMIT_ONCHAIN",
   );
-  const preflightSubmission = parseBooleanEnv(
-    env.VEIL_POC_PREFLIGHT_SUBMISSION,
-    "VEIL_POC_PREFLIGHT_SUBMISSION",
-  );
   if (submitOnchain && !generateProof) {
     throw new Error("submit_onchain=true requires generate_proof=true.");
   }
@@ -287,7 +280,6 @@ export function loadVeilShieldedMessagePocConfig(
     ),
     generateProof,
     submitOnchain,
-    preflightSubmission,
     summaryPath: env.VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH?.trim()
       || DEFAULT_SHIELDED_MESSAGE_SUMMARY_PATH,
   });
@@ -546,7 +538,7 @@ export function createOfficialShieldedMessageSubmissionAccount(config: {
   rpcUrl: string;
   accountAddress: bigint;
   accountPrivateKey: string;
-}): ShieldedMessageSubmissionAccount {
+}): RegisterSubmissionAccount {
   const provider = new ProofRpcProvider({ nodeUrl: config.rpcUrl });
   const account = new ProofAccount({
     provider,
@@ -554,9 +546,6 @@ export function createOfficialShieldedMessageSubmissionAccount(config: {
     signer: config.accountPrivateKey,
   });
   return {
-    estimateInvokeFee(call, details) {
-      return account.estimateInvokeFee(call, details);
-    },
     execute(call, details) {
       return account.execute(call, details);
     },
@@ -566,39 +555,45 @@ export function createOfficialShieldedMessageSubmissionAccount(config: {
   };
 }
 
-export async function preflightShieldedMessageSubmission(input: {
-  proofInput: ShieldedMessageProofExecutorInput;
-  account: ShieldedMessageSubmissionAccount;
+const SHIELDED_MESSAGE_L1_DATA_GAS_MAX_AMOUNT = 4_096n;
+const SHIELDED_MESSAGE_L2_GAS_MAX_AMOUNT = 145_000_000n;
+const GAS_PRICE_MARGIN_NUMERATOR = 3n;
+const GAS_PRICE_MARGIN_DENOMINATOR = 2n;
+
+function addGasPriceMargin(price: bigint): bigint {
+  if (price <= 0n) throw new Error("Starknet gas price must be positive.");
+  return (
+    price * GAS_PRICE_MARGIN_NUMERATOR
+    + GAS_PRICE_MARGIN_DENOMINATOR
+    - 1n
+  ) / GAS_PRICE_MARGIN_DENOMINATOR;
+}
+
+export async function createShieldedMessageResourceBounds(input: {
   rpcUrl: string;
-  simulate?: () => Promise<ExecuteResult>;
+  provingBlockId: number;
+  provider?: ShieldedMessageGasPriceProvider;
 }): Promise<ProofResourceBounds> {
-  const simulateOptions = {
-    provider: new ProofRpcProvider({ nodeUrl: input.rpcUrl }),
-    validateSignature: false,
-    // The installed SDK forwards this runtime option to CallMockProofProvider,
-    // even though 0.14.3-rc.2 omits it from the public SimulateOptions type.
-    provingBlockId: input.proofInput.provingBlockId,
+  const provider = input.provider
+    ?? new ProofRpcProvider({ nodeUrl: input.rpcUrl });
+  const prices = await provider.getGasPrices(input.provingBlockId);
+  // The successful register transaction consumed 78,617,920 L2 gas and 576
+  // L1-data gas. These caps leave headroom for the helper's ciphertext writes
+  // while keeping the maximum fee bounded for the funded CI account.
+  return {
+    l1_gas: {
+      max_amount: 0n,
+      max_price_per_unit: addGasPriceMargin(prices.l1GasPrice),
+    },
+    l1_data_gas: {
+      max_amount: SHIELDED_MESSAGE_L1_DATA_GAS_MAX_AMOUNT,
+      max_price_per_unit: addGasPriceMargin(prices.l1DataGasPrice),
+    },
+    l2_gas: {
+      max_amount: SHIELDED_MESSAGE_L2_GAS_MAX_AMOUNT,
+      max_price_per_unit: addGasPriceMargin(prices.l2GasPrice),
+    },
   };
-  const simulated = input.simulate
-    ? await input.simulate()
-    : await createOfficialShieldedMessageBuilder(input.proofInput)
-      .simulate(simulateOptions);
-  const { call, proof } = simulated.callAndProof;
-  const proofFacts = Array.isArray(proof.proofFacts) ? proof.proofFacts : [];
-  if (proofFacts.length === 0) {
-    throw new Error("Shielded-message simulation returned no proof facts.");
-  }
-  const estimate = await input.account.estimateInvokeFee(call as ProofCall, {
-    tip: 0n,
-    proofFacts,
-    ...(typeof proof.data === "string" && proof.data.length > 0
-      ? { proof: proof.data }
-      : {}),
-  });
-  if (!estimate.resourceBounds) {
-    throw new Error("Shielded-message simulation returned no resource bounds.");
-  }
-  return estimate.resourceBounds;
 }
 
 export function createShieldedMessageProofSummary(input: {
@@ -913,7 +908,7 @@ export async function runVeilOfficialShieldedMessagePoc(
   });
   const prepared = await prepareShieldedMessage({ config });
   await verifyLocalShieldedMessageDecrypt({ prepared });
-  if (!config.generateProof && !config.preflightSubmission) {
+  if (!config.generateProof) {
     console.log(SHIELDED_MESSAGE_IDENTITY_VALID);
     console.log(SHIELDED_MESSAGE_DRY_RUN_VALID);
     console.log(LOCAL_DECRYPT_VERIFIED);
@@ -934,27 +929,21 @@ export async function runVeilOfficialShieldedMessagePoc(
     prepared,
     provider,
   };
-  let submissionAccount: ShieldedMessageSubmissionAccount | undefined;
+  let submissionAccount: RegisterSubmissionAccount | undefined;
   let submissionResourceBounds: ProofResourceBounds | undefined;
-  if (config.submitOnchain || config.preflightSubmission) {
+  if (config.submitOnchain) {
     submissionAccount = (dependencies.createSubmissionAccount
       ?? createOfficialShieldedMessageSubmissionAccount)({
       rpcUrl: config.rpcUrl,
       accountAddress: config.identity.accountAddress,
       accountPrivateKey: config.identity.accountPrivateKey,
     });
-    submissionResourceBounds = await (dependencies.preflightSubmission
-      ?? preflightShieldedMessageSubmission)({
-      proofInput,
-      account: submissionAccount,
+    submissionResourceBounds = await (dependencies.createSubmissionResourceBounds
+      ?? createShieldedMessageResourceBounds)({
       rpcUrl: config.rpcUrl,
+      provingBlockId,
     });
-    console.log(SHIELDED_MESSAGE_SUBMISSION_PREFLIGHT_VALID);
-  }
-  if (config.preflightSubmission && !config.generateProof) {
-    console.log(SHIELDED_MESSAGE_IDENTITY_VALID);
-    console.log(LOCAL_DECRYPT_VERIFIED);
-    return null;
+    console.log("SHIELDED_MESSAGE_RESOURCE_BOUNDS_VALID");
   }
   const result = await (dependencies.proofExecutor
     ?? officialShieldedMessageProofExecutor).execute({
@@ -971,7 +960,7 @@ export async function runVeilOfficialShieldedMessagePoc(
   console.log("proof_present: true");
   if (config.submitOnchain) {
     if (!submissionAccount || !submissionResourceBounds) {
-      throw new Error("Shielded-message submission preflight result is missing.");
+      throw new Error("Shielded-message submission resource bounds are missing.");
     }
     summary = await submitShieldedMessage({
       config,

@@ -106,22 +106,6 @@ jobs:
           packages/veil-sdk/tests/veil-poc-identity.test.mjs
           packages/veil-sdk/tests/veil-official-shielded-message-poc.test.mjs
 
-      - name: Preflight shielded-message submission without a transaction
-        if: ${{ inputs.submit_onchain }}
-        shell: bash
-        env:
-          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
-          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
-          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          VEIL_POC_GENERATE_PROOF: "false"
-          VEIL_POC_SUBMIT_ONCHAIN: "false"
-          VEIL_POC_PREFLIGHT_SUBMISSION: "true"
-        run: |
-          set -euo pipefail
-          node --experimental-strip-types \
-            tools/veil-official-shielded-message-poc.ts
-
       - name: Checkout official sequencer release
         if: ${{ inputs.generate_proof }}
         uses: actions/checkout@v4

@@ -13,9 +13,9 @@ import {
   assertMessageCommittedEvent,
   assertShieldedMessageSummarySafe,
   createShieldedMessageProofSummary,
+  createShieldedMessageResourceBounds,
   loadVeilShieldedMessagePocConfig,
   officialShieldedMessageProofExecutor,
-  preflightShieldedMessageSubmission,
   prepareShieldedMessage,
   runVeilOfficialShieldedMessagePoc,
   submitShieldedMessage,
@@ -391,31 +391,28 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
   assert.equal(summary.localDecryptVerified, true);
 });
 
-test("submission preflight uses official simulation facts and sends no transaction", async () => {
-  let estimateDetails;
-  let transactions = 0;
-  const bounds = await preflightShieldedMessageSubmission({
-    proofInput: {},
+test("submission resource bounds use the finalized block and no fee simulation", async () => {
+  const reads = [];
+  const bounds = await createShieldedMessageResourceBounds({
     rpcUrl: "https://rpc.example",
-    simulate: async () => executeResult(["0x2", "0x3"]),
-    account: {
-      async estimateInvokeFee(_call, details) {
-        estimateDetails = details;
-        return { resourceBounds: RESOURCE_BOUNDS };
-      },
-      async execute() {
-        transactions += 1;
-        throw new Error("must not submit during preflight");
-      },
-      async waitForTransaction() {
-        throw new Error("must not wait during preflight");
+    provingBlockId: PROVING_BLOCK,
+    provider: {
+      async getGasPrices(blockIdentifier) {
+        reads.push(blockIdentifier);
+        return {
+          l1DataGasPrice: 10n,
+          l1GasPrice: 20n,
+          l2GasPrice: 30n,
+        };
       },
     },
   });
-  assert.deepEqual(bounds, RESOURCE_BOUNDS);
-  assert.equal(estimateDetails.tip, 0n);
-  assert.deepEqual(estimateDetails.proofFacts, ["0x2", "0x3"]);
-  assert.equal(transactions, 0);
+  assert.deepEqual(reads, [PROVING_BLOCK]);
+  assert.deepEqual(bounds, {
+    l1_gas: { max_amount: 0n, max_price_per_unit: 30n },
+    l1_data_gas: { max_amount: 4096n, max_price_per_unit: 15n },
+    l2_gas: { max_amount: 145000000n, max_price_per_unit: 45n },
+  });
 });
 
 test("proofFacts empty is never sent", async () => {

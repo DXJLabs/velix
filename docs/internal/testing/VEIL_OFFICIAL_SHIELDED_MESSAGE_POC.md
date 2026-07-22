@@ -16,12 +16,13 @@ Run modes:
   `callAndProof.call`, require `ACCEPTED_ON_L2` and `SUCCEEDED`, verify the
   `MessageCommitted` event and stored ciphertext chunks, then decrypt locally.
 
-For the submission mode, the workflow first uses the Official SDK `simulate()`
-path to validate the same `OpenChannel` plus `InvokeExternal` shape and obtain
-resource bounds without sending a transaction. This check runs before the
-transaction-prover image is built. The real proof submission reuses those
-bounds, so `account.execute()` does not repeat a failing proof-bearing fee
-estimate. A failed simulation stops the workflow before proving.
+For the submission mode, the PoC supplies bounded resource limits derived from
+the successful register transaction's measured gas usage and gas prices at the
+same finalized block used for proving. A 50% price margin is applied. This
+avoids the account client's automatic proof-bearing fee estimate; the deployed
+Privacy Pool rejects the SDK's call-only `compile_actions` simulation with
+`SENDER_NOT_AUTHENTICATED`. No simulation fallback or direct helper call is
+used.
 
 A successful submission verdict proves a real Official Privacy Pool
 `InvokeExternal` call reached `VeilChannelHelper.privacy_invoke`, the real proof
