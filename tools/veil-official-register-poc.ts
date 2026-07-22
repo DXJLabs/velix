@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import {
   MAX_VIEWING_KEY,
+  ProvingServiceError,
   ProvingServiceProofProvider,
   createEmptyRegistry,
   createPrivateTransfers,
@@ -23,6 +24,30 @@ export const DEFAULT_POOL_ADDRESS =
 export const ISOLATED_POC_SIGNER_LABEL =
   "standard starknet.js signer for isolated VEIL PoC";
 export const REGISTER_PROOF_RESULT = "OFFICIAL_SDK_REGISTER_PROOF_GENERATED";
+export const DEFAULT_PROVING_ERROR_PATH = "veil-proving-error.json";
+
+const REDACTED = "[REDACTED]";
+const REDACTED_URL = "[REDACTED_URL]";
+const TRUNCATED = "[TRUNCATED]";
+const MAX_DIAGNOSTIC_DEPTH = 4;
+const MAX_DIAGNOSTIC_ARRAY_ITEMS = 20;
+const MAX_DIAGNOSTIC_OBJECT_ENTRIES = 40;
+const MAX_DIAGNOSTIC_STRING_LENGTH = 2_048;
+
+export type SafeDiagnosticValue =
+  | null
+  | boolean
+  | number
+  | string
+  | SafeDiagnosticValue[]
+  | { [key: string]: SafeDiagnosticValue };
+
+export interface SafeProvingServiceErrorDiagnostic {
+  name: string;
+  code: number;
+  message: string;
+  data: SafeDiagnosticValue;
+}
 
 type DiscoveryMethod =
   | "discoverNotes"
@@ -105,6 +130,140 @@ export interface VeilOfficialRegisterPocConfig {
   provingBlockId: ProvingBlockId;
   provingBlockIdLabel: string;
   summaryPath: string;
+}
+
+function isSensitiveDiagnosticKey(key: string): boolean {
+  const normalized = key.replace(/[^a-z0-9]/giu, "").toLowerCase();
+  const sensitiveFragments = [
+    "accesskey",
+    "apikey",
+    "authorization",
+    "calldata",
+    "invocation",
+    "password",
+    "payload",
+    "privatekey",
+    "registry",
+    "registrysecret",
+    "rpcurl",
+    "secret",
+    "signature",
+    "signedtransaction",
+    "token",
+    "transaction",
+    "transactionpayload",
+    "viewingkey",
+  ];
+  return normalized === "key"
+    || normalized.endsWith("key")
+    || sensitiveFragments.some((fragment) => normalized.includes(fragment));
+}
+
+export function sanitizeProvingDiagnosticText(value: string): string {
+  const sanitized = value
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>]+/giu, REDACTED_URL)
+    .replace(/\b(?:bearer|basic)\s+[a-z0-9._~+/=-]+/giu, REDACTED)
+    .replace(
+      /\b(?:calldata|invocation|payload|registry|signed[_ -]?transaction|transaction(?:[_ -]?payload)?)\b["']?\s*[:=][\s\S]*/giu,
+      REDACTED,
+    )
+    .replace(
+      /\b(?:api[_ -]?key|authorization|password|private[_ -]?key|registry(?:[_ -]?secret)?|secret|signature|token|viewing[_ -]?key)\b["']?\s*[:=]\s*["']?[^\s,;}\]]+/giu,
+      REDACTED,
+    )
+    .replace(/\b0x[0-9a-f]{32,}\b/giu, REDACTED)
+    .replace(/\b[0-9a-f]{40,}\b/giu, REDACTED)
+    .replace(/\b[0-9]{40,}\b/gu, REDACTED);
+
+  return sanitized.length > MAX_DIAGNOSTIC_STRING_LENGTH
+    ? `${sanitized.slice(0, MAX_DIAGNOSTIC_STRING_LENGTH)}${TRUNCATED}`
+    : sanitized;
+}
+
+function parseJsonDiagnosticString(value: string): unknown {
+  const trimmed = value.trim();
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return value;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+export function sanitizeProvingDiagnosticData(
+  value: unknown,
+  depth = 0,
+): SafeDiagnosticValue {
+  if (depth > MAX_DIAGNOSTIC_DEPTH) return TRUNCATED;
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") {
+    const parsed = parseJsonDiagnosticString(value);
+    return parsed === value
+      ? sanitizeProvingDiagnosticText(value)
+      : sanitizeProvingDiagnosticData(parsed, depth + 1);
+  }
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : String(value);
+  if (typeof value === "bigint") {
+    return sanitizeProvingDiagnosticText(value.toString());
+  }
+  if (value instanceof Uint8Array) return REDACTED;
+  if (Array.isArray(value)) {
+    const items = value
+      .slice(0, MAX_DIAGNOSTIC_ARRAY_ITEMS)
+      .map((item) => sanitizeProvingDiagnosticData(item, depth + 1));
+    if (value.length > MAX_DIAGNOSTIC_ARRAY_ITEMS) items.push(TRUNCATED);
+    return items;
+  }
+  if (typeof value === "object") {
+    const safe: Record<string, SafeDiagnosticValue> = {};
+    const entries = Object.entries(value).slice(0, MAX_DIAGNOSTIC_OBJECT_ENTRIES);
+    let redacted = false;
+    for (const [key, entryValue] of entries) {
+      if (isSensitiveDiagnosticKey(key)) {
+        redacted = true;
+        continue;
+      }
+      safe[sanitizeProvingDiagnosticText(key)] = sanitizeProvingDiagnosticData(
+        entryValue,
+        depth + 1,
+      );
+    }
+    if (redacted) safe.redacted = true;
+    if (Object.keys(value).length > MAX_DIAGNOSTIC_OBJECT_ENTRIES) {
+      safe.truncated = true;
+    }
+    return safe;
+  }
+  return sanitizeProvingDiagnosticText(String(value));
+}
+
+export function formatSafeProvingServiceError(
+  error: ProvingServiceError,
+): SafeProvingServiceErrorDiagnostic {
+  const dataSuffix = error.data ? `: ${error.data}` : "";
+  const rpcMessage = dataSuffix && error.message.endsWith(dataSuffix)
+    ? error.message.slice(0, -dataSuffix.length)
+    : error.message;
+
+  return {
+    name: sanitizeProvingDiagnosticText(error.name),
+    code: error.code,
+    message: sanitizeProvingDiagnosticText(rpcMessage),
+    data: sanitizeProvingDiagnosticData(error.data),
+  };
+}
+
+export async function writeSafeProvingServiceError(
+  error: ProvingServiceError,
+  outputPath = DEFAULT_PROVING_ERROR_PATH,
+): Promise<SafeProvingServiceErrorDiagnostic> {
+  const diagnostic = formatSafeProvingServiceError(error);
+  await writeFile(outputPath, `${JSON.stringify(diagnostic, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  return diagnostic;
 }
 
 function requiredEnv(
@@ -355,7 +514,12 @@ if (isMainModule()) {
     const summary = await runVeilOfficialRegisterPoc();
     console.log(JSON.stringify(summary));
   } catch (error) {
-    if (error instanceof LocalDiscoveryAccessError) {
+    if (error instanceof ProvingServiceError) {
+      const errorPath = process.env.VEIL_POC_ERROR_PATH?.trim()
+        || DEFAULT_PROVING_ERROR_PATH;
+      const diagnostic = await writeSafeProvingServiceError(error, errorPath);
+      console.error(JSON.stringify(diagnostic));
+    } else if (error instanceof LocalDiscoveryAccessError) {
       console.error(`VEIL register PoC failed closed; discovery method called: ${error.method}`);
     } else if (error instanceof Error && /required|must be/u.test(error.message)) {
       console.error(`VEIL register PoC configuration failed: ${error.message}`);
