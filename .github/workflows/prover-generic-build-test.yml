@@ -1,4 +1,4 @@
-name: Build Generic STWO Prover and Run VEIL Proof
+name: Build Generic STWO Prover and Run Official SDK VEIL Proof
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-and-prove:
-    name: Build Prover and Generate VEIL Proof
+    name: Build Prover and Generate Official SDK VEIL Proof
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -57,6 +57,7 @@ jobs:
           ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
           CONFIGURED_BLOCK_ID: ${{ secrets.VEIL_POC_BLOCK_ID }}
+          INDEXER_URL: ${{ secrets.VEIL_POC_INDEXER_URL }}
         run: |
           set -euo pipefail
 
@@ -76,6 +77,11 @@ jobs:
 
           if [ -z "${USER_ADDRESS:-}" ]; then
             echo "Secret VEIL_POC_ACCOUNT_ADDRESS belum tersedia."
+            exit 1
+          fi
+
+          if [ -z "${INDEXER_URL:-}" ]; then
+            echo "Secret VEIL_POC_INDEXER_URL belum tersedia."
             exit 1
           fi
 
@@ -99,6 +105,7 @@ jobs:
           echo "RPC secret tersedia."
           echo "Private key secret tersedia."
           echo "Account address tersedia."
+          echo "Indexer URL tersedia."
           echo "Block ID tersedia."
           echo "Nilai rahasia tidak ditampilkan."
 
@@ -251,52 +258,43 @@ jobs:
 
           echo
           echo "================================"
-          echo "VEIL POC FILES"
+          echo "VEIL OFFICIAL SDK PROOF FILES"
           echo "================================"
 
           test -f tools/privacy-set-viewing-key-poc/Cargo.toml
           test -f tools/privacy-set-viewing-key-poc/src/main.rs
           test -f tools/privacy-set-viewing-key-poc/src/lib.rs
+          test -f tools/privacy-prover-smoke-test.ts
 
           find tools/privacy-set-viewing-key-poc \
             -maxdepth 2 \
             -type f \
             -print
 
+          echo "Rust PoC is retained as EXPERIMENTAL / NOT FOR PRODUCTION."
+
       # ============================================================
-      # 4. PREPARE AND BUILD VEIL RUST POC
-      # Build before starting prover to reduce concurrent RAM usage.
+      # 4. PREPARE OFFICIAL PRIVACY SDK SMOKE TEST
       # ============================================================
 
-      - name: Prepare Rust toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: velix/package-lock.json
 
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-
-          rustc --version
-          cargo --version
-
-      - name: Build and test VEIL SetViewingKey PoC
+      - name: Install pinned VEIL and official Privacy SDK dependencies
         shell: bash
         run: |
           set -euxo pipefail
 
           cd velix
 
-          cargo test \
-            --release \
-            --manifest-path \
-            tools/privacy-set-viewing-key-poc/Cargo.toml \
-            2>&1 | tee ../veil-poc-test.log
+          npm ci 2>&1 | tee ../veil-sdk-install.log
 
-          cargo build \
-            --release \
-            --manifest-path \
-            tools/privacy-set-viewing-key-poc/Cargo.toml \
-            2>&1 | tee ../veil-poc-build.log
+          npm --prefix packages/veil-sdk run build \
+            2>&1 | tee ../veil-sdk-build.log
 
       # ============================================================
       # 5. CHECKOUT OFFICIAL STARKWARE SEQUENCER SOURCE
@@ -432,7 +430,7 @@ jobs:
             -e MAX_CONNECTIONS="2" \
             -e COMPILED_CLASS_CACHE_SIZE="50" \
             -e PREFETCH_STATE="false" \
-            -e RUST_LOG="debug" \
+            -e RUST_LOG="info" \
             -e RUST_BACKTRACE="1" \
             -e RUST_LIB_BACKTRACE="1" \
             veil-transaction-prover:x86-64-v3
@@ -454,7 +452,9 @@ jobs:
               echo "Container berhenti sebelum server siap."
 
               docker logs veil-generic-prover \
-                2>&1 | tee generic-startup.log
+                2>&1 \
+                | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+                | tee generic-startup.log
 
               echo "result=CONTAINER_STOPPED" \
                 >> "$GITHUB_OUTPUT"
@@ -494,7 +494,9 @@ jobs:
           done
 
           docker logs veil-generic-prover \
-            2>&1 | tee generic-startup.log
+            2>&1 \
+            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+            | tee generic-startup.log
 
           if [ "$READY" -ne 1 ]; then
             echo "Prover tidak siap dalam 120 detik."
@@ -509,43 +511,20 @@ jobs:
           echo "exit_status=0" >> "$GITHUB_OUTPUT"
 
       # ============================================================
-      # 9. VALIDATE VEIL POC AGAINST RPC
+      # 9. RUN REAL PROOF THROUGH THE OFFICIAL PRIVACY SDK
       # ============================================================
 
-      - name: Validate VEIL PoC RPC compatibility
-        shell: bash
-        env:
-          VEIL_POC_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
-        run: |
-          set -euo pipefail
-
-          cd velix
-
-          cargo run \
-            --release \
-            --manifest-path \
-            tools/privacy-set-viewing-key-poc/Cargo.toml \
-            -- \
-            validate-rpc \
-            > ../veil-validate-rpc.log \
-            2>&1
-
-          cat ../veil-validate-rpc.log
-
-      # ============================================================
-      # 10. RUN REAL VEIL SETVIEWINGKEY PROOF
-      # ============================================================
-
-      - name: Run VEIL SetViewingKey real proof
+      - name: Run official SDK SetViewingKey real proof
         id: veil-proof
         shell: bash
         env:
           VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_INDEXER_URL: ${{ secrets.VEIL_POC_INDEXER_URL }}
           VEIL_POC_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
-          VEIL_POC_OUT_DIR: ${{ github.workspace }}/veil-proof-artifacts
-          USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_RESOLVED_BLOCK_ID: ${{ env.VEIL_POC_RESOLVED_BLOCK_ID }}
+          VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-proof-summary.json
         run: |
           set -euo pipefail
 
@@ -559,22 +538,27 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${USER_ADDRESS:-}" ]; then
+          if [ -z "${VEIL_POC_ACCOUNT_ADDRESS:-}" ]; then
             echo "VEIL_POC_ACCOUNT_ADDRESS kosong."
             echo "result=ADDRESS_MISSING" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
-          mkdir -p "$VEIL_POC_OUT_DIR"
+          if [ -z "${VEIL_POC_INDEXER_URL:-}" ]; then
+            echo "VEIL_POC_INDEXER_URL kosong."
+            echo "result=INDEXER_MISSING" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
 
           echo "================================"
-          echo "REAL VEIL STWO PROOF"
+          echo "OFFICIAL SDK REAL VEIL STWO PROOF"
           echo "================================"
           echo "User address tersedia."
           echo "Block ID tersedia."
-          echo "Nonce: $VEIL_POC_NONCE"
           echo "Prover: localhost:3000"
-          echo "Private key: hidden"
+          echo "Ready/custom signer: configured"
+          echo "IndexerDiscoveryProvider: configured"
+          echo "Private key, signature, viewing key, dan secret tidak ditampilkan."
 
           START_TIME="$(date +%s)"
 
@@ -586,16 +570,9 @@ jobs:
             /usr/bin/time \
               -v \
               -o ../veil-proof-time.log \
-            cargo run \
-              --release \
-              --manifest-path \
-              tools/privacy-set-viewing-key-poc/Cargo.toml \
-              -- \
-              prove \
-              --user-address "$USER_ADDRESS" \
-              --block-id "$VEIL_POC_RESOLVED_BLOCK_ID" \
-              --nonce "$VEIL_POC_NONCE" \
-            > /dev/null \
+            node --experimental-strip-types \
+              tools/privacy-prover-smoke-test.ts \
+            > ../veil-sdk-proof.log \
             2> ../veil-proof-stderr.log
 
           PROOF_STATUS=$?
@@ -614,6 +591,12 @@ jobs:
           echo "================================"
 
           cat ../veil-proof-time.log || true
+
+          awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+            ../veil-proof-stderr.log \
+            > ../veil-proof-stderr.sanitized.log
+          mv ../veil-proof-stderr.sanitized.log \
+            ../veil-proof-stderr.log
 
           if [ -s ../veil-proof-stderr.log ]; then
             echo
@@ -637,7 +620,9 @@ jobs:
             echo "================================"
 
             docker logs --tail 500 veil-generic-prover \
-              2>&1 | tee ../prover-failure.log || true
+              2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+              | tee ../prover-failure.log || true
 
             echo "Proof melewati batas waktu 300 menit."
             echo "result=PROOF_TIMEOUT" >> "$GITHUB_OUTPUT"
@@ -651,7 +636,9 @@ jobs:
             echo "================================"
 
             docker logs --tail 500 veil-generic-prover \
-              2>&1 | tee ../prover-failure.log || true
+              2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+              | tee ../prover-failure.log || true
 
             echo "Proof dihentikan, kemungkinan kehabisan RAM."
             echo "result=PROOF_KILLED_OR_OOM" \
@@ -666,94 +653,61 @@ jobs:
             echo "================================"
 
             docker logs --tail 500 veil-generic-prover \
-              2>&1 | tee ../prover-failure.log || true
+              2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+              | tee ../prover-failure.log || true
 
             echo "Proof gagal dengan status $PROOF_STATUS."
             echo "result=PROOF_FAILED" >> "$GITHUB_OUTPUT"
             exit "$PROOF_STATUS"
           fi
 
-          PROOF_FILE="$VEIL_POC_OUT_DIR/prove-response.json"
           SUMMARY_FILE="$GITHUB_WORKSPACE/veil-proof-summary.json"
 
-          if [ ! -s "$PROOF_FILE" ]; then
-            echo "prove-response.json tidak dibuat atau kosong."
+          if [ ! -s "$SUMMARY_FILE" ]; then
+            echo "veil-proof-summary.json tidak dibuat atau kosong."
             echo "result=PROOF_ARTIFACT_MISSING" \
               >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
-          python3 \
-            - "$PROOF_FILE" "$SUMMARY_FILE" \
-            <<'PY'
+          python3 - "$SUMMARY_FILE" <<'PY'
           import json
           import sys
 
-          proof_path = sys.argv[1]
-          summary_path = sys.argv[2]
+          summary_path = sys.argv[1]
+          with open(summary_path, "r", encoding="utf-8") as file:
+              summary = json.load(file)
 
-          with open(proof_path, "r", encoding="utf-8") as file:
-              result = json.load(file)
-
-          proof = result.get("proof", "")
-          proof_facts = result.get("proof_facts", [])
-          messages = result.get("l2_to_l1_messages", [])
-          facts_info = result.get("proof_facts_info", {})
-
-          summary = {
-              "proof_present": bool(proof),
-              "proof_length": len(proof),
-              "proof_facts_count": len(proof_facts),
-              "l2_to_l1_messages_count": len(messages),
-              "proof_facts_info": facts_info,
-          }
-
-          if not proof:
+          if summary.get("result") != "OFFICIAL_SDK_REAL_PROOF_GENERATED":
+              raise SystemExit("Official SDK tidak melaporkan real proof")
+          if not summary.get("proofPresent"):
               raise SystemExit("Prover menghasilkan proof kosong")
-
-          if not proof_facts:
-              raise SystemExit(
-                  "Prover menghasilkan proof_facts kosong"
-              )
-
-          with open(
-              summary_path,
-              "w",
-              encoding="utf-8",
-          ) as file:
-              json.dump(
-                  summary,
-                  file,
-                  indent=2,
-                  ensure_ascii=False,
-              )
+          if summary.get("proofFactsCount", 0) < 1:
+              raise SystemExit("Prover menghasilkan proof facts kosong")
+          if summary.get("l2ToL1OutputCount", 0) < 1:
+              raise SystemExit("Prover menghasilkan output kosong")
 
           print("================================")
-          print("VEIL REAL PROOF VERDICT")
+          print("VEIL OFFICIAL SDK REAL PROOF VERDICT")
           print("================================")
-          print("proof_present:", summary["proof_present"])
-          print("proof_length:", summary["proof_length"])
-          print(
-              "proof_facts_count:",
-              summary["proof_facts_count"],
-          )
-          print(
-              "l2_to_l1_messages_count:",
-              summary["l2_to_l1_messages_count"],
-          )
+          print("proof_present:", summary["proofPresent"])
+          print("proof_length:", summary["proofLength"])
+          print("proof_facts_count:", summary["proofFactsCount"])
+          print("l2_to_l1_output_count:", summary["l2ToL1OutputCount"])
           PY
 
           echo
           cat "$SUMMARY_FILE"
 
           echo
-          echo "result=REAL_PROOF_GENERATED" \
+          echo "result=OFFICIAL_SDK_REAL_PROOF_GENERATED" \
             >> "$GITHUB_OUTPUT"
 
           echo "exit_status=0" >> "$GITHUB_OUTPUT"
 
       # ============================================================
-      # 11. FINAL VERDICT
+      # 10. FINAL VERDICT
       # ============================================================
 
       - name: Final verdict
@@ -796,7 +750,7 @@ jobs:
           echo "${{ steps.veil-proof.outputs.duration_seconds }} seconds"
 
       # ============================================================
-      # 12. SAVE LOGS AND STOP PROVER
+      # 11. SAVE LOGS AND STOP PROVER
       # ============================================================
 
       - name: Save prover logs and stop container
@@ -806,8 +760,9 @@ jobs:
           echo "Saving final prover logs..."
 
           docker logs veil-generic-prover \
-            > generic-startup.log \
-            2>&1 || true
+            2>&1 \
+            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret)/' \
+            > generic-startup.log || true
 
           echo "Saving final Docker statistics..."
 
@@ -829,14 +784,14 @@ jobs:
             veil-generic-prover || true
 
       # ============================================================
-      # 13. UPLOAD RESULTS
+      # 12. UPLOAD RESULTS
       # ============================================================
 
       - name: Upload prover and VEIL proof artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: veil-stwo-real-proof-results
+          name: veil-official-sdk-stwo-real-proof-results
           path: |
             generic-build.log
             generic-startup.log
@@ -846,12 +801,11 @@ jobs:
             spec-version-response.json
             veil-chain-id-response.json
             veil-nonce-response.json
-            veil-poc-test.log
-            veil-poc-build.log
-            veil-validate-rpc.log
+            veil-sdk-install.log
+            veil-sdk-build.log
+            veil-sdk-proof.log
             veil-proof-time.log
             veil-proof-stderr.log
             veil-proof-summary.json
-            veil-proof-artifacts/
           if-no-files-found: ignore
           retention-days: 7
