@@ -1,15 +1,15 @@
-name: Validate Official SDK Shielded Message Identity
+name: Run Official SDK Shielded Message PoC
 
 on:
   workflow_dispatch:
     inputs:
       generate_proof:
-        description: Reserved for the shielded-message proof phase after identity registration
+        description: Generate a real shielded-message proof with the self-hosted STWO prover
         required: true
         type: boolean
         default: false
       submit_onchain:
-        description: Reserved for on-chain submission after proof generation is enabled
+        description: Submit and verify the proved shielded message on Starknet Sepolia
         required: true
         type: boolean
         default: false
@@ -18,10 +18,13 @@ permissions:
   contents: read
 
 jobs:
-  validate-identity:
-    name: Validate persistent VEIL PoC identity
+  shielded-message:
+    name: Prove or Submit Official SDK Shielded Message
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 360
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_BUILD_JOBS: "2"
 
     steps:
       - name: Validate shielded-message workflow inputs
@@ -31,7 +34,6 @@ jobs:
           SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
         run: |
           set -euo pipefail
-
           if [ "$SUBMIT_ONCHAIN" = "true" ] && [ "$GENERATE_PROOF" != "true" ]; then
             echo "submit_onchain=true requires generate_proof=true."
             exit 1
@@ -46,15 +48,13 @@ jobs:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
         run: |
           set -euo pipefail
-
           for name in ACCOUNT_ADDRESS ACCOUNT_PRIVATE_KEY VIEWING_KEY RPC_URL; do
             if [ -z "${!name:-}" ]; then
               echo "A required VEIL shielded-message identity secret is unavailable."
               exit 1
             fi
           done
-
-          echo "VEIL shielded-message identity secrets are configured; values are not displayed."
+          echo "VEIL identity configuration is present; secret values are not displayed."
 
       - name: Checkout VEIL source
         uses: actions/checkout@v4
@@ -65,17 +65,260 @@ jobs:
           node-version: "24"
           cache: npm
 
+      - name: Set up Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.15.2"
+
+      - name: Set up compatible Starknet Foundry
+        uses: foundry-rs/setup-snfoundry@v6.0.0
+        with:
+          starknet-foundry-version: "0.56.0"
+
+      - name: Show pinned toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          scarb --version
+          snforge --version
+          sncast --version
+          node --version
+          npm --version
+
       - name: Install pinned dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Build VEIL SDK
+        run: npm run build:sdk
+
+      - name: Build Cairo contracts
+        run: scarb build
+
+      - name: Run Cairo contract tests
+        run: snforge test
 
       - name: Typecheck PoC tools
         run: npm run typecheck:poc
 
-      - name: Verify registered persistent identity read-only
+      - name: Run shielded-message PoC tests
+        run: >-
+          node --experimental-strip-types --test
+          packages/veil-sdk/tests/veil-poc-identity.test.mjs
+          packages/veil-sdk/tests/veil-official-shielded-message-poc.test.mjs
+
+      - name: Checkout official sequencer release
+        if: ${{ inputs.generate_proof }}
+        uses: actions/checkout@v4
+        with:
+          repository: starkware-libs/sequencer
+          ref: PRIVACY-0.14.3-RC.2
+          path: sequencer
+          fetch-depth: 1
+
+      - name: Free disk space for prover build
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          docker system prune -af || true
+          df -h /
+
+      - name: Set up Docker Buildx
+        if: ${{ inputs.generate_proof }}
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Build x86-64-v3 transaction prover
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd sequencer
+          docker buildx build \
+            --load \
+            --progress=plain \
+            --build-arg BUILD_MODE=release \
+            --build-arg TARGET_CPU=x86-64-v3 \
+            -f crates/starknet_transaction_prover/Dockerfile \
+            -t veil-transaction-prover:x86-64-v3 \
+            . 2>&1 | tee ../veil-shielded-prover-build.log
+
+      - name: Start self-hosted prover
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          docker rm -f veil-shielded-prover 2>/dev/null || true
+          docker run -d \
+            --name veil-shielded-prover \
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            veil-transaction-prover:x86-64-v3
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Running}}' veil-shielded-prover 2>/dev/null || true)" != "true" ]; then
+              echo "The prover container stopped before becoming ready."
+              exit 1
+            fi
+            response="$(curl -sS --connect-timeout 2 --max-time 5 \
+              -X POST http://127.0.0.1:3000 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+              2>/dev/null || true)"
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+            echo "Waiting for prover: $attempt/60"
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "The prover did not become ready."
+            exit 1
+          fi
+          echo "Self-hosted prover is ready."
+
+      - name: Run Official SDK shielded-message PoC
+        id: shielded-message
+        shell: bash
         env:
           VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
           VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
-        run: node --experimental-strip-types tools/veil-official-shielded-message-poc.ts
+          VEIL_POC_GENERATE_PROOF: ${{ inputs.generate_proof }}
+          VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+          VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH: ${{ github.workspace }}/veil-shielded-message-summary.json
+        run: |
+          set -euo pipefail
+          rm -f "$GITHUB_WORKSPACE/veil-shielded-message-summary.json"
+          timeout 300m node --experimental-strip-types \
+            tools/veil-official-shielded-message-poc.ts
+
+      - name: Validate safe shielded-message summary
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+        run: |
+          set -euo pipefail
+          summary="$GITHUB_WORKSPACE/veil-shielded-message-summary.json"
+          if [ ! -s "$summary" ]; then
+            echo "veil-shielded-message-summary.json is missing or empty."
+            exit 1
+          fi
+          node --input-type=module - "$summary" "$SUBMIT_ONCHAIN" <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const [summaryPath, submitOnchain] = process.argv.slice(2);
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          const expectedKeys = [
+            "result",
+            "network",
+            "helperAddress",
+            "privacyPoolAddress",
+            "accountAddress",
+            "provingBlockId",
+            "transactionHash",
+            "finalityStatus",
+            "executionStatus",
+            "messageLocator",
+            "payloadCommitment",
+            "ciphertextChunkCount",
+            "proofPresent",
+            "proofFactsCount",
+            "messageEventFound",
+            "storageVerified",
+            "localDecryptVerified",
+          ];
+          if (JSON.stringify(Object.keys(summary)) !== JSON.stringify(expectedKeys)) {
+            throw new Error("Shielded-message summary contains unexpected fields.");
+          }
+          if (summary.network !== "SN_SEPOLIA" || summary.proofPresent !== true) {
+            throw new Error("Shielded-message proof verdict is invalid.");
+          }
+          if (!/^0x[0-9a-f]+$/u.test(summary.helperAddress)
+              || !/^0x[0-9a-f]+$/u.test(summary.privacyPoolAddress)
+              || !/^0x[0-9a-f]+$/u.test(summary.accountAddress)
+              || !/^0x[0-9a-f]+$/u.test(summary.messageLocator)
+              || !/^0x[0-9a-f]+$/u.test(summary.payloadCommitment)) {
+            throw new Error("Shielded-message summary contains an invalid felt.");
+          }
+          if (!Number.isSafeInteger(summary.ciphertextChunkCount)
+              || summary.ciphertextChunkCount < 1
+              || summary.ciphertextChunkCount > 64) {
+            throw new Error("Shielded-message chunk count is invalid.");
+          }
+          if (submitOnchain === "true") {
+            if (summary.result !== "OFFICIAL_SDK_SHIELDED_MESSAGE_SUBMITTED_ONCHAIN"
+                || summary.finalityStatus !== "ACCEPTED_ON_L2"
+                || summary.executionStatus !== "SUCCEEDED"
+                || !summary.transactionHash
+                || summary.messageEventFound !== true
+                || summary.storageVerified !== true
+                || summary.localDecryptVerified !== true) {
+              throw new Error("Shielded-message on-chain verification failed.");
+            }
+          } else if (summary.result !== "OFFICIAL_SDK_SHIELDED_MESSAGE_PROOF_GENERATED"
+              || summary.transactionHash !== null
+              || summary.finalityStatus !== "NOT_SUBMITTED"
+              || summary.executionStatus !== "NOT_SUBMITTED"
+              || summary.localDecryptVerified !== true) {
+            throw new Error("Shielded-message proof-only summary is invalid.");
+          }
+          console.log(summary.result);
+          if (summary.transactionHash) console.log("transaction hash:", summary.transactionHash);
+          console.log(summary.finalityStatus);
+          console.log(summary.executionStatus);
+          NODE
+
+      - name: Ensure dry-run emitted no proof artifact
+        if: ${{ !inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e "$GITHUB_WORKSPACE/veil-shielded-message-summary.json" ]; then
+            echo "Proof summary was created while generate_proof=false."
+            exit 1
+          fi
+          echo "OFFICIAL_SDK_SHIELDED_MESSAGE_DRY_RUN_VALID"
+
+      - name: Save redacted prover logs and stop container
+        if: ${{ always() && inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker logs veil-shielded-prover 2>&1 \
+            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+            > veil-shielded-prover.log || true
+          docker rm -f veil-shielded-prover || true
+
+      - name: Upload safe shielded-message artifact
+        if: ${{ always() && inputs.generate_proof }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-official-shielded-message-results
+          path: |
+            veil-account-preflight.json
+            veil-shielded-message-summary.json
+            veil-shielded-prover.log
+            veil-shielded-prover-build.log
+          if-no-files-found: ignore
+          retention-days: 7
