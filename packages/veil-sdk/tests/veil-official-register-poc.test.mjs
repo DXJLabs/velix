@@ -12,6 +12,7 @@ import {
   LocalFailClosedDiscoveryProvider,
   assertAccountPreflightArtifactSafe,
   assertRegisterProofSummarySafe,
+  assertRegisterSubmissionSummarySafe,
   createOfficialProvingProvider,
   createRegisterProofSummary,
   createStandardPocSigner,
@@ -21,6 +22,7 @@ import {
   runVeilOfficialRegisterPoc,
   sanitizeProvingDiagnosticData,
   sanitizeProvingDiagnosticText,
+  submitOfficialRegisterCall,
   writeSafeProvingServiceError,
 } from "../../../tools/veil-official-register-poc.ts";
 import {
@@ -121,6 +123,34 @@ function mockProvingProvider(options = {}) {
         proofFacts: ["0x2"],
       };
     },
+  };
+}
+
+function registerExecuteResult(proofFacts = ["0x2"]) {
+  return {
+    callAndProof: {
+      call: {
+        contractAddress: "0x456",
+        entrypoint: "apply_actions",
+        calldata: ["0xabc"],
+      },
+      proof: {
+        data: Buffer.from("isolated-register-proof").toString("base64"),
+        output: ["0x1"],
+        proofFacts,
+      },
+    },
+    registry: createEmptyRegistry(),
+    warnings: [],
+  };
+}
+
+function successfulSubmissionReceipt() {
+  return {
+    finality_status: "ACCEPTED_ON_L2",
+    execution_status: "SUCCEEDED",
+    isSuccess() { return true; },
+    isReverted() { return false; },
   };
 }
 
@@ -328,6 +358,108 @@ test("valid account preflight passes the same finalized block number to the offi
   }
 });
 
+test("submit_onchain=false keeps the PoC proof-only", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "veil-proof-only-"));
+  const preflightPath = join(directory, "veil-account-preflight.json");
+  const summaryPath = join(directory, "veil-register-proof-summary.json");
+  const submissionPath = join(directory, "veil-register-submission-summary.json");
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  let submissionAccountCreations = 0;
+  try {
+    await runVeilOfficialRegisterPoc({
+      VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
+      VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+      VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
+      STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
+      VEIL_POC_SUMMARY_PATH: summaryPath,
+      VEIL_POC_SUBMIT_ONCHAIN: "false",
+      VEIL_POC_SUBMISSION_SUMMARY_PATH: submissionPath,
+    }, {
+      accountPreflightProvider: mockAccountProvider({ ownerPublicKey: publicKey }),
+      accountPreflightPath: preflightPath,
+      createProvingProvider() {
+        return mockProvingProvider();
+      },
+      createSubmissionAccount() {
+        submissionAccountCreations += 1;
+        throw new Error("submission account must not be created");
+      },
+    });
+
+    assert.equal(submissionAccountCreations, 0);
+    await assert.rejects(() => readFile(submissionPath, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("submit_onchain=true writes only the safe accepted submission summary", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "veil-submit-onchain-"));
+  const preflightPath = join(directory, "veil-account-preflight.json");
+  const summaryPath = join(directory, "veil-register-proof-summary.json");
+  const submissionPath = join(directory, "veil-register-submission-summary.json");
+  const signer = createStandardPocSigner(PRIVATE_KEY);
+  const publicKey = await signer.getPubKey();
+  let executionDetails;
+  try {
+    await runVeilOfficialRegisterPoc({
+      VEIL_POC_ACCOUNT_PRIVATE_KEY: PRIVATE_KEY,
+      VEIL_POC_ACCOUNT_ADDRESS: "0x123",
+      VEIL_POC_PROVER_URL: "http://127.0.0.1:3000",
+      STARKNET_SEPOLIA_RPC_URL: "https://rpc.example/rpc/v0_9/synthetic-api-key",
+      VEIL_POC_SUMMARY_PATH: summaryPath,
+      VEIL_POC_SUBMIT_ONCHAIN: "true",
+      VEIL_POC_SUBMISSION_SUMMARY_PATH: submissionPath,
+    }, {
+      accountPreflightProvider: mockAccountProvider({ ownerPublicKey: publicKey }),
+      accountPreflightPath: preflightPath,
+      createProvingProvider() {
+        return mockProvingProvider();
+      },
+      createSubmissionAccount() {
+        return {
+          async execute(_call, details) {
+            executionDetails = details;
+            return { transaction_hash: "0x789" };
+          },
+          async waitForTransaction() {
+            return successfulSubmissionReceipt();
+          },
+        };
+      },
+    });
+
+    assert.equal(executionDetails.tip, 0n);
+    const artifactText = await readFile(submissionPath, "utf8");
+    const artifact = JSON.parse(artifactText);
+    assert.deepEqual(Object.keys(artifact), [
+      "result",
+      "transactionHash",
+      "finalityStatus",
+      "executionStatus",
+      "accountAddress",
+      "provingBlockId",
+      "proofPresent",
+      "proofFactsCount",
+    ]);
+    assert.equal(artifact.result, "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN");
+    assert.equal(artifact.finalityStatus, "ACCEPTED_ON_L2");
+    assert.equal(artifact.executionStatus, "SUCCEEDED");
+    assert.equal(artifact.provingBlockId, String(FINALIZED_BLOCK_NUMBER));
+    for (const sensitive of [
+      PRIVATE_KEY,
+      "isolated-register-proof",
+      Buffer.from("isolated-register-proof").toString("base64"),
+      "synthetic-api-key",
+    ]) {
+      assert.equal(artifactText.includes(sensitive), false);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("LocalFailClosedDiscoveryProvider never performs a network request", async () => {
   const originalFetch = globalThis.fetch;
   let networkCalls = 0;
@@ -372,6 +504,99 @@ test("official register builder path does not invoke discovery", async () => {
   assert.equal(result.callAndProof.proof.proofFacts.length, 1);
   assert.equal(discoveryProvider.discoveryCalls, 0);
   assert.equal(discoveryProvider.lastMethod, undefined);
+});
+
+test("official register submission sends tip and non-empty proof facts", async () => {
+  const executeCalls = [];
+  const waitCalls = [];
+  const result = registerExecuteResult(["0x2", "0x3"]);
+  const summary = await submitOfficialRegisterCall({
+    account: {
+      async execute(call, details) {
+        executeCalls.push({ call, details });
+        return { transaction_hash: "0x789" };
+      },
+      async waitForTransaction(transactionHash, options) {
+        waitCalls.push({ transactionHash, options });
+        return successfulSubmissionReceipt();
+      },
+    },
+    result,
+    provingProvider: mockProvingProvider(),
+    accountAddress: ACCOUNT_ADDRESS,
+    provingBlockId: String(FINALIZED_BLOCK_NUMBER),
+  });
+
+  assert.equal(executeCalls.length, 1);
+  assert.equal(executeCalls[0].call, result.callAndProof.call);
+  assert.deepEqual(executeCalls[0].details, {
+    tip: 0n,
+    proof: result.callAndProof.proof.data,
+    proofFacts: ["0x2", "0x3"],
+  });
+  assert.notDeepEqual(executeCalls[0].details.proofFacts, []);
+  assert.equal(waitCalls.length, 1);
+  assert.equal(waitCalls[0].transactionHash, "0x789");
+  assert.deepEqual(waitCalls[0].options, {
+    successStates: ["ACCEPTED_ON_L2"],
+    errorStates: ["REVERTED"],
+  });
+  assert.equal(summary.result, "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN");
+  assert.equal(summary.finalityStatus, "ACCEPTED_ON_L2");
+  assert.equal(summary.executionStatus, "SUCCEEDED");
+});
+
+test("official register submission omits proof fields when proof facts are empty", async () => {
+  let executionDetails;
+  await submitOfficialRegisterCall({
+    account: {
+      async execute(_call, details) {
+        executionDetails = details;
+        return { transaction_hash: "0x789" };
+      },
+      async waitForTransaction() {
+        return successfulSubmissionReceipt();
+      },
+    },
+    result: registerExecuteResult([]),
+    provingProvider: mockProvingProvider(),
+    accountAddress: ACCOUNT_ADDRESS,
+    provingBlockId: String(FINALIZED_BLOCK_NUMBER),
+  });
+
+  assert.deepEqual(executionDetails, { tip: 0n });
+  assert.equal(Object.hasOwn(executionDetails, "proof"), false);
+  assert.equal(Object.hasOwn(executionDetails, "proofFacts"), false);
+});
+
+test("reverted register receipt fails closed and invalidates the proof nonce cache", async () => {
+  let invalidations = 0;
+  await assert.rejects(
+    () => submitOfficialRegisterCall({
+      account: {
+        async execute() {
+          return { transaction_hash: "0x789" };
+        },
+        async waitForTransaction() {
+          return {
+            finality_status: "ACCEPTED_ON_L2",
+            execution_status: "REVERTED",
+            isSuccess() { return false; },
+            isReverted() { return true; },
+          };
+        },
+      },
+      result: registerExecuteResult(),
+      provingProvider: {
+        ...mockProvingProvider(),
+        invalidateNonceCache() { invalidations += 1; },
+      },
+      accountAddress: ACCOUNT_ADDRESS,
+      provingBlockId: String(FINALIZED_BLOCK_NUMBER),
+    }),
+    /not accepted and successful on L2/u,
+  );
+  assert.equal(invalidations, 1);
 });
 
 test("missing standard signer fails closed", async () => {
@@ -474,6 +699,44 @@ test("register proof summary contains only safe metadata", () => {
   ]);
   const serialized = JSON.stringify(summary);
   for (const value of sensitive) assert.equal(serialized.includes(value), false);
+});
+
+test("register submission summary contains no raw proof or secret", async () => {
+  const rawProof = Buffer.from("raw-proof-material").toString("base64");
+  const secret = "synthetic-private-secret";
+  const result = registerExecuteResult(["0x2"]);
+  result.callAndProof.proof.data = rawProof;
+  const summary = await submitOfficialRegisterCall({
+    account: {
+      async execute() {
+        return { transaction_hash: "0x789" };
+      },
+      async waitForTransaction() {
+        return successfulSubmissionReceipt();
+      },
+    },
+    result,
+    provingProvider: mockProvingProvider(),
+    accountAddress: ACCOUNT_ADDRESS,
+    provingBlockId: String(FINALIZED_BLOCK_NUMBER),
+  });
+
+  assertRegisterSubmissionSummarySafe(summary, [rawProof, secret]);
+  assert.deepEqual(Object.keys(summary), [
+    "result",
+    "transactionHash",
+    "finalityStatus",
+    "executionStatus",
+    "accountAddress",
+    "provingBlockId",
+    "proofPresent",
+    "proofFactsCount",
+  ]);
+  const serialized = JSON.stringify(summary);
+  assert.equal(serialized.includes(rawProof), false);
+  assert.equal(serialized.includes(secret), false);
+  assert.equal(Object.hasOwn(summary, "proof"), false);
+  assert.equal(Object.hasOwn(summary, "proofFacts"), false);
 });
 
 test("proving diagnostic sanitizer redacts URLs and sensitive material", () => {

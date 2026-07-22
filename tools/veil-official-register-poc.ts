@@ -29,14 +29,29 @@ import type {
   Signature,
   SignerInterface,
 } from "starknet";
+import {
+  Account as ProofAccount,
+  RpcProvider as ProofRpcProvider,
+  TransactionExecutionStatus,
+  TransactionFinalityStatus,
+} from "starknet-proof";
+import type {
+  Call as ProofCall,
+  UniversalDetails as ProofExecutionDetails,
+  waitForTransactionOptions,
+} from "starknet-proof";
 
 export const DEFAULT_POOL_ADDRESS =
   "0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5";
 export const ISOLATED_POC_SIGNER_LABEL =
   "standard starknet.js signer for isolated VEIL PoC";
 export const REGISTER_PROOF_RESULT = "OFFICIAL_SDK_REGISTER_PROOF_GENERATED";
+export const REGISTER_SUBMISSION_RESULT =
+  "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN";
 export const DEFAULT_PROVING_ERROR_PATH = "veil-proving-error.json";
 export const DEFAULT_ACCOUNT_PREFLIGHT_PATH = "veil-account-preflight.json";
+export const DEFAULT_REGISTER_SUBMISSION_SUMMARY_PATH =
+  "veil-register-submission-summary.json";
 
 const REDACTED = "[REDACTED]";
 const REDACTED_URL = "[REDACTED_URL]";
@@ -195,6 +210,35 @@ export interface RegisterProofExecutionOptions {
   provingBlockId: ProvingBlockId;
 }
 
+export interface RegisterSubmissionReceipt {
+  finality_status?: string;
+  execution_status?: string;
+  isSuccess(): boolean;
+  isReverted(): boolean;
+}
+
+export interface RegisterSubmissionAccount {
+  execute(
+    call: ProofCall,
+    details: ProofExecutionDetails,
+  ): Promise<{ transaction_hash: string }>;
+  waitForTransaction(
+    transactionHash: string,
+    options?: waitForTransactionOptions,
+  ): Promise<RegisterSubmissionReceipt>;
+}
+
+export interface VeilRegisterSubmissionSummary {
+  result: string;
+  transactionHash: string;
+  finalityStatus: string;
+  executionStatus: string;
+  accountAddress: string;
+  provingBlockId: string;
+  proofPresent: boolean;
+  proofFactsCount: number;
+}
+
 export interface VeilOfficialRegisterPocConfig {
   rpcUrl: string;
   proverUrl: string;
@@ -202,12 +246,15 @@ export interface VeilOfficialRegisterPocConfig {
   accountPrivateKey: string;
   poolAddress: bigint;
   summaryPath: string;
+  submitOnchain: boolean;
+  submissionSummaryPath: string;
 }
 
 export interface VeilOfficialRegisterPocDependencies {
   accountPreflightProvider?: AccountPreflightProvider;
   accountPreflightPath?: string;
   createProvingProvider?: typeof createOfficialProvingProvider;
+  createSubmissionAccount?: typeof createOfficialRegisterSubmissionAccount;
 }
 
 function isSensitiveDiagnosticKey(key: string): boolean {
@@ -367,6 +414,14 @@ function parsePositiveFelt(value: string, label: string): bigint {
   return parsed;
 }
 
+function parseBooleanEnv(value: string | undefined, label: string): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  throw new Error(`${label} must be true or false.`);
+}
+
 function createEphemeralViewingKey(): bigint {
   const candidate = BigInt(`0x${randomBytes(32).toString("hex")}`)
     % MAX_VIEWING_KEY;
@@ -397,6 +452,13 @@ export function loadVeilOfficialRegisterPocConfig(
     summaryPath:
       env.VEIL_POC_SUMMARY_PATH?.trim()
       || "veil-register-proof-summary.json",
+    submitOnchain: parseBooleanEnv(
+      env.VEIL_POC_SUBMIT_ONCHAIN,
+      "VEIL_POC_SUBMIT_ONCHAIN",
+    ),
+    submissionSummaryPath:
+      env.VEIL_POC_SUBMISSION_SUMMARY_PATH?.trim()
+      || DEFAULT_REGISTER_SUBMISSION_SUMMARY_PATH,
   };
 }
 
@@ -799,6 +861,27 @@ export function createOfficialProvingProvider(config: {
   );
 }
 
+export function createOfficialRegisterSubmissionAccount(config: {
+  rpcUrl: string;
+  accountAddress: bigint;
+  accountPrivateKey: string;
+}): RegisterSubmissionAccount {
+  const provider = new ProofRpcProvider({ nodeUrl: config.rpcUrl });
+  const account = new ProofAccount({
+    provider,
+    address: normalizeFeltHex(config.accountAddress),
+    signer: config.accountPrivateKey,
+  });
+  return {
+    execute(call, details) {
+      return account.execute(call, details);
+    },
+    waitForTransaction(transactionHash, options) {
+      return provider.waitForTransaction(transactionHash, options);
+    },
+  };
+}
+
 export async function executeOfficialRegisterProof(
   options: RegisterProofExecutionOptions,
 ): Promise<ExecuteResult> {
@@ -896,6 +979,124 @@ export function assertRegisterProofSummarySafe(
   }
 }
 
+export function assertRegisterSubmissionSummarySafe(
+  summary: VeilRegisterSubmissionSummary,
+  sensitiveValues: readonly string[] = [],
+): void {
+  const expectedKeys = [
+    "result",
+    "transactionHash",
+    "finalityStatus",
+    "executionStatus",
+    "accountAddress",
+    "provingBlockId",
+    "proofPresent",
+    "proofFactsCount",
+  ];
+  const actualKeys = Object.keys(summary);
+  if (actualKeys.length !== expectedKeys.length
+      || actualKeys.some((key, index) => key !== expectedKeys[index])) {
+    throw new Error("Register submission summary contains an unexpected field.");
+  }
+
+  const forbiddenKeys = [
+    "privateKey",
+    "signature",
+    "viewingKey",
+    "rawProof",
+    "proof",
+    "proofFacts",
+    "secret",
+    "calldata",
+  ];
+  if (forbiddenKeys.some((key) => Object.hasOwn(summary, key))) {
+    throw new Error("Register submission summary contains a forbidden field.");
+  }
+
+  const serialized = JSON.stringify(summary);
+  if (sensitiveValues.some((value) => value.length > 0 && serialized.includes(value))) {
+    throw new Error("Register submission summary contains sensitive material.");
+  }
+}
+
+export async function writeRegisterSubmissionSummary(
+  summary: VeilRegisterSubmissionSummary,
+  outputPath = DEFAULT_REGISTER_SUBMISSION_SUMMARY_PATH,
+  sensitiveValues: readonly string[] = [],
+): Promise<void> {
+  assertRegisterSubmissionSummarySafe(summary, sensitiveValues);
+  await writeFile(outputPath, `${JSON.stringify(summary, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+}
+
+function invalidateProofNonceCache(provingProvider: ProofProviderInterface): void {
+  try {
+    provingProvider.invalidateNonceCache?.();
+  } catch {
+    // Preserve the submission failure while still attempting official invalidation.
+  }
+}
+
+export async function submitOfficialRegisterCall(input: {
+  account: RegisterSubmissionAccount;
+  result: ExecuteResult;
+  provingProvider: ProofProviderInterface;
+  accountAddress: bigint;
+  provingBlockId: string;
+}): Promise<VeilRegisterSubmissionSummary> {
+  const { call, proof } = input.result.callAndProof;
+  const proofFacts = Array.isArray(proof.proofFacts) ? proof.proofFacts : [];
+  const proofPresent = typeof proof.data === "string" && proof.data.length > 0;
+  const executionDetails: ProofExecutionDetails = {
+    tip: 0n,
+    ...(proofFacts.length > 0 ? {
+      proof: proof.data,
+      proofFacts,
+    } : {}),
+  };
+
+  try {
+    const transaction = await input.account.execute(
+      call as ProofCall,
+      executionDetails,
+    );
+    if (typeof transaction.transaction_hash !== "string"
+        || transaction.transaction_hash.length === 0) {
+      throw new Error("Register submission returned no transaction hash.");
+    }
+
+    const receipt = await input.account.waitForTransaction(
+      transaction.transaction_hash,
+      {
+        successStates: [TransactionFinalityStatus.ACCEPTED_ON_L2],
+        errorStates: [TransactionExecutionStatus.REVERTED],
+      },
+    );
+    if (receipt.isReverted()
+        || !receipt.isSuccess()
+        || receipt.finality_status !== TransactionFinalityStatus.ACCEPTED_ON_L2
+        || receipt.execution_status !== TransactionExecutionStatus.SUCCEEDED) {
+      throw new Error("Register transaction was not accepted and successful on L2.");
+    }
+
+    return {
+      result: REGISTER_SUBMISSION_RESULT,
+      transactionHash: transaction.transaction_hash,
+      finalityStatus: receipt.finality_status,
+      executionStatus: receipt.execution_status,
+      accountAddress: normalizeFeltHex(input.accountAddress),
+      provingBlockId: input.provingBlockId,
+      proofPresent,
+      proofFactsCount: proofFacts.length,
+    };
+  } catch (error) {
+    invalidateProofNonceCache(input.provingProvider);
+    throw error;
+  }
+}
+
 export async function runVeilOfficialRegisterPoc(
   env: NodeJS.ProcessEnv = process.env,
   dependencies: VeilOfficialRegisterPocDependencies = {},
@@ -954,6 +1155,38 @@ export async function runVeilOfficialRegisterPoc(
     encoding: "utf8",
     mode: 0o600,
   });
+
+  if (config.submitOnchain) {
+    const submissionAccountFactory = dependencies.createSubmissionAccount
+      ?? createOfficialRegisterSubmissionAccount;
+    let submissionAccount: RegisterSubmissionAccount;
+    try {
+      submissionAccount = submissionAccountFactory({
+        rpcUrl: config.rpcUrl,
+        accountAddress: config.accountAddress,
+        accountPrivateKey: config.accountPrivateKey,
+      });
+    } catch (error) {
+      invalidateProofNonceCache(provingProvider);
+      throw error;
+    }
+    const submissionSummary = await submitOfficialRegisterCall({
+      account: submissionAccount,
+      result,
+      provingProvider,
+      accountAddress: config.accountAddress,
+      provingBlockId: preflight.artifact.blockId,
+    });
+    await writeRegisterSubmissionSummary(
+      submissionSummary,
+      config.submissionSummaryPath,
+      [
+        config.accountPrivateKey,
+        viewingKey.toString(),
+        result.callAndProof.proof.data,
+      ],
+    );
+  }
   return summary;
 }
 

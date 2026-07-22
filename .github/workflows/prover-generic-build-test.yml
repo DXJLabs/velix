@@ -2,6 +2,12 @@ name: Build Generic STWO Prover and Run Official SDK VEIL Register Proof
 
 on:
   workflow_dispatch:
+    inputs:
+      submit_onchain:
+        description: Submit the generated official SDK register proof on-chain
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -430,6 +436,8 @@ jobs:
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
           VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-register-proof-summary.json
+          VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+          VEIL_POC_SUBMISSION_SUMMARY_PATH: ${{ github.workspace }}/veil-register-submission-summary.json
           VEIL_POC_ERROR_PATH: ${{ github.workspace }}/veil-proving-error.json
         run: |
           set -euo pipefail
@@ -461,6 +469,8 @@ jobs:
           echo "Private key, signature, viewing key, dan secret tidak ditampilkan."
 
           START_TIME="$(date +%s)"
+
+          rm -f "$GITHUB_WORKSPACE/veil-register-submission-summary.json"
 
           cd velix
 
@@ -672,9 +682,75 @@ jobs:
           echo
           cat "$SUMMARY_FILE"
 
-          echo
-          echo "result=OFFICIAL_SDK_REGISTER_PROOF_GENERATED" \
-            >> "$GITHUB_OUTPUT"
+          SUBMISSION_FILE="$GITHUB_WORKSPACE/veil-register-submission-summary.json"
+
+          if [ "$VEIL_POC_SUBMIT_ONCHAIN" = "true" ]; then
+            if [ ! -s "$SUBMISSION_FILE" ]; then
+              echo "veil-register-submission-summary.json tidak dibuat atau kosong."
+              echo "result=SUBMISSION_ARTIFACT_MISSING" \
+                >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+
+            python3 - "$SUBMISSION_FILE" "$SUMMARY_FILE" <<'PY'
+          import json
+          import sys
+
+          submission_path, proof_path = sys.argv[1:]
+          with open(submission_path, "r", encoding="utf-8") as file:
+              submission = json.load(file)
+          with open(proof_path, "r", encoding="utf-8") as file:
+              proof = json.load(file)
+
+          expected_keys = [
+              "result",
+              "transactionHash",
+              "finalityStatus",
+              "executionStatus",
+              "accountAddress",
+              "provingBlockId",
+              "proofPresent",
+              "proofFactsCount",
+          ]
+          if list(submission) != expected_keys:
+              raise SystemExit("Submission summary memiliki field yang tidak diizinkan")
+          if submission.get("result") != "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN":
+              raise SystemExit("Official SDK register tidak dilaporkan submitted")
+          if submission.get("finalityStatus") != "ACCEPTED_ON_L2":
+              raise SystemExit("Transaksi register tidak accepted di L2")
+          if submission.get("executionStatus") != "SUCCEEDED":
+              raise SystemExit("Transaksi register tidak sukses")
+          if not isinstance(submission.get("transactionHash"), str) or not submission["transactionHash"]:
+              raise SystemExit("Transaction hash register kosong")
+          if submission.get("accountAddress") != proof.get("accountAddress"):
+              raise SystemExit("Account submission berbeda dari account proof")
+          if submission.get("provingBlockId") != proof.get("provingBlockId"):
+              raise SystemExit("Block submission berbeda dari proving block")
+          if submission.get("proofPresent") is not True:
+              raise SystemExit("Submission tidak berasal dari proof yang tersedia")
+          if submission.get("proofFactsCount") != proof.get("proofFactsCount"):
+              raise SystemExit("Jumlah proof facts submission tidak cocok")
+
+          print("OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN")
+          print("transaction hash:", submission["transactionHash"])
+          print(submission["finalityStatus"])
+          print(submission["executionStatus"])
+          PY
+
+            echo
+            cat "$SUBMISSION_FILE"
+            echo "result=OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN" \
+              >> "$GITHUB_OUTPUT"
+          else
+            if [ -e "$SUBMISSION_FILE" ]; then
+              echo "Submission artifact dibuat saat submit_onchain=false."
+              echo "result=UNEXPECTED_SUBMISSION_ARTIFACT" \
+                >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            echo "result=OFFICIAL_SDK_REGISTER_PROOF_GENERATED" \
+              >> "$GITHUB_OUTPUT"
+          fi
 
           echo "exit_status=0" >> "$GITHUB_OUTPUT"
 
@@ -778,5 +854,6 @@ jobs:
             velix/veil-account-preflight.json
             veil-proving-error.json
             veil-register-proof-summary.json
+            veil-register-submission-summary.json
           if-no-files-found: ignore
           retention-days: 7
