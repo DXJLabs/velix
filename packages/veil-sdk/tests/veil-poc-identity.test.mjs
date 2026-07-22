@@ -200,6 +200,26 @@ test("workflows validate persistent viewing key before expensive or transactiona
     messageWorkflow.indexOf("Validate VEIL identity secrets before setup")
       < messageWorkflow.indexOf("Install pinned dependencies"),
   );
+  const submissionPreflightIndex = messageWorkflow.indexOf(
+    "Preflight shielded-message submission without a transaction",
+  );
+  assert.ok(submissionPreflightIndex >= 0);
+  assert.ok(
+    submissionPreflightIndex
+      < messageWorkflow.indexOf("Build x86-64-v3 transaction prover"),
+  );
+  const submissionPreflightStep = messageWorkflow.slice(
+    submissionPreflightIndex,
+    messageWorkflow.indexOf("Checkout official sequencer release"),
+  );
+  assert.equal(
+    submissionPreflightStep.includes('VEIL_POC_SUBMIT_ONCHAIN: "false"'),
+    true,
+  );
+  assert.equal(
+    submissionPreflightStep.includes('VEIL_POC_PREFLIGHT_SUBMISSION: "true"'),
+    true,
+  );
   assert.equal(messageWorkflow.includes("proof and submission remain disabled"), false);
   assert.equal(
     messageWorkflow.includes(

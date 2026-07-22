@@ -21,8 +21,15 @@ import {
 } from "starknet";
 import type { Call, SignerInterface } from "starknet";
 import {
+  Account as ProofAccount,
+  RpcProvider as ProofRpcProvider,
   TransactionExecutionStatus,
   TransactionFinalityStatus,
+} from "starknet-proof";
+import type {
+  Call as ProofCall,
+  UniversalDetails as ProofExecutionDetails,
+  waitForTransactionOptions,
 } from "starknet-proof";
 
 import {
@@ -48,7 +55,6 @@ import {
   DEFAULT_POOL_ADDRESS,
   createAccountPreflightProvider,
   createOfficialProvingProvider,
-  createOfficialRegisterSubmissionAccount,
   createStandardPocSigner,
   preflightVeilPocAccount,
   writeAccountPreflightArtifact,
@@ -71,6 +77,8 @@ export const SHIELDED_MESSAGE_PROOF_RESULT =
   "OFFICIAL_SDK_SHIELDED_MESSAGE_PROOF_GENERATED";
 export const SHIELDED_MESSAGE_SUBMISSION_RESULT =
   "OFFICIAL_SDK_SHIELDED_MESSAGE_SUBMITTED_ONCHAIN";
+export const SHIELDED_MESSAGE_SUBMISSION_PREFLIGHT_VALID =
+  "OFFICIAL_SDK_SHIELDED_MESSAGE_SUBMISSION_PREFLIGHT_VALID";
 export const MESSAGE_EVENT_FOUND = "MESSAGE_EVENT_FOUND";
 export const MESSAGE_STORAGE_VERIFIED = "MESSAGE_STORAGE_VERIFIED";
 export const LOCAL_DECRYPT_VERIFIED = "LOCAL_DECRYPT_VERIFIED";
@@ -95,6 +103,7 @@ export interface VeilShieldedMessagePocConfig {
   helperClassHash: bigint;
   generateProof: boolean;
   submitOnchain: boolean;
+  preflightSubmission: boolean;
   summaryPath: string;
 }
 
@@ -142,6 +151,15 @@ export interface ShieldedMessageProofExecutor {
   execute(input: ShieldedMessageProofExecutorInput): Promise<ExecuteResult>;
 }
 
+type ProofResourceBounds = NonNullable<ProofExecutionDetails["resourceBounds"]>;
+
+export interface ShieldedMessageSubmissionAccount extends RegisterSubmissionAccount {
+  estimateInvokeFee(
+    call: ProofCall,
+    details: ProofExecutionDetails,
+  ): Promise<{ resourceBounds: ProofResourceBounds }>;
+}
+
 export interface VeilShieldedMessageSummary {
   result: string;
   network: "SN_SEPOLIA";
@@ -171,7 +189,8 @@ export interface VeilShieldedMessagePocDependencies {
     rpcUrl: string;
     accountAddress: bigint;
     accountPrivateKey: string;
-  }) => RegisterSubmissionAccount;
+  }) => ShieldedMessageSubmissionAccount;
+  preflightSubmission?: typeof preflightShieldedMessageSubmission;
   accountPreflightPath?: string;
 }
 
@@ -241,6 +260,10 @@ export function loadVeilShieldedMessagePocConfig(
     env.VEIL_POC_SUBMIT_ONCHAIN,
     "VEIL_POC_SUBMIT_ONCHAIN",
   );
+  const preflightSubmission = parseBooleanEnv(
+    env.VEIL_POC_PREFLIGHT_SUBMISSION,
+    "VEIL_POC_PREFLIGHT_SUBMISSION",
+  );
   if (submitOnchain && !generateProof) {
     throw new Error("submit_onchain=true requires generate_proof=true.");
   }
@@ -264,6 +287,7 @@ export function loadVeilShieldedMessagePocConfig(
     ),
     generateProof,
     submitOnchain,
+    preflightSubmission,
     summaryPath: env.VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH?.trim()
       || DEFAULT_SHIELDED_MESSAGE_SUMMARY_PATH,
   });
@@ -479,38 +503,103 @@ class SelfChannelDiscoveryProvider implements DiscoveryProviderInterface {
   }
 }
 
+function createOfficialShieldedMessageBuilder(
+  input: ShieldedMessageProofExecutorInput,
+) {
+  const context = createShieldedMessageIdentityContext(input.config);
+  const discoveryProvider = new SelfChannelDiscoveryProvider({
+    provider: input.provider,
+    poolAddress: input.config.poolAddress,
+    accountAddress: context.accountAddress,
+    viewingKey: context.viewingKey,
+    provingBlockId: input.provingBlockId,
+  });
+  const transfers = createPrivateTransfers({
+    account: { address: context.accountAddress, signer: input.signer },
+    viewingKeyProvider: {
+      async getViewingKey() {
+        return context.viewingKey;
+      },
+    },
+    provingProvider: input.provingProvider,
+    discoveryProvider,
+    poolContractAddress: input.config.poolAddress,
+    poolMode: "compatibility",
+  });
+  return transfers
+    .build()
+    .setup(context.accountAddress)
+    .invoke(() => ({
+      contractAddress: feltHex(input.config.helperAddress),
+      calldata: [...input.prepared.helperCalldata],
+    }));
+}
+
 export const officialShieldedMessageProofExecutor: ShieldedMessageProofExecutor = {
   async execute(input) {
-    const context = createShieldedMessageIdentityContext(input.config);
-    const discoveryProvider = new SelfChannelDiscoveryProvider({
-      provider: input.provider,
-      poolAddress: input.config.poolAddress,
-      accountAddress: context.accountAddress,
-      viewingKey: context.viewingKey,
-      provingBlockId: input.provingBlockId,
-    });
-    const transfers = createPrivateTransfers({
-      account: { address: context.accountAddress, signer: input.signer },
-      viewingKeyProvider: {
-        async getViewingKey() {
-          return context.viewingKey;
-        },
-      },
-      provingProvider: input.provingProvider,
-      discoveryProvider,
-      poolContractAddress: input.config.poolAddress,
-      poolMode: "compatibility",
-    });
-    return transfers
-      .build()
-      .setup(context.accountAddress)
-      .invoke(() => ({
-        contractAddress: feltHex(input.config.helperAddress),
-        calldata: [...input.prepared.helperCalldata],
-      }))
+    return createOfficialShieldedMessageBuilder(input)
       .execute({ provingBlockId: input.provingBlockId });
   },
 };
+
+export function createOfficialShieldedMessageSubmissionAccount(config: {
+  rpcUrl: string;
+  accountAddress: bigint;
+  accountPrivateKey: string;
+}): ShieldedMessageSubmissionAccount {
+  const provider = new ProofRpcProvider({ nodeUrl: config.rpcUrl });
+  const account = new ProofAccount({
+    provider,
+    address: feltHex(config.accountAddress),
+    signer: config.accountPrivateKey,
+  });
+  return {
+    estimateInvokeFee(call, details) {
+      return account.estimateInvokeFee(call, details);
+    },
+    execute(call, details) {
+      return account.execute(call, details);
+    },
+    waitForTransaction(transactionHash, options?: waitForTransactionOptions) {
+      return provider.waitForTransaction(transactionHash, options);
+    },
+  };
+}
+
+export async function preflightShieldedMessageSubmission(input: {
+  proofInput: ShieldedMessageProofExecutorInput;
+  account: ShieldedMessageSubmissionAccount;
+  rpcUrl: string;
+  simulate?: () => Promise<ExecuteResult>;
+}): Promise<ProofResourceBounds> {
+  const simulateOptions = {
+    provider: new ProofRpcProvider({ nodeUrl: input.rpcUrl }),
+    validateSignature: false,
+    // The installed SDK forwards this runtime option to CallMockProofProvider,
+    // even though 0.14.3-rc.2 omits it from the public SimulateOptions type.
+    provingBlockId: input.proofInput.provingBlockId,
+  };
+  const simulated = input.simulate
+    ? await input.simulate()
+    : await createOfficialShieldedMessageBuilder(input.proofInput)
+      .simulate(simulateOptions);
+  const { call, proof } = simulated.callAndProof;
+  const proofFacts = Array.isArray(proof.proofFacts) ? proof.proofFacts : [];
+  if (proofFacts.length === 0) {
+    throw new Error("Shielded-message simulation returned no proof facts.");
+  }
+  const estimate = await input.account.estimateInvokeFee(call as ProofCall, {
+    tip: 0n,
+    proofFacts,
+    ...(typeof proof.data === "string" && proof.data.length > 0
+      ? { proof: proof.data }
+      : {}),
+  });
+  if (!estimate.resourceBounds) {
+    throw new Error("Shielded-message simulation returned no resource bounds.");
+  }
+  return estimate.resourceBounds;
+}
 
 export function createShieldedMessageProofSummary(input: {
   config: VeilShieldedMessagePocConfig;
@@ -716,6 +805,7 @@ export async function submitShieldedMessage(input: {
   provider: ShieldedMessageChainProvider;
   account: RegisterSubmissionAccount;
   provingProvider: ProofProviderInterface;
+  resourceBounds: ProofResourceBounds;
   provingBlockId: number;
   prepared: PreparedShieldedMessage;
   result: ExecuteResult;
@@ -725,6 +815,7 @@ export async function submitShieldedMessage(input: {
   const proofFacts = Array.isArray(proof.proofFacts) ? proof.proofFacts : [];
   const executionDetails = {
     tip: 0n,
+    resourceBounds: input.resourceBounds,
     ...(proofFacts.length > 0
       ? { proof: proof.data, proofFacts }
       : {}),
@@ -822,7 +913,7 @@ export async function runVeilOfficialShieldedMessagePoc(
   });
   const prepared = await prepareShieldedMessage({ config });
   await verifyLocalShieldedMessageDecrypt({ prepared });
-  if (!config.generateProof) {
+  if (!config.generateProof && !config.preflightSubmission) {
     console.log(SHIELDED_MESSAGE_IDENTITY_VALID);
     console.log(SHIELDED_MESSAGE_DRY_RUN_VALID);
     console.log(LOCAL_DECRYPT_VERIFIED);
@@ -835,14 +926,39 @@ export async function runVeilOfficialShieldedMessagePoc(
     poolAddress: config.poolAddress,
     provingBlockId,
   });
-  const result = await (dependencies.proofExecutor
-    ?? officialShieldedMessageProofExecutor).execute({
+  const proofInput: ShieldedMessageProofExecutorInput = {
     config,
     signer,
     provingProvider,
     provingBlockId,
     prepared,
     provider,
+  };
+  let submissionAccount: ShieldedMessageSubmissionAccount | undefined;
+  let submissionResourceBounds: ProofResourceBounds | undefined;
+  if (config.submitOnchain || config.preflightSubmission) {
+    submissionAccount = (dependencies.createSubmissionAccount
+      ?? createOfficialShieldedMessageSubmissionAccount)({
+      rpcUrl: config.rpcUrl,
+      accountAddress: config.identity.accountAddress,
+      accountPrivateKey: config.identity.accountPrivateKey,
+    });
+    submissionResourceBounds = await (dependencies.preflightSubmission
+      ?? preflightShieldedMessageSubmission)({
+      proofInput,
+      account: submissionAccount,
+      rpcUrl: config.rpcUrl,
+    });
+    console.log(SHIELDED_MESSAGE_SUBMISSION_PREFLIGHT_VALID);
+  }
+  if (config.preflightSubmission && !config.generateProof) {
+    console.log(SHIELDED_MESSAGE_IDENTITY_VALID);
+    console.log(LOCAL_DECRYPT_VERIFIED);
+    return null;
+  }
+  const result = await (dependencies.proofExecutor
+    ?? officialShieldedMessageProofExecutor).execute({
+    ...proofInput,
   });
   let summary = createShieldedMessageProofSummary({
     config,
@@ -854,17 +970,15 @@ export async function runVeilOfficialShieldedMessagePoc(
   console.log(SHIELDED_MESSAGE_PROOF_RESULT);
   console.log("proof_present: true");
   if (config.submitOnchain) {
-    const account = (dependencies.createSubmissionAccount
-      ?? createOfficialRegisterSubmissionAccount)({
-      rpcUrl: config.rpcUrl,
-      accountAddress: config.identity.accountAddress,
-      accountPrivateKey: config.identity.accountPrivateKey,
-    });
+    if (!submissionAccount || !submissionResourceBounds) {
+      throw new Error("Shielded-message submission preflight result is missing.");
+    }
     summary = await submitShieldedMessage({
       config,
       provider,
-      account,
+      account: submissionAccount,
       provingProvider,
+      resourceBounds: submissionResourceBounds,
       provingBlockId,
       prepared,
       result,

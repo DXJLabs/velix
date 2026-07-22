@@ -15,6 +15,7 @@ import {
   createShieldedMessageProofSummary,
   loadVeilShieldedMessagePocConfig,
   officialShieldedMessageProofExecutor,
+  preflightShieldedMessageSubmission,
   prepareShieldedMessage,
   runVeilOfficialShieldedMessagePoc,
   submitShieldedMessage,
@@ -36,6 +37,11 @@ const CURRENT_BLOCK = 123;
 const PROVING_BLOCK = CURRENT_BLOCK - 10;
 const ACCOUNT_CLASS_HASH = "0xdef";
 const PLAINTEXT = "VEIL_PRIVATE_MESSAGE_POC_V1";
+const RESOURCE_BOUNDS = {
+  l1_gas: { max_amount: 1n, max_price_per_unit: 2n },
+  l2_gas: { max_amount: 3n, max_price_per_unit: 4n },
+  l1_data_gas: { max_amount: 5n, max_price_per_unit: 6n },
+};
 
 function pocEnv(overrides = {}) {
   return {
@@ -368,12 +374,14 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
       async waitForTransaction() { return successfulReceipt(); },
     },
     provingProvider: { invalidateNonceCache() {} },
+    resourceBounds: RESOURCE_BOUNDS,
     provingBlockId: PROVING_BLOCK,
     prepared,
     result: executeResult(["0x2", "0x3"]),
   });
   assert.deepEqual(calls[0].details, {
     tip: 0n,
+    resourceBounds: RESOURCE_BOUNDS,
     proof: executeResult().callAndProof.proof.data,
     proofFacts: ["0x2", "0x3"],
   });
@@ -381,6 +389,33 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
   assert.equal(summary.messageEventFound, true);
   assert.equal(summary.storageVerified, true);
   assert.equal(summary.localDecryptVerified, true);
+});
+
+test("submission preflight uses official simulation facts and sends no transaction", async () => {
+  let estimateDetails;
+  let transactions = 0;
+  const bounds = await preflightShieldedMessageSubmission({
+    proofInput: {},
+    rpcUrl: "https://rpc.example",
+    simulate: async () => executeResult(["0x2", "0x3"]),
+    account: {
+      async estimateInvokeFee(_call, details) {
+        estimateDetails = details;
+        return { resourceBounds: RESOURCE_BOUNDS };
+      },
+      async execute() {
+        transactions += 1;
+        throw new Error("must not submit during preflight");
+      },
+      async waitForTransaction() {
+        throw new Error("must not wait during preflight");
+      },
+    },
+  });
+  assert.deepEqual(bounds, RESOURCE_BOUNDS);
+  assert.equal(estimateDetails.tip, 0n);
+  assert.deepEqual(estimateDetails.proofFacts, ["0x2", "0x3"]);
+  assert.equal(transactions, 0);
 });
 
 test("proofFacts empty is never sent", async () => {
@@ -397,11 +432,12 @@ test("proofFacts empty is never sent", async () => {
       async waitForTransaction() { return successfulReceipt(); },
     },
     provingProvider: { invalidateNonceCache() {} },
+    resourceBounds: RESOURCE_BOUNDS,
     provingBlockId: PROVING_BLOCK,
     prepared,
     result: executeResult([]),
   });
-  assert.deepEqual(details, { tip: 0n });
+  assert.deepEqual(details, { tip: 0n, resourceBounds: RESOURCE_BOUNDS });
   assert.equal(Object.hasOwn(details, "proof"), false);
   assert.equal(Object.hasOwn(details, "proofFacts"), false);
 });
@@ -427,6 +463,7 @@ test("reverted receipt fails and invalidates the official nonce cache", async ()
       provingProvider: {
         invalidateNonceCache() { invalidations += 1; },
       },
+      resourceBounds: RESOURCE_BOUNDS,
       provingBlockId: PROVING_BLOCK,
       prepared,
       result: executeResult(),
