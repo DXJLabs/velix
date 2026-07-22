@@ -17,7 +17,8 @@
     "test:api": "node --test api/tests/*.test.mjs",
     "test:all": "npm run test:sdk && npm run test:app && npm run test:api",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "npm run build:sdk && tsc -p tsconfig.json --noEmit"
+    "typecheck": "npm run build:sdk && tsc -p tsconfig.json --noEmit && npm run typecheck:poc",
+    "typecheck:poc": "tsc -p tools/tsconfig.json"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.1",

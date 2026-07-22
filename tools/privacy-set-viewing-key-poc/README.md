@@ -1,6 +1,7 @@
-# VEIL Privacy SetViewingKey PoC
+# VEIL Privacy SetViewingKey PoC — EXPERIMENTAL — NOT FOR PRODUCTION
 
-Local-only Phase 4D adapter for constructing the Privacy Pool `SetViewingKey`
+**EXPERIMENTAL — NOT FOR PRODUCTION.** This Rust tool is a local-only Phase 4D
+adapter for constructing the Privacy Pool `SetViewingKey`
 proving flow. It does not submit live transactions.
 
 This tool is retained as historical/local RPC tooling. Its SetViewingKey proof

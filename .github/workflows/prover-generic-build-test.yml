@@ -1,4 +1,4 @@
-name: Build Generic STWO Prover and Run Official SDK VEIL Proof
+name: Build Generic STWO Prover and Run Official SDK VEIL Register Proof
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-and-prove:
-    name: Build Prover and Generate Official SDK VEIL Proof
+    name: Build Prover and Generate Official SDK VEIL Register Proof
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
@@ -57,7 +57,6 @@ jobs:
           ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           USER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
           CONFIGURED_BLOCK_ID: ${{ secrets.VEIL_POC_BLOCK_ID }}
-          INDEXER_URL: ${{ secrets.VEIL_POC_INDEXER_URL }}
         run: |
           set -euo pipefail
 
@@ -77,11 +76,6 @@ jobs:
 
           if [ -z "${USER_ADDRESS:-}" ]; then
             echo "Secret VEIL_POC_ACCOUNT_ADDRESS belum tersedia."
-            exit 1
-          fi
-
-          if [ -z "${INDEXER_URL:-}" ]; then
-            echo "Secret VEIL_POC_INDEXER_URL belum tersedia."
             exit 1
           fi
 
@@ -105,7 +99,6 @@ jobs:
           echo "RPC secret tersedia."
           echo "Private key secret tersedia."
           echo "Account address tersedia."
-          echo "Indexer URL tersedia."
           echo "Block ID tersedia."
           echo "Nilai rahasia tidak ditampilkan."
 
@@ -264,7 +257,7 @@ jobs:
           test -f tools/privacy-set-viewing-key-poc/Cargo.toml
           test -f tools/privacy-set-viewing-key-poc/src/main.rs
           test -f tools/privacy-set-viewing-key-poc/src/lib.rs
-          test -f tools/privacy-prover-smoke-test.ts
+          test -f tools/veil-official-register-poc.ts
 
           find tools/privacy-set-viewing-key-poc \
             -maxdepth 2 \
@@ -514,17 +507,16 @@ jobs:
       # 9. RUN REAL PROOF THROUGH THE OFFICIAL PRIVACY SDK
       # ============================================================
 
-      - name: Run official SDK SetViewingKey real proof
+      - name: Run official SDK register real proof
         id: veil-proof
         shell: bash
         env:
           VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
           VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          VEIL_POC_INDEXER_URL: ${{ secrets.VEIL_POC_INDEXER_URL }}
-          VEIL_POC_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
-          VEIL_POC_RESOLVED_BLOCK_ID: ${{ env.VEIL_POC_RESOLVED_BLOCK_ID }}
-          VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-proof-summary.json
+          VEIL_POC_BLOCK_ID: ${{ env.VEIL_POC_RESOLVED_BLOCK_ID }}
+          VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-register-proof-summary.json
         run: |
           set -euo pipefail
 
@@ -544,20 +536,14 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${VEIL_POC_INDEXER_URL:-}" ]; then
-            echo "VEIL_POC_INDEXER_URL kosong."
-            echo "result=INDEXER_MISSING" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
           echo "================================"
-          echo "OFFICIAL SDK REAL VEIL STWO PROOF"
+          echo "OFFICIAL SDK REAL VEIL REGISTER STWO PROOF"
           echo "================================"
           echo "User address tersedia."
           echo "Block ID tersedia."
           echo "Prover: localhost:3000"
-          echo "Ready/custom signer: configured"
-          echo "IndexerDiscoveryProvider: configured"
+          echo "standard starknet.js signer for isolated VEIL PoC: configured"
+          echo "LocalFailClosedDiscoveryProvider: configured"
           echo "Private key, signature, viewing key, dan secret tidak ditampilkan."
 
           START_TIME="$(date +%s)"
@@ -571,7 +557,7 @@ jobs:
               -v \
               -o ../veil-proof-time.log \
             node --experimental-strip-types \
-              tools/privacy-prover-smoke-test.ts \
+              tools/veil-official-register-poc.ts \
             > ../veil-sdk-proof.log \
             2> ../veil-proof-stderr.log
 
@@ -662,10 +648,10 @@ jobs:
             exit "$PROOF_STATUS"
           fi
 
-          SUMMARY_FILE="$GITHUB_WORKSPACE/veil-proof-summary.json"
+          SUMMARY_FILE="$GITHUB_WORKSPACE/veil-register-proof-summary.json"
 
           if [ ! -s "$SUMMARY_FILE" ]; then
-            echo "veil-proof-summary.json tidak dibuat atau kosong."
+            echo "veil-register-proof-summary.json tidak dibuat atau kosong."
             echo "result=PROOF_ARTIFACT_MISSING" \
               >> "$GITHUB_OUTPUT"
             exit 1
@@ -679,14 +665,26 @@ jobs:
           with open(summary_path, "r", encoding="utf-8") as file:
               summary = json.load(file)
 
-          if summary.get("result") != "OFFICIAL_SDK_REAL_PROOF_GENERATED":
+          expected_keys = [
+              "result",
+              "proofPresent",
+              "proofLength",
+              "proofFactsCount",
+              "l2ToL1OutputCount",
+              "discoveryCalls",
+              "accountAddress",
+              "provingBlockId",
+          ]
+          if list(summary) != expected_keys:
+              raise SystemExit("Proof summary memiliki field yang tidak diizinkan")
+          if summary.get("result") != "OFFICIAL_SDK_REGISTER_PROOF_GENERATED":
               raise SystemExit("Official SDK tidak melaporkan real proof")
-          if not summary.get("proofPresent"):
+          if summary.get("proofPresent") is not True:
               raise SystemExit("Prover menghasilkan proof kosong")
           if summary.get("proofFactsCount", 0) < 1:
               raise SystemExit("Prover menghasilkan proof facts kosong")
-          if summary.get("l2ToL1OutputCount", 0) < 1:
-              raise SystemExit("Prover menghasilkan output kosong")
+          if summary.get("discoveryCalls") != 0:
+              raise SystemExit("Register path memanggil discovery")
 
           print("================================")
           print("VEIL OFFICIAL SDK REAL PROOF VERDICT")
@@ -695,13 +693,14 @@ jobs:
           print("proof_length:", summary["proofLength"])
           print("proof_facts_count:", summary["proofFactsCount"])
           print("l2_to_l1_output_count:", summary["l2ToL1OutputCount"])
+          print("discovery_calls:", summary["discoveryCalls"])
           PY
 
           echo
           cat "$SUMMARY_FILE"
 
           echo
-          echo "result=OFFICIAL_SDK_REAL_PROOF_GENERATED" \
+          echo "result=OFFICIAL_SDK_REGISTER_PROOF_GENERATED" \
             >> "$GITHUB_OUTPUT"
 
           echo "exit_status=0" >> "$GITHUB_OUTPUT"
@@ -775,8 +774,14 @@ jobs:
           echo "Saving final container state..."
 
           docker inspect veil-generic-prover \
-            > prover-container-inspect.json \
-            2>&1 || true
+            2>/dev/null \
+            | jq 'map(.Config.Env |= map(
+                if startswith("RPC_URL=")
+                then "RPC_URL=[REDACTED]"
+                else .
+                end
+              ))' \
+            > prover-container-inspect.json || true
 
           echo "Stopping prover container..."
 
@@ -806,6 +811,6 @@ jobs:
             veil-sdk-proof.log
             veil-proof-time.log
             veil-proof-stderr.log
-            veil-proof-summary.json
+            veil-register-proof-summary.json
           if-no-files-found: ignore
           retention-days: 7
