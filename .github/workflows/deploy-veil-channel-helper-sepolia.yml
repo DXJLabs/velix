@@ -1,0 +1,218 @@
+name: Build, Test, and Deploy VeilChannelHelper to Starknet Sepolia
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_contract:
+        description: Declare and deploy VeilChannelHelper to Starknet Sepolia
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-deploy:
+    name: Validate or Deploy VeilChannelHelper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Set up Scarb
+        uses: software-mansion/setup-scarb@v1
+        with:
+          scarb-version: "2.15.2"
+
+      - name: Set up Starknet Foundry
+        uses: foundry-rs/setup-snfoundry@v4
+        with:
+          starknet-foundry-version: "0.56.0"
+
+      - name: Verify pinned toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          scarb --version
+          snforge --version
+          sncast --version
+          node --version
+          npm --version
+
+      - name: Install JavaScript dependencies
+        shell: bash
+        run: npm ci --ignore-scripts
+
+      - name: Build Cairo contracts and artifacts
+        shell: bash
+        run: scarb build
+
+      - name: Run Cairo contract tests
+        shell: bash
+        run: snforge test
+
+      - name: Typecheck deployment script
+        shell: bash
+        run: npm run typecheck:poc
+
+      - name: Run deployment script tests
+        shell: bash
+        run: >-
+          node --experimental-strip-types --test
+          packages/veil-sdk/tests/veil-channel-helper-deployment.test.mjs
+
+      - name: Validate VeilChannelHelper artifacts without deployment
+        if: ${{ !inputs.deploy_contract }}
+        shell: bash
+        env:
+          VEIL_DEPLOY_CONTRACT: "false"
+        run: |
+          set -euo pipefail
+
+          SUMMARY_FILE="$GITHUB_WORKSPACE/veil-channel-helper-deployment-summary.json"
+          rm -f "$SUMMARY_FILE"
+          VALIDATION_OUTPUT="$(
+            node --experimental-strip-types \
+              tools/deploy-veil-channel-helper-sepolia.ts
+          )"
+          echo "$VALIDATION_OUTPUT"
+
+          if [ -e "$SUMMARY_FILE" ]; then
+            echo "Deployment summary dibuat saat deploy_contract=false."
+            exit 1
+          fi
+
+          node --input-type=module - "$VALIDATION_OUTPUT" <<'NODE'
+          const validation = JSON.parse(process.argv[2]);
+          const expectedKeys = [
+            "result",
+            "contractName",
+            "classHash",
+            "compiledClassHash",
+          ];
+          if (JSON.stringify(Object.keys(validation)) !== JSON.stringify(expectedKeys)) {
+            throw new Error("Artifact validation contains unexpected fields.");
+          }
+          if (validation.result !== "VEIL_CHANNEL_HELPER_ARTIFACTS_VALID"
+              || validation.contractName !== "VeilChannelHelper") {
+            throw new Error("VeilChannelHelper artifacts were not validated.");
+          }
+          for (const key of ["classHash", "compiledClassHash"]) {
+            if (!/^0x[0-9a-f]+$/u.test(validation[key]) || BigInt(validation[key]) === 0n) {
+              throw new Error(`${key} is not a valid nonzero felt.`);
+            }
+          }
+          console.log("VEIL_CHANNEL_HELPER_ARTIFACTS_VALID");
+          NODE
+
+      - name: Deploy VeilChannelHelper to Sepolia
+        id: deployment
+        if: ${{ inputs.deploy_contract }}
+        shell: bash
+        env:
+          VEIL_DEPLOY_CONTRACT: "true"
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_CHANNEL_HELPER_DEPLOYMENT_SUMMARY_PATH: ${{ github.workspace }}/veil-channel-helper-deployment-summary.json
+        run: |
+          set -euo pipefail
+
+          SUMMARY_FILE="$GITHUB_WORKSPACE/veil-channel-helper-deployment-summary.json"
+          rm -f "$SUMMARY_FILE"
+
+          node --experimental-strip-types \
+            tools/deploy-veil-channel-helper-sepolia.ts
+
+          if [ ! -s "$SUMMARY_FILE" ]; then
+            echo "veil-channel-helper-deployment-summary.json tidak dibuat atau kosong."
+            exit 1
+          fi
+
+          node --input-type=module - "$SUMMARY_FILE" <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import { RpcProvider } from "starknet";
+
+          const summaryPath = process.argv[2];
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          const expectedKeys = [
+            "result",
+            "network",
+            "contractName",
+            "classHash",
+            "contractAddress",
+            "declareTransactionHash",
+            "deployTransactionHash",
+            "finalityStatus",
+            "executionStatus",
+            "deployerAddress",
+            "blockNumber",
+          ];
+          if (JSON.stringify(Object.keys(summary)) !== JSON.stringify(expectedKeys)) {
+            throw new Error("Deployment summary contains unexpected fields.");
+          }
+          if (summary.result !== "VEIL_CHANNEL_HELPER_DEPLOYED_ON_SEPOLIA"
+              || summary.network !== "SN_SEPOLIA"
+              || summary.contractName !== "VeilChannelHelper"
+              || summary.finalityStatus !== "ACCEPTED_ON_L2"
+              || summary.executionStatus !== "SUCCEEDED") {
+            throw new Error("Deployment summary verdict is invalid.");
+          }
+          for (const key of [
+            "classHash",
+            "contractAddress",
+            "deployTransactionHash",
+            "deployerAddress",
+          ]) {
+            if (!/^0x[0-9a-f]+$/u.test(summary[key]) || BigInt(summary[key]) === 0n) {
+              throw new Error(`${key} is not a valid nonzero felt.`);
+            }
+          }
+          if (summary.declareTransactionHash !== null
+              && (!/^0x[0-9a-f]+$/u.test(summary.declareTransactionHash)
+                || BigInt(summary.declareTransactionHash) === 0n)) {
+            throw new Error("declareTransactionHash is invalid.");
+          }
+          if (!Number.isSafeInteger(summary.blockNumber) || summary.blockNumber < 0) {
+            throw new Error("Deployment block number is invalid.");
+          }
+
+          const provider = new RpcProvider({
+            nodeUrl: process.env.STARKNET_SEPOLIA_RPC_URL,
+          });
+          const onchainClassHash = await provider.getClassHashAt(
+            summary.contractAddress,
+            summary.blockNumber,
+          );
+          if (BigInt(onchainClassHash) !== BigInt(summary.classHash)) {
+            throw new Error("On-chain class hash does not match the deployment summary.");
+          }
+
+          console.log(summary.result);
+          console.log("class hash:", summary.classHash);
+          console.log("contract address:", summary.contractAddress);
+          console.log("declare transaction hash:", summary.declareTransactionHash);
+          console.log("deploy transaction hash:", summary.deployTransactionHash);
+          console.log(summary.finalityStatus);
+          console.log(summary.executionStatus);
+          NODE
+
+          echo "result=VEIL_CHANNEL_HELPER_DEPLOYED_ON_SEPOLIA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload safe deployment summary
+        if: ${{ always() && inputs.deploy_contract }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-channel-helper-sepolia-deployment
+          path: veil-channel-helper-deployment-summary.json
+          if-no-files-found: error
+          retention-days: 14

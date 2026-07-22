@@ -12,5 +12,5 @@
     "types": ["node"],
     "verbatimModuleSyntax": true
   },
-  "include": ["veil-official-register-poc.ts"]
+  "include": ["*.ts"]
 }
