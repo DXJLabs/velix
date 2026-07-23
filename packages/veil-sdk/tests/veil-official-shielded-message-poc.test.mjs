@@ -1030,13 +1030,18 @@ test("workflow keeps the official InvokeExternal path and has no direct fallback
     true,
   );
   const estimateStep = workflow.indexOf(
-    "Estimate shielded-message resources before prover build",
+    "Estimate shielded-message resources before prover start",
   );
-  const proverBuildStep = workflow.indexOf(
-    "Build x86-64-v3 transaction prover",
+  const proverPullStep = workflow.indexOf(
+    "Pull saved transaction prover",
   );
   assert.equal(estimateStep >= 0, true);
-  assert.equal(proverBuildStep > estimateStep, true);
+  assert.equal(proverPullStep > estimateStep, true);
+  assert.equal(
+    workflow.includes("Build x86-64-v3 transaction prover"),
+    false,
+  );
+  assert.equal(workflow.includes('docker pull "$PROVER_IMAGE"'), true);
   assert.equal(
     workflow.includes("VEIL_POC_RESOURCE_ESTIMATE_ONLY: \"true\""),
     true,

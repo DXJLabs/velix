@@ -107,8 +107,9 @@ jobs:
           node --experimental-strip-types --test
           packages/veil-sdk/tests/veil-poc-identity.test.mjs
           packages/veil-sdk/tests/veil-official-shielded-message-poc.test.mjs
+          packages/veil-sdk/tests/veil-official-shielded-message-runner.test.mjs
 
-      - name: Estimate shielded-message resources before prover build
+      - name: Estimate shielded-message resources before prover start
         if: ${{ inputs.generate_proof }}
         shell: bash
         env:
@@ -201,11 +202,14 @@ jobs:
           VEIL_POC_GENERATE_PROOF: ${{ inputs.generate_proof }}
           VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
           VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH: ${{ github.workspace }}/veil-shielded-message-summary.json
+          VEIL_POC_SHIELDED_MESSAGE_ERROR_PATH: ${{ github.workspace }}/veil-shielded-message-error.json
         run: |
           set -euo pipefail
-          rm -f "$GITHUB_WORKSPACE/veil-shielded-message-summary.json"
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-shielded-message-summary.json" \
+            "$GITHUB_WORKSPACE/veil-shielded-message-error.json"
           timeout 300m node --experimental-strip-types \
-            tools/veil-official-shielded-message-poc.ts
+            tools/veil-official-shielded-message-runner.ts
 
       - name: Validate safe shielded-message summary
         if: ${{ inputs.generate_proof }}
@@ -313,6 +317,7 @@ jobs:
           path: |
             veil-account-preflight.json
             veil-shielded-message-summary.json
+            veil-shielded-message-error.json
             veil-shielded-prover.log
           if-no-files-found: ignore
           retention-days: 7
