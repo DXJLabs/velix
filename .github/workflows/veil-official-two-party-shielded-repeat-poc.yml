@@ -1,0 +1,366 @@
+name: Run Official SDK Reusable Two-Party Shielded Message PoC
+
+on:
+  workflow_dispatch:
+    inputs:
+      direction:
+        description: Sender and recipient direction
+        required: true
+        type: choice
+        options:
+          - a-to-b
+          - b-to-a
+        default: a-to-b
+      generate_proof:
+        description: Generate a real STWO proof
+        required: true
+        type: boolean
+        default: false
+      submit_onchain:
+        description: Submit on Sepolia and verify recipient decryption
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  reusable-two-party-message:
+    name: Reuse Channel and Rotate Replay Anchor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
+
+    steps:
+      - name: Validate workflow inputs and secrets
+        shell: bash
+        env:
+          DIRECTION: ${{ inputs.direction }}
+          GENERATE_PROOF: ${{ inputs.generate_proof }}
+          SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          if [ "$SUBMIT_ONCHAIN" = "true" ] && [ "$GENERATE_PROOF" != "true" ]; then
+            echo "submit_onchain=true requires generate_proof=true."
+            exit 1
+          fi
+          case "$DIRECTION" in
+            a-to-b|b-to-a) ;;
+            *) echo "Unsupported direction: $DIRECTION"; exit 1 ;;
+          esac
+          for name in \
+            A_ADDRESS \
+            A_PRIVATE_KEY \
+            A_VIEWING_KEY \
+            B_ADDRESS \
+            B_PRIVATE_KEY \
+            B_VIEWING_KEY \
+            RPC_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "A required reusable-message secret is unavailable: $name"
+              exit 1
+            fi
+          done
+          if [ "$A_ADDRESS" = "$B_ADDRESS" ]; then
+            echo "A and B must be different accounts."
+            exit 1
+          fi
+          echo "Reusable two-party identity configuration is present; values are not displayed."
+
+      - name: Checkout VEIL source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build VEIL SDK
+        run: npm run build:sdk
+
+      - name: Typecheck PoC tools
+        run: npm run typecheck:poc
+
+      - name: Run two-party and replay-anchor unit tests
+        run: >-
+          node --experimental-strip-types --test
+          packages/veil-sdk/tests/veil-official-two-party-shielded-message-poc.test.mjs
+          packages/veil-sdk/tests/veil-official-two-party-shielded-repeat-poc.test.mjs
+
+      - name: Estimate reusable-message resources before prover start
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          DIRECTION: ${{ inputs.direction }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_GENERATE_PROOF: "true"
+          VEIL_POC_SUBMIT_ONCHAIN: "false"
+          VEIL_POC_RESOURCE_ESTIMATE_ONLY: "true"
+          VEIL_POC_ACCOUNT_PREFLIGHT_PATH: ${{ github.workspace }}/veil-repeat-preflight.json
+        run: |
+          set -euo pipefail
+          if [ "$DIRECTION" = "a-to-b" ]; then
+            export VEIL_POC_ACCOUNT_ADDRESS="$A_ADDRESS"
+            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$A_PRIVATE_KEY"
+            export VEIL_POC_VIEWING_KEY="$A_VIEWING_KEY"
+            export VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS="$B_ADDRESS"
+            export VEIL_POC_RECIPIENT_VIEWING_KEY="$B_VIEWING_KEY"
+          else
+            export VEIL_POC_ACCOUNT_ADDRESS="$B_ADDRESS"
+            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$B_PRIVATE_KEY"
+            export VEIL_POC_VIEWING_KEY="$B_VIEWING_KEY"
+            export VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS="$A_ADDRESS"
+            export VEIL_POC_RECIPIENT_VIEWING_KEY="$A_VIEWING_KEY"
+          fi
+          node --experimental-strip-types \
+            tools/veil-official-two-party-shielded-repeat-poc.ts
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ inputs.generate_proof }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull saved transaction prover
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PROVER_IMAGE"
+          docker image inspect "$PROVER_IMAGE" >/dev/null
+          echo "SAVED_PROVER_IMAGE_READY"
+
+      - name: Start self-hosted prover
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          docker rm -f veil-repeat-prover 2>/dev/null || true
+          docker run -d \
+            --name veil-repeat-prover \
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            "$PROVER_IMAGE"
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Running}}' veil-repeat-prover 2>/dev/null || true)" != "true" ]; then
+              echo "The prover container stopped before becoming ready."
+              exit 1
+            fi
+            response="$(curl -sS --connect-timeout 2 --max-time 5 \
+              -X POST http://127.0.0.1:3000 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+              2>/dev/null || true)"
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+            echo "Waiting for prover: $attempt/60"
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "The prover did not become ready."
+            exit 1
+          fi
+          echo "Self-hosted prover is ready."
+
+      - name: Run reusable two-party shielded message
+        shell: bash
+        env:
+          DIRECTION: ${{ inputs.direction }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_GENERATE_PROOF: ${{ inputs.generate_proof }}
+          VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+          VEIL_POC_RESOURCE_ESTIMATE_ONLY: "false"
+          VEIL_POC_TWO_PARTY_SUMMARY_PATH: ${{ github.workspace }}/veil-two-party-shielded-repeat-summary.json
+          VEIL_POC_ACCOUNT_PREFLIGHT_PATH: ${{ github.workspace }}/veil-repeat-preflight.json
+        run: |
+          set -euo pipefail
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-two-party-shielded-repeat-summary.json" \
+            "$GITHUB_WORKSPACE/veil-repeat-preflight.json"
+          if [ "$DIRECTION" = "a-to-b" ]; then
+            export VEIL_POC_ACCOUNT_ADDRESS="$A_ADDRESS"
+            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$A_PRIVATE_KEY"
+            export VEIL_POC_VIEWING_KEY="$A_VIEWING_KEY"
+            export VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS="$B_ADDRESS"
+            export VEIL_POC_RECIPIENT_VIEWING_KEY="$B_VIEWING_KEY"
+          else
+            export VEIL_POC_ACCOUNT_ADDRESS="$B_ADDRESS"
+            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$B_PRIVATE_KEY"
+            export VEIL_POC_VIEWING_KEY="$B_VIEWING_KEY"
+            export VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS="$A_ADDRESS"
+            export VEIL_POC_RECIPIENT_VIEWING_KEY="$A_VIEWING_KEY"
+          fi
+          timeout 300m node --experimental-strip-types \
+            tools/veil-official-two-party-shielded-repeat-poc.ts
+
+      - name: Validate safe reusable-message summary
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          DIRECTION: ${{ inputs.direction }}
+          SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+        run: |
+          set -euo pipefail
+          summary="$GITHUB_WORKSPACE/veil-two-party-shielded-repeat-summary.json"
+          if [ ! -s "$summary" ]; then
+            echo "Reusable-message summary is missing or empty."
+            exit 1
+          fi
+          node --input-type=module - \
+            "$summary" \
+            "$SUBMIT_ONCHAIN" \
+            "$DIRECTION" \
+            "$A_ADDRESS" \
+            "$B_ADDRESS" <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const [summaryPath, submitOnchain, direction, aAddress, bAddress] =
+            process.argv.slice(2);
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          const expectedKeys = [
+            "result",
+            "network",
+            "helperAddress",
+            "privacyPoolAddress",
+            "senderAddress",
+            "recipientAddress",
+            "provingBlockId",
+            "transactionHash",
+            "finalityStatus",
+            "executionStatus",
+            "messageLocator",
+            "payloadCommitment",
+            "ciphertextChunkCount",
+            "recipientChannelIndex",
+            "proofPresent",
+            "proofFactsCount",
+            "messageEventFound",
+            "storageVerified",
+            "senderLocalDecryptVerified",
+            "recipientChannelRecovered",
+            "recipientDecryptVerified",
+            "unrelatedViewingKeyRejected",
+          ];
+          if (JSON.stringify(Object.keys(summary)) !== JSON.stringify(expectedKeys)) {
+            throw new Error("Reusable-message summary contains unexpected fields.");
+          }
+          const normalize = (value) => `0x${BigInt(value).toString(16)}`;
+          const expectedSender = direction === "a-to-b" ? aAddress : bAddress;
+          const expectedRecipient = direction === "a-to-b" ? bAddress : aAddress;
+          if (normalize(summary.senderAddress) !== normalize(expectedSender)
+              || normalize(summary.recipientAddress) !== normalize(expectedRecipient)) {
+            throw new Error("Reusable-message direction mismatch.");
+          }
+          if (summary.network !== "SN_SEPOLIA" || summary.proofPresent !== true) {
+            throw new Error("Reusable-message proof verdict is invalid.");
+          }
+          if (submitOnchain === "true") {
+            if (summary.result !== "OFFICIAL_SDK_TWO_PARTY_SHIELDED_MESSAGE_SUBMITTED_ONCHAIN"
+                || summary.finalityStatus !== "ACCEPTED_ON_L2"
+                || summary.executionStatus !== "SUCCEEDED"
+                || !summary.transactionHash
+                || summary.messageEventFound !== true
+                || summary.storageVerified !== true
+                || summary.senderLocalDecryptVerified !== true
+                || summary.recipientChannelRecovered !== true
+                || summary.recipientDecryptVerified !== true
+                || summary.unrelatedViewingKeyRejected !== true) {
+              throw new Error("Real reusable two-party verification failed.");
+            }
+          } else if (summary.result !== "OFFICIAL_SDK_TWO_PARTY_SHIELDED_MESSAGE_PROOF_GENERATED"
+              || summary.transactionHash !== null
+              || summary.finalityStatus !== "NOT_SUBMITTED"
+              || summary.executionStatus !== "NOT_SUBMITTED") {
+            throw new Error("Reusable-message proof-only verdict is invalid.");
+          }
+          console.log("REUSABLE_TWO_PARTY_SUMMARY_VALID");
+          console.log(summary.result);
+          if (summary.transactionHash) console.log("transaction hash:", summary.transactionHash);
+          console.log(summary.finalityStatus);
+          console.log(summary.executionStatus);
+          NODE
+
+      - name: Ensure dry-run emitted no proof artifact
+        if: ${{ !inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e "$GITHUB_WORKSPACE/veil-two-party-shielded-repeat-summary.json" ]; then
+            echo "Proof summary was created while generate_proof=false."
+            exit 1
+          fi
+          echo "REUSABLE_TWO_PARTY_DRY_RUN_VALID"
+
+      - name: Save redacted prover logs and stop container
+        if: ${{ always() && inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker inspect veil-repeat-prover >/dev/null 2>&1; then
+            docker logs veil-repeat-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-repeat-prover.log || true
+            docker rm -f veil-repeat-prover || true
+          else
+            printf '%s\n' "Prover container was not started." \
+              > veil-repeat-prover.log
+          fi
+
+      - name: Upload safe reusable-message artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-two-party-shielded-repeat-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            veil-two-party-shielded-repeat-summary.json
+            veil-repeat-preflight.json
+            veil-repeat-prover.log
