@@ -98,6 +98,33 @@ const INTERNAL_PLAINTEXT = "VEIL_PRIVATE_MESSAGE_POC_V1";
 const TWO_PARTY_ROOM_ID =
   "VEIL_OFFICIAL_TWO_PARTY_SHIELDED_MESSAGE_POC_V1";
 const MAX_SAFE_CHANNEL_COUNT = BigInt(Number.MAX_SAFE_INTEGER);
+const OUTGOING_CHANNEL_ID_TAG = "OUTGOING_CHANNEL_ID_TAG:V1";
+const MAX_OUTGOING_CHANNEL_SCAN = 4_096;
+
+function shortStringToFelt(value: string): bigint {
+  if (value.length > 31) {
+    throw new Error("Outgoing-channel domain tag is too long.");
+  }
+  return BigInt(`0x${Buffer.from(value, "ascii").toString("hex")}`);
+}
+
+function computeOutgoingChannelId(input: {
+  senderAddress: bigint;
+  senderViewingKey: bigint;
+  index: number;
+}): bigint {
+  if (!Number.isSafeInteger(input.index) || input.index < 0) {
+    throw new Error("Outgoing-channel index is invalid.");
+  }
+
+  return ec.starkCurve.poseidonHashMany([
+    shortStringToFelt(OUTGOING_CHANNEL_ID_TAG),
+    input.senderAddress,
+    input.senderViewingKey,
+    BigInt(input.index),
+    0n,
+  ]);
+}
 
 export interface VeilTwoPartyShieldedMessagePocConfig
   extends VeilShieldedMessagePocConfig {
@@ -337,26 +364,29 @@ export async function prepareTwoPartyShieldedMessage(input: {
 
 class SingleRecipientChannelDiscoveryProvider
 implements DiscoveryProviderInterface {
+  readonly #provider: ShieldedMessageChainProvider;
+  readonly #poolAddress: bigint;
   readonly #senderAddress: bigint;
   readonly #senderViewingKey: bigint;
   readonly #recipientAddress: bigint;
   readonly #recipientPublicKey: bigint;
-  readonly #recipientChannelCount: number;
   readonly #provingBlockId: number;
 
   constructor(input: {
+    provider: ShieldedMessageChainProvider;
+    poolAddress: bigint;
     senderAddress: bigint;
     senderViewingKey: bigint;
     recipientAddress: bigint;
     recipientPublicKey: bigint;
-    recipientChannelCount: number;
     provingBlockId: number;
   }) {
+    this.#provider = input.provider;
+    this.#poolAddress = input.poolAddress;
     this.#senderAddress = input.senderAddress;
     this.#senderViewingKey = input.senderViewingKey;
     this.#recipientAddress = input.recipientAddress;
     this.#recipientPublicKey = input.recipientPublicKey;
-    this.#recipientChannelCount = input.recipientChannelCount;
     this.#provingBlockId = input.provingBlockId;
   }
 
@@ -374,42 +404,155 @@ implements DiscoveryProviderInterface {
     );
   }
 
+  async #readChannel(recipient: bigint): Promise<Channel> {
+    const publicKeyResponse = await this.#provider.callContract({
+      contractAddress: feltHex(this.#poolAddress),
+      entrypoint: "get_public_key",
+      calldata: [feltHex(recipient)],
+    }, this.#provingBlockId);
+
+    if (publicKeyResponse.length !== 1
+        || BigInt(publicKeyResponse[0]!) === 0n) {
+      throw new Error(
+        "Two-party discovery recipient is not registered in the Privacy Pool.",
+      );
+    }
+
+    const publicKey = BigInt(publicKeyResponse[0]!);
+    const expectedPublicKey = recipient === this.#senderAddress
+      ? BigInt(ec.starkCurve.getStarkKey(feltHex(this.#senderViewingKey)))
+      : this.#recipientPublicKey;
+
+    if (publicKey !== expectedPublicKey) {
+      throw new Error(
+        "Two-party discovery returned an unexpected recipient public key.",
+      );
+    }
+
+    const channelKey = BigInt(computePrivacyPoolChannelKey({
+      senderAddress: this.#senderAddress,
+      senderPrivateKey: this.#senderViewingKey,
+      recipientAddress: recipient,
+      recipientPublicKey: publicKey,
+    }));
+
+    const channelMarker = BigInt(computePrivacyPoolChannelMarker({
+      channelKey,
+      senderAddress: this.#senderAddress,
+      recipientAddress: recipient,
+      recipientPublicKey: publicKey,
+    }));
+
+    const existsResponse = await this.#provider.callContract({
+      contractAddress: feltHex(this.#poolAddress),
+      entrypoint: "channel_exists",
+      calldata: [feltHex(channelMarker)],
+    }, this.#provingBlockId);
+
+    if (existsResponse.length !== 1) {
+      throw new Error(
+        "Privacy Pool returned an invalid channel-existence response.",
+      );
+    }
+
+    const exists = BigInt(existsResponse[0]!) !== 0n;
+
+    return {
+      publicKey,
+      key: exists ? channelKey : undefined,
+      tokens: new AddressMap(),
+    } as unknown as Channel;
+  }
+
+  async #readOutgoingChannelCount(): Promise<number> {
+    for (let index = 0; index < MAX_OUTGOING_CHANNEL_SCAN; index += 1) {
+      const outgoingChannelId = computeOutgoingChannelId({
+        senderAddress: this.#senderAddress,
+        senderViewingKey: this.#senderViewingKey,
+        index,
+      });
+
+      const response = await this.#provider.callContract({
+        contractAddress: feltHex(this.#poolAddress),
+        entrypoint: "get_outgoing_channel_info",
+        calldata: [feltHex(outgoingChannelId)],
+      }, this.#provingBlockId);
+
+      if (response.length !== 2) {
+        throw new Error(
+          "Privacy Pool returned invalid outgoing-channel information.",
+        );
+      }
+
+      const salt = BigInt(response[0]!);
+
+      if (salt === 0n) {
+        return index;
+      }
+    }
+
+    throw new Error(
+      "Privacy Pool outgoing-channel count exceeded the PoC safety limit.",
+    );
+  }
+
   async discoverChannels(
     address: bigint,
     viewingKey: bigint,
     recipients: Parameters<DiscoveryProviderInterface["discoverChannels"]>[2],
     params?: Parameters<DiscoveryProviderInterface["discoverChannels"]>[3],
   ): ReturnType<DiscoveryProviderInterface["discoverChannels"]> {
-    if (address !== this.#senderAddress || viewingKey !== this.#senderViewingKey) {
+    if (address !== this.#senderAddress
+        || viewingKey !== this.#senderViewingKey) {
       throw new Error("Two-party channel discovery sender identity mismatch.");
     }
+
     if (params?.blockIdentifier !== undefined
         && Number(params.blockIdentifier) !== this.#provingBlockId) {
       throw new Error("Two-party channel discovery block mismatch.");
     }
+
     if (recipients === "total-only") {
       return {
         timestamp: this.#provingBlockId,
-        total: this.#recipientChannelCount,
+        total: await this.#readOutgoingChannelCount(),
       };
     }
-    if (recipients === "all"
-        || recipients.length !== 1
-        || recipients[0] !== this.#recipientAddress) {
+
+    if (recipients === "all") {
       throw new Error(
-        "Two-party PoC supports exactly the configured recipient.",
+        "Unbounded two-party channel discovery is not allowed in this PoC.",
       );
     }
+
+    if (recipients.length === 0) {
+      throw new Error("Two-party discovery received no recipients.");
+    }
+
+    const allowedRecipients = new Set([
+      this.#senderAddress,
+      this.#recipientAddress,
+    ]);
+
+    for (const recipient of recipients) {
+      if (!allowedRecipients.has(recipient)) {
+        throw new Error(
+          "Two-party discovery requested an unexpected recipient.",
+        );
+      }
+    }
+
     const channels = new AddressMap<Channel>();
-    channels.set(this.#recipientAddress, {
-      publicKey: this.#recipientPublicKey,
-      key: undefined,
-      tokens: new AddressMap(),
-    } as unknown as Channel);
+
+    for (const recipient of recipients) {
+      if (!channels.has(recipient)) {
+        channels.set(recipient, await this.#readChannel(recipient));
+      }
+    }
+
     return {
       timestamp: this.#provingBlockId,
       channels,
-      total: this.#recipientChannelCount,
     };
   }
 }
@@ -420,11 +563,12 @@ function createTwoPartyTransfers(
 ) {
   const prepared = asPreparedTwoParty(input.prepared);
   const discoveryProvider = new SingleRecipientChannelDiscoveryProvider({
+    provider: input.provider,
+    poolAddress: input.config.poolAddress,
     senderAddress: input.config.identity.accountAddress,
     senderViewingKey: input.config.identity.viewingKey,
     recipientAddress: prepared.recipientAddress,
     recipientPublicKey: prepared.recipientPublicKey,
-    recipientChannelCount: prepared.recipientChannelIndex,
     provingBlockId: input.provingBlockId,
   });
   const transfers = createPrivateTransfers({
