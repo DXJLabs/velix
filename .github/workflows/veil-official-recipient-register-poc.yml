@@ -1,0 +1,242 @@
+name: Register VEIL Recipient B in Privacy Pool
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  register-recipient:
+    name: Register Recipient B with Official Privacy SDK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    env:
+      PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
+
+    steps:
+      - name: Validate recipient B secrets
+        shell: bash
+        env:
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+
+          for name in \
+            ACCOUNT_ADDRESS \
+            ACCOUNT_PRIVATE_KEY \
+            VIEWING_KEY \
+            RPC_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required recipient B secret is unavailable: $name"
+              exit 1
+            fi
+          done
+
+          case "$ACCOUNT_ADDRESS" in
+            0x*) ;;
+            *)
+              echo "Recipient B address must begin with 0x."
+              exit 1
+              ;;
+          esac
+
+          echo "Recipient B registration configuration is present."
+          echo "Secret values are not displayed."
+
+      - name: Checkout VEIL source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build VEIL SDK
+        run: npm run build:sdk
+
+      - name: Typecheck PoC tools
+        run: npm run typecheck:poc
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull saved transaction prover
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PROVER_IMAGE"
+          docker image inspect "$PROVER_IMAGE" >/dev/null
+          echo "SAVED_PROVER_IMAGE_READY"
+
+      - name: Start self-hosted prover
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+
+          docker rm -f veil-recipient-register-prover \
+            2>/dev/null || true
+
+          docker run -d \
+            --name veil-recipient-register-prover \
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            "$PROVER_IMAGE"
+
+          ready=0
+
+          for attempt in $(seq 1 60); do
+            running="$(
+              docker inspect \
+                -f '{{.State.Running}}' \
+                veil-recipient-register-prover \
+                2>/dev/null || true
+            )"
+
+            if [ "$running" != "true" ]; then
+              echo "Recipient register prover stopped before becoming ready."
+              exit 1
+            fi
+
+            response="$(
+              curl -sS \
+                --connect-timeout 2 \
+                --max-time 5 \
+                -X POST \
+                http://127.0.0.1:3000 \
+                -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+                2>/dev/null || true
+            )"
+
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+
+            echo "Waiting for prover: $attempt/60"
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "Recipient register prover did not become ready."
+            exit 1
+          fi
+
+          echo "Recipient register prover is ready."
+
+      - name: Register recipient B through official SDK
+        shell: bash
+        env:
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_SUBMIT_ONCHAIN: "true"
+          VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-recipient-register-proof-summary.json
+          VEIL_POC_SUBMISSION_SUMMARY_PATH: ${{ github.workspace }}/veil-recipient-register-submission-summary.json
+          VEIL_POC_ERROR_PATH: ${{ github.workspace }}/veil-recipient-register-error.json
+        run: |
+          set -euo pipefail
+
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-account-preflight.json" \
+            "$GITHUB_WORKSPACE/veil-recipient-register-proof-summary.json" \
+            "$GITHUB_WORKSPACE/veil-recipient-register-submission-summary.json" \
+            "$GITHUB_WORKSPACE/veil-recipient-register-error.json"
+
+          timeout 300m node --experimental-strip-types \
+            tools/veil-official-register-poc.ts \
+            | tee veil-recipient-register.log
+
+      - name: Validate recipient B registration result
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          summary="$GITHUB_WORKSPACE/veil-recipient-register-submission-summary.json"
+
+          if [ ! -s "$summary" ]; then
+            echo "Recipient B registration submission summary is missing."
+            exit 1
+          fi
+
+          node --input-type=module - "$summary" <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const [summaryPath] = process.argv.slice(2);
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+
+          if (
+            summary.result !== "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN"
+            || summary.finalityStatus !== "ACCEPTED_ON_L2"
+            || summary.executionStatus !== "SUCCEEDED"
+            || summary.proofPresent !== true
+            || !summary.transactionHash
+          ) {
+            throw new Error("Recipient B Privacy Pool registration failed.");
+          }
+
+          console.log(summary.result);
+          console.log("transaction hash:", summary.transactionHash);
+          console.log(summary.finalityStatus);
+          console.log(summary.executionStatus);
+          NODE
+
+      - name: Save redacted prover logs and stop container
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if docker inspect veil-recipient-register-prover \
+              >/dev/null 2>&1; then
+            docker logs veil-recipient-register-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-recipient-register-prover.log || true
+
+            docker rm -f veil-recipient-register-prover || true
+          else
+            printf '%s\n' "Prover container was not started." \
+              > veil-recipient-register-prover.log
+          fi
+
+      - name: Upload safe recipient registration artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-official-recipient-register-results
+          path: |
+            veil-account-preflight.json
+            veil-recipient-register-proof-summary.json
+            veil-recipient-register-submission-summary.json
+            veil-recipient-register-error.json
+            veil-recipient-register.log
+            veil-recipient-register-prover.log
+          if-no-files-found: warn
+          retention-days: 14
