@@ -153,6 +153,43 @@ jobs:
           docker image inspect "$PROVER_IMAGE" >/dev/null
           echo "SAVED_PROVER_IMAGE_READY"
 
+      - name: Prepare memory for recursive STWO proof
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== MEMORY BEFORE SWAP ==="
+          free -h
+
+          echo "=== DISK BEFORE SWAP ==="
+          df -h /
+
+          available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+          reserve_kb="$((3 * 1024 * 1024))"
+          maximum_swap_kb="$((10 * 1024 * 1024))"
+          swap_kb="$((available_kb - reserve_kb))"
+
+          if [ "$swap_kb" -gt "$maximum_swap_kb" ]; then
+            swap_kb="$maximum_swap_kb"
+          fi
+
+          if [ "$swap_kb" -lt "$((4 * 1024 * 1024))" ]; then
+            echo "Insufficient runner disk for the minimum 4 GiB prover swap."
+            exit 1
+          fi
+
+          sudo rm -f /swapfile
+          sudo fallocate -l "${swap_kb}K" /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+          echo "=== MEMORY AFTER SWAP ==="
+          free -h
+          swapon --show
+          df -h /
+
       - name: Start self-hosted prover
         if: ${{ inputs.generate_proof }}
         shell: bash
@@ -172,6 +209,8 @@ jobs:
             -e MAX_QUEUED_REQUESTS="1" \
             -e MAX_CONNECTIONS="2" \
             -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e RAYON_NUM_THREADS="2" \
+            -e MALLOC_ARENA_MAX="2" \
             -e PREFETCH_STATE="false" \
             -e RUST_LOG="info" \
             "$PROVER_IMAGE"
@@ -344,14 +383,35 @@ jobs:
         run: |
           set -euo pipefail
           if docker inspect veil-repeat-prover >/dev/null 2>&1; then
+            docker inspect veil-repeat-prover \
+              --format '{{json .State}}' \
+              > veil-repeat-prover-state.json || true
+
             docker logs veil-repeat-prover 2>&1 \
               | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
               > veil-repeat-prover.log || true
+
+            echo "=== PROVER CONTAINER STATE ==="
+            cat veil-repeat-prover-state.json || true
+
             docker rm -f veil-repeat-prover || true
           else
             printf '%s\n' "Prover container was not started." \
               > veil-repeat-prover.log
+            printf '%s\n' '{"status":"not_started"}' \
+              > veil-repeat-prover-state.json
           fi
+
+          {
+            echo "=== FINAL MEMORY ==="
+            free -h
+            echo
+            echo "=== FINAL SWAP ==="
+            swapon --show || true
+            echo
+            echo "=== FINAL DISK ==="
+            df -h /
+          } > veil-repeat-memory-final.log
 
       - name: Upload safe reusable-message artifacts
         if: ${{ always() }}
@@ -364,3 +424,5 @@ jobs:
             veil-two-party-shielded-repeat-summary.json
             veil-repeat-preflight.json
             veil-repeat-prover.log
+            veil-repeat-prover-state.json
+            veil-repeat-memory-final.log
