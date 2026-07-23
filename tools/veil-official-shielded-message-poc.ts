@@ -577,7 +577,23 @@ export function createOfficialShieldedMessageSubmissionAccount(config: {
 }): ShieldedMessageSubmissionAccount {
   const provider = new ProofRpcProvider({
     nodeUrl: config.rpcUrl,
-    resourceBoundsOverhead: false,
+    // Keep the outer on-chain verification transaction atomic while applying
+    // the official starknet.js safety margin. The previous zero-overhead
+    // estimate was 0.15% below the L2 gas actually consumed and reverted.
+    resourceBoundsOverhead: {
+      l1_gas: {
+        max_amount: 50,
+        max_price_per_unit: 50,
+      },
+      l1_data_gas: {
+        max_amount: 50,
+        max_price_per_unit: 50,
+      },
+      l2_gas: {
+        max_amount: 50,
+        max_price_per_unit: 50,
+      },
+    },
   });
   const account = new ProofAccount({
     provider,
