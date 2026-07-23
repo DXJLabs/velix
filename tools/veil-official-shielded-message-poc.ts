@@ -149,8 +149,7 @@ export interface ShieldedMessageProofExecutorInput {
 
 export interface ShieldedMessageProofExecution {
   result: ExecuteResult;
-  resourceBounds: ProofResourceBounds;
-  accountNonce: bigint;
+  provingResourceBounds: ProofResourceBounds;
 }
 
 export interface ShieldedMessageProofExecutor {
@@ -164,7 +163,6 @@ export type ProofResourceBounds =
 
 export interface ShieldedMessageResourceEstimator {
   estimateInvokeV3(invocation: ProofInvocation): Promise<ProofResourceBounds>;
-  getAccountNonce(accountAddress: bigint): Promise<bigint>;
 }
 
 export interface ShieldedMessageRpcEstimatorProvider {
@@ -172,10 +170,15 @@ export interface ShieldedMessageRpcEstimatorProvider {
     invocations: readonly unknown[],
     options: { blockIdentifier: "latest"; skipValidate: true },
   ): Promise<readonly { resourceBounds: ProofResourceBounds }[]>;
-  getNonceForAddress(
-    accountAddress: string,
-    blockIdentifier: "latest",
-  ): Promise<string>;
+}
+
+export interface ShieldedMessageSubmissionAccount
+  extends RegisterSubmissionAccount {
+  getNonce(blockIdentifier: "latest"): Promise<string>;
+  estimateInvokeFee(
+    call: Parameters<RegisterSubmissionAccount["execute"]>[0],
+    details: ProofExecutionDetails,
+  ): Promise<{ resourceBounds: ProofResourceBounds }>;
 }
 
 export interface VeilShieldedMessageSummary {
@@ -207,7 +210,7 @@ export interface VeilShieldedMessagePocDependencies {
     rpcUrl: string;
     accountAddress: bigint;
     accountPrivateKey: string;
-  }) => RegisterSubmissionAccount;
+  }) => ShieldedMessageSubmissionAccount;
   createResourceEstimator?: (
     rpcUrl: string,
   ) => ShieldedMessageResourceEstimator;
@@ -571,14 +574,23 @@ export function createOfficialShieldedMessageSubmissionAccount(config: {
   rpcUrl: string;
   accountAddress: bigint;
   accountPrivateKey: string;
-}): RegisterSubmissionAccount {
-  const provider = new ProofRpcProvider({ nodeUrl: config.rpcUrl });
+}): ShieldedMessageSubmissionAccount {
+  const provider = new ProofRpcProvider({
+    nodeUrl: config.rpcUrl,
+    resourceBoundsOverhead: false,
+  });
   const account = new ProofAccount({
     provider,
     address: feltHex(config.accountAddress),
     signer: config.accountPrivateKey,
   });
   return {
+    getNonce(blockIdentifier) {
+      return account.getNonce(blockIdentifier);
+    },
+    estimateInvokeFee(call, details) {
+      return account.estimateInvokeFee(call as never, details);
+    },
     execute(call, details) {
       return account.execute(call, details);
     },
@@ -639,9 +651,9 @@ function resourceBoundsFingerprint(bounds: ProofResourceBounds): string {
   ].join(":");
 }
 
-export function createShieldedMessageResourceBounds(
+function assertEstimatedResourceBounds(
   estimate: ProofResourceBounds,
-): ProofResourceBounds {
+): void {
   for (const resource of ["l1_gas", "l1_data_gas", "l2_gas"] as const) {
     assertResourceValue(
       estimate[resource].max_amount,
@@ -656,14 +668,48 @@ export function createShieldedMessageResourceBounds(
       false,
     );
   }
+}
+
+function createMarginedResourceAmounts(estimate: ProofResourceBounds) {
+  assertEstimatedResourceBounds(estimate);
+  const amounts = {
+    l1_gas: scaleResourceCeil(
+      estimate.l1_gas.max_amount,
+      STANDARD_RESOURCE_MARGIN_NUMERATOR,
+      STANDARD_RESOURCE_MARGIN_DENOMINATOR,
+      "l1_gas.max_amount",
+    ),
+    l1_data_gas: scaleResourceCeil(
+      estimate.l1_data_gas.max_amount,
+      L1_DATA_GAS_AMOUNT_MARGIN,
+      1n,
+      "l1_data_gas.max_amount",
+    ),
+    l2_gas: scaleResourceCeil(
+      estimate.l2_gas.max_amount,
+      STANDARD_RESOURCE_MARGIN_NUMERATOR,
+      STANDARD_RESOURCE_MARGIN_DENOMINATOR,
+      "l2_gas.max_amount",
+    ),
+  };
+  for (const resource of ["l1_gas", "l1_data_gas", "l2_gas"] as const) {
+    assertResourceValue(
+      amounts[resource],
+      MAX_RESOURCE_AMOUNT,
+      `${resource}.max_amount`,
+      true,
+    );
+  }
+  return amounts;
+}
+
+export function createShieldedMessageSubmissionResourceBounds(
+  estimate: ProofResourceBounds,
+): ProofResourceBounds {
+  const amounts = createMarginedResourceAmounts(estimate);
   const bounds = {
     l1_gas: {
-      max_amount: scaleResourceCeil(
-        estimate.l1_gas.max_amount,
-        STANDARD_RESOURCE_MARGIN_NUMERATOR,
-        STANDARD_RESOURCE_MARGIN_DENOMINATOR,
-        "l1_gas.max_amount",
-      ),
+      max_amount: amounts.l1_gas,
       max_price_per_unit: scaleResourceCeil(
         estimate.l1_gas.max_price_per_unit,
         STANDARD_RESOURCE_MARGIN_NUMERATOR,
@@ -672,12 +718,7 @@ export function createShieldedMessageResourceBounds(
       ),
     },
     l1_data_gas: {
-      max_amount: scaleResourceCeil(
-        estimate.l1_data_gas.max_amount,
-        L1_DATA_GAS_AMOUNT_MARGIN,
-        1n,
-        "l1_data_gas.max_amount",
-      ),
+      max_amount: amounts.l1_data_gas,
       max_price_per_unit: scaleResourceCeil(
         estimate.l1_data_gas.max_price_per_unit,
         STANDARD_RESOURCE_MARGIN_NUMERATOR,
@@ -686,12 +727,7 @@ export function createShieldedMessageResourceBounds(
       ),
     },
     l2_gas: {
-      max_amount: scaleResourceCeil(
-        estimate.l2_gas.max_amount,
-        STANDARD_RESOURCE_MARGIN_NUMERATOR,
-        STANDARD_RESOURCE_MARGIN_DENOMINATOR,
-        "l2_gas.max_amount",
-      ),
+      max_amount: amounts.l2_gas,
       max_price_per_unit: scaleResourceCeil(
         estimate.l2_gas.max_price_per_unit,
         STANDARD_RESOURCE_MARGIN_NUMERATOR,
@@ -715,6 +751,36 @@ export function createShieldedMessageResourceBounds(
     );
   }
   return freezeResourceBounds(bounds);
+}
+
+export function createShieldedMessageProvingResourceBounds(
+  estimate: ProofResourceBounds,
+  defaultProvingBounds: ProofResourceBounds,
+): ProofResourceBounds {
+  const marginedAmounts = createMarginedResourceAmounts(estimate);
+  assertResourceValue(
+    defaultProvingBounds.l2_gas.max_amount,
+    MAX_RESOURCE_AMOUNT,
+    "l2_gas.default_proving_max_amount",
+    true,
+  );
+  return freezeResourceBounds({
+    l1_gas: {
+      max_amount: marginedAmounts.l1_gas,
+      max_price_per_unit: 0n,
+    },
+    l1_data_gas: {
+      max_amount: marginedAmounts.l1_data_gas,
+      max_price_per_unit: 0n,
+    },
+    l2_gas: {
+      max_amount: marginedAmounts.l2_gas
+        > defaultProvingBounds.l2_gas.max_amount
+        ? marginedAmounts.l2_gas
+        : defaultProvingBounds.l2_gas.max_amount,
+      max_price_per_unit: 0n,
+    },
+  });
 }
 
 export function createShieldedMessageResourceEstimator(
@@ -782,11 +848,6 @@ export function createShieldedMessageResourceEstimator(
       }
       return estimate.resourceBounds;
     },
-    async getAccountNonce(accountAddress) {
-      return BigInt(
-        await provider.getNonceForAddress(feltHex(accountAddress), "latest"),
-      );
-    },
   };
 }
 
@@ -816,7 +877,7 @@ function assertInvocationResourceBounds(
     if (BigInt(invocationBound.max_amount) !== bounds[resource].max_amount
         || BigInt(invocationBound.max_price_per_unit)
           !== bounds[resource].max_price_per_unit) {
-      throw new Error("Proving and submission resource bounds differ.");
+      throw new Error("Final proving resource bounds are inconsistent.");
     }
   }
 }
@@ -841,20 +902,21 @@ async function prepareOfficialShieldedMessageProof(
   );
   const preliminaryInvocation = await preliminary.builder
     .createProofInvocation();
-  const [rawEstimate, accountNonce] = await Promise.all([
-    input.resourceEstimator.estimateInvokeV3(
-      preliminaryInvocation.invocation,
-    ),
-    input.resourceEstimator.getAccountNonce(
-      input.config.identity.accountAddress,
-    ),
-  ]);
-  const resourceBounds = createShieldedMessageResourceBounds(rawEstimate);
+  const rawEstimate = await input.resourceEstimator.estimateInvokeV3(
+    preliminaryInvocation.invocation,
+  );
+  if (!baseDetails.resourceBounds) {
+    throw new Error("Official proving provider returned no default bounds.");
+  }
+  const provingResourceBounds = createShieldedMessageProvingResourceBounds(
+    rawEstimate,
+    baseDetails.resourceBounds,
+  );
   const finalDetails: ProofInvocationFactoryDetails = {
     ...baseDetails,
     nonce: baseDetails.nonce,
     tip: 0n,
-    resourceBounds,
+    resourceBounds: provingResourceBounds,
   };
   const finalProvider = createPinnedProofProvider(
     input.provingProvider,
@@ -865,18 +927,25 @@ async function prepareOfficialShieldedMessageProof(
     finalProvider,
   );
   const finalInvocation = await finalTransfer.builder.createProofInvocation();
-  assertInvocationResourceBounds(finalInvocation.invocation, resourceBounds);
-  console.log("SHIELDED_MESSAGE_RESOURCE_ESTIMATE_VALID");
-  console.log(`l1_gas.max_amount: ${resourceBounds.l1_gas.max_amount}`);
-  console.log(
-    `l1_data_gas.max_amount: ${resourceBounds.l1_data_gas.max_amount}`,
+  assertInvocationResourceBounds(
+    finalInvocation.invocation,
+    provingResourceBounds,
   );
-  console.log(`l2_gas.max_amount: ${resourceBounds.l2_gas.max_amount}`);
+  console.log("SHIELDED_MESSAGE_RESOURCE_ESTIMATE_VALID");
+  console.log(
+    `l1_gas.max_amount: ${provingResourceBounds.l1_gas.max_amount}`,
+  );
+  console.log(
+    `l1_data_gas.max_amount: ${provingResourceBounds.l1_data_gas.max_amount}`,
+  );
+  console.log(
+    `l2_gas.max_amount: ${provingResourceBounds.l2_gas.max_amount}`,
+  );
+  console.log("SHIELDED_MESSAGE_PROVING_ZERO_FEE_BOUNDS_VALID");
   return {
     finalInvocation,
     finalTransfer,
-    resourceBounds,
-    accountNonce,
+    provingResourceBounds,
   };
 }
 
@@ -885,19 +954,23 @@ export const officialShieldedMessageProofExecutor: ShieldedMessageProofExecutor 
     const {
       finalInvocation,
       finalTransfer,
-      resourceBounds,
-      accountNonce,
+      provingResourceBounds,
     } = await prepareOfficialShieldedMessageProof(input);
-    const boundsBeforeProof = resourceBoundsFingerprint(resourceBounds);
+    const boundsBeforeProof = resourceBoundsFingerprint(
+      provingResourceBounds,
+    );
     const result = await finalTransfer.transfers.executeWithInvocation(
       finalInvocation,
       input.provingBlockId,
     );
-    if (resourceBoundsFingerprint(resourceBounds) !== boundsBeforeProof) {
+    if (resourceBoundsFingerprint(provingResourceBounds) !== boundsBeforeProof) {
       throw new Error("Resource bounds changed after proof generation.");
     }
-    assertInvocationResourceBounds(finalInvocation.invocation, resourceBounds);
-    return { result, resourceBounds, accountNonce };
+    assertInvocationResourceBounds(
+      finalInvocation.invocation,
+      provingResourceBounds,
+    );
+    return { result, provingResourceBounds };
   },
 };
 
@@ -1103,10 +1176,8 @@ function invalidateProofNonceCache(provingProvider: ProofProviderInterface): voi
 export async function submitShieldedMessage(input: {
   config: VeilShieldedMessagePocConfig;
   provider: ShieldedMessageChainProvider;
-  account: RegisterSubmissionAccount;
+  account: ShieldedMessageSubmissionAccount;
   provingProvider: ProofProviderInterface;
-  resourceBounds: ProofResourceBounds;
-  accountNonce: bigint;
   provingBlockId: number;
   prepared: PreparedShieldedMessage;
   result: ExecuteResult;
@@ -1114,15 +1185,27 @@ export async function submitShieldedMessage(input: {
   const proofSummary = createShieldedMessageProofSummary(input);
   const { call, proof } = input.result.callAndProof;
   const proofFacts = Array.isArray(proof.proofFacts) ? proof.proofFacts : [];
-  const executionDetails = {
-    tip: 0n,
-    nonce: input.accountNonce,
-    resourceBounds: input.resourceBounds,
-    ...(proofFacts.length > 0
-      ? { proof: proof.data, proofFacts }
-      : {}),
-  };
   try {
+    const accountNonce = BigInt(await input.account.getNonce("latest"));
+    const proofDetails = proofFacts.length > 0
+      ? { proof: proof.data, proofFacts }
+      : {};
+    const estimateDetails = {
+      tip: 0n,
+      nonce: accountNonce,
+      ...proofDetails,
+    };
+    const estimate = await input.account.estimateInvokeFee(
+      call as never,
+      estimateDetails,
+    );
+    const submissionResourceBounds =
+      createShieldedMessageSubmissionResourceBounds(estimate.resourceBounds);
+    console.log("SHIELDED_MESSAGE_SUBMISSION_RESOURCE_ESTIMATE_VALID");
+    const executionDetails = {
+      ...estimateDetails,
+      resourceBounds: submissionResourceBounds,
+    };
     const transaction = await input.account.execute(call as never, executionDetails);
     if (!transaction.transaction_hash) {
       throw new Error("Shielded-message submission returned no transaction hash.");
@@ -1247,7 +1330,7 @@ export async function runVeilOfficialShieldedMessagePoc(
     console.log("SHIELDED_MESSAGE_RESOURCE_PREFLIGHT_VALID");
     return null;
   }
-  let submissionAccount: RegisterSubmissionAccount | undefined;
+  let submissionAccount: ShieldedMessageSubmissionAccount | undefined;
   if (config.submitOnchain) {
     submissionAccount = (dependencies.createSubmissionAccount
       ?? createOfficialShieldedMessageSubmissionAccount)({
@@ -1260,7 +1343,7 @@ export async function runVeilOfficialShieldedMessagePoc(
     ?? officialShieldedMessageProofExecutor).execute({
     ...proofInput,
   });
-  const { result, resourceBounds, accountNonce } = proofExecution;
+  const { result } = proofExecution;
   let summary = createShieldedMessageProofSummary({
     config,
     provingBlockId,
@@ -1274,14 +1357,11 @@ export async function runVeilOfficialShieldedMessagePoc(
     if (!submissionAccount) {
       throw new Error("Shielded-message submission account is missing.");
     }
-    console.log("SHIELDED_MESSAGE_PROVING_SUBMISSION_BOUNDS_IDENTICAL");
     summary = await submitShieldedMessage({
       config,
       provider,
       account: submissionAccount,
       provingProvider,
-      resourceBounds,
-      accountNonce,
       provingBlockId,
       prepared,
       result,
