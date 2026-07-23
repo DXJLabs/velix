@@ -183,7 +183,7 @@ jobs:
 
             if swapon --show --noheadings --raw \
              | awk '{ print $1 }' \
-             ￼| grep -Fxq "$swap_path"; then
+             | grep -Fxq "$swap_path"; then
              sudo swapoff "$swap_path"
            fi
 
