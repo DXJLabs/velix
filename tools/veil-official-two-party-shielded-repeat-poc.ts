@@ -114,8 +114,8 @@ function asPreparedTwoParty(
 }
 
 function sameOptionalFelt(
-  left: bigint | string | undefined,
-  right: bigint | string | undefined,
+  left: bigint | number | string | undefined,
+  right: bigint | number | string | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right;
   return BigInt(left) === BigInt(right);
