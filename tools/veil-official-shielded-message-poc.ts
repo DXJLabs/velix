@@ -1190,12 +1190,12 @@ export async function submitShieldedMessage(input: {
       ? { proof: proof.data, proofFacts }
       : {};
     const executionDetails = {
-      tip: 0n,
       ...proofDetails,
     };
-    // Follow the official SNIP-36 submission path and the already successful
-    // register PoC: Account.execute estimates, signs, and broadcasts one
-    // internally consistent outer Invoke V3 transaction.
+    // Follow the official SNIP-36 submission path and let Account.execute
+    // resolve a current network tip, estimate fees, sign, and broadcast one
+    // internally consistent outer Invoke V3 transaction. The virtual proving
+    // transaction remains separately pinned to tip zero.
     console.log("SHIELDED_MESSAGE_SUBMISSION_OFFICIAL_EXECUTE_READY");
     const transaction = await input.account.execute(call as never, executionDetails);
     if (!transaction.transaction_hash) {

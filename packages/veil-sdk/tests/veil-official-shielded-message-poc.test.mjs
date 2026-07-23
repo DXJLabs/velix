@@ -555,10 +555,10 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
   assert.equal(lifecycle.indexOf("prove") < lifecycle.indexOf("execute"), true);
   assert.equal(submittedCall, result.callAndProof.call);
   assert.deepEqual(submittedDetails, {
-    tip: 0n,
     proof: result.callAndProof.proof.data,
     proofFacts: result.callAndProof.proof.proofFacts,
   });
+  assert.equal(Object.hasOwn(submittedDetails, "tip"), false);
   assert.equal(Object.hasOwn(submittedDetails, "nonce"), false);
   assert.equal(Object.hasOwn(submittedDetails, "resourceBounds"), false);
   assert.equal(
@@ -578,7 +578,7 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
   }
 });
 
-test("submission uses tip zero and includes non-empty proof facts", async () => {
+test("submission lets Account resolve tip and includes non-empty proof facts", async () => {
   const { config, prepared } = await preparedFixture();
   const calls = [];
   const provider = storageProvider(prepared);
@@ -598,10 +598,10 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
     result: executeResult(["0x2", "0x3"]),
   });
   assert.deepEqual(calls[0].details, {
-    tip: 0n,
     proof: executeResult().callAndProof.proof.data,
     proofFacts: ["0x2", "0x3"],
   });
+  assert.equal(Object.hasOwn(calls[0].details, "tip"), false);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].stage, "execute");
   assert.equal(Object.hasOwn(calls[0].details, "nonce"), false);
@@ -794,7 +794,8 @@ test("proofFacts empty is never sent", async () => {
     prepared,
     result: executeResult([]),
   });
-  assert.deepEqual(details, { tip: 0n });
+  assert.deepEqual(details, {});
+  assert.equal(Object.hasOwn(details, "tip"), false);
   assert.equal(Object.hasOwn(details, "nonce"), false);
   assert.equal(Object.hasOwn(details, "resourceBounds"), false);
   assert.equal(Object.hasOwn(details, "proof"), false);
@@ -849,10 +850,10 @@ test("official outer execute failure invalidates the proof nonce cache", async (
         async execute(_call, details) {
           executeCalls += 1;
           assert.deepEqual(details, {
-            tip: 0n,
             proof: executeResult().callAndProof.proof.data,
             proofFacts: ["0x2"],
           });
+          assert.equal(Object.hasOwn(details, "tip"), false);
           throw new Error("official outer Invoke V3 submission failed");
         },
         async waitForTransaction() { return successfulReceipt(); },
