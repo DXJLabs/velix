@@ -160,8 +160,19 @@ function sanitizeDiagnosticValue(
 function readNumericCode(error: unknown): number | null {
   if (error instanceof ProvingServiceError) return error.code;
   if (typeof error !== "object" || error === null) return null;
-  const code = (error as Record<string, unknown>).code;
-  return typeof code === "number" && Number.isFinite(code) ? code : null;
+  const errorRecord = error as Record<string, unknown>;
+  const directCode = errorRecord.code;
+  if (typeof directCode === "number" && Number.isFinite(directCode)) {
+    return directCode;
+  }
+  const baseError = typeof errorRecord.baseError === "object"
+      && errorRecord.baseError !== null
+    ? errorRecord.baseError as Record<string, unknown>
+    : undefined;
+  const baseCode = baseError?.code;
+  return typeof baseCode === "number" && Number.isFinite(baseCode)
+    ? baseCode
+    : null;
 }
 
 export function createSafeShieldedMessageErrorDiagnostic(input: {
@@ -173,17 +184,23 @@ export function createSafeShieldedMessageErrorDiagnostic(input: {
   const errorRecord = typeof input.error === "object" && input.error !== null
     ? input.error as Record<string, unknown>
     : undefined;
+  const baseError = typeof errorRecord?.baseError === "object"
+      && errorRecord.baseError !== null
+    ? errorRecord.baseError as Record<string, unknown>
+    : undefined;
   const name = input.error instanceof Error
     ? input.error.name
     : typeof errorRecord?.name === "string"
       ? errorRecord.name
       : "UnknownError";
-  const message = input.error instanceof Error
-    ? input.error.message
-    : typeof errorRecord?.message === "string"
-      ? errorRecord.message
-      : String(input.error);
-  const data = errorRecord?.data;
+  const message = typeof baseError?.message === "string"
+    ? baseError.message
+    : input.error instanceof Error
+      ? input.error.message
+      : typeof errorRecord?.message === "string"
+        ? errorRecord.message
+        : String(input.error);
+  const data = baseError?.data ?? errorRecord?.data;
   const cause = input.error instanceof Error
     ? input.error.cause
     : errorRecord?.cause;

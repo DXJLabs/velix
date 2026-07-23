@@ -70,6 +70,42 @@ test("safe shielded-message diagnostic preserves the useful error and redacts se
   }
 });
 
+test("RpcError diagnostic reads the safe baseError message and validation data", () => {
+  const error = Object.assign(new Error(
+    `RPC request contained ${PRIVATE_KEY} and ${RPC_URL}`,
+  ), {
+    name: "RpcError",
+    code: 55,
+    baseError: {
+      code: 55,
+      message: "Account validation failed",
+      data: "Invalid signature",
+    },
+    request: {
+      method: "starknet_addInvokeTransaction",
+      params: {
+        privateKey: PRIVATE_KEY,
+        proof: RAW_PROOF,
+      },
+    },
+  });
+  const diagnostic = createSafeShieldedMessageErrorDiagnostic({
+    error,
+    stage: "SUBMISSION_SENDING",
+    sensitiveValues: [PRIVATE_KEY, RPC_URL],
+  });
+  const serialized = JSON.stringify(diagnostic);
+
+  assert.equal(diagnostic.name, "RpcError");
+  assert.equal(diagnostic.code, 55);
+  assert.equal(diagnostic.message, "Account validation failed");
+  assert.equal(diagnostic.data, "Invalid signature");
+  assert.equal(serialized.includes(PRIVATE_KEY), false);
+  assert.equal(serialized.includes(RPC_URL), false);
+  assert.equal(serialized.includes(RAW_PROOF), false);
+  assert.equal(serialized.includes("request"), false);
+});
+
 test("generic Error cause is sanitized without serializing proof material", () => {
   const error = new Error(`outer failure ${PRIVATE_KEY}`, {
     cause: {
