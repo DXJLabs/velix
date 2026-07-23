@@ -179,11 +179,19 @@ jobs:
             exit 1
           fi
 
-          sudo rm -f /swapfile
-          sudo fallocate -l "${swap_kb}K" /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          swap_path="/veil-prover.swap"
+
+            if swapon --show --noheadings --raw \
+             | awk '{ print $1 }' \
+             ￼| grep -Fxq "$swap_path"; then
+             sudo swapoff "$swap_path"
+           fi
+
+          sudo rm -f "$swap_path"
+          sudo fallocate -l "${swap_kb}K" "$swap_path"
+          sudo chmod 600 "$swap_path"
+          sudo mkswap "$swap_path"
+          sudo swapon "$swap_path"
 
           echo "=== MEMORY AFTER SWAP ==="
           free -h
