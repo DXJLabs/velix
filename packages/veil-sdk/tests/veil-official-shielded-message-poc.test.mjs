@@ -14,6 +14,7 @@ import {
   assertShieldedMessageSummarySafe,
   createShieldedMessageProofSummary,
   createShieldedMessageResourceBounds,
+  createShieldedMessageResourceEstimator,
   loadVeilShieldedMessagePocConfig,
   officialShieldedMessageProofExecutor,
   prepareShieldedMessage,
@@ -42,6 +43,17 @@ const RESOURCE_BOUNDS = {
   l2_gas: { max_amount: 3n, max_price_per_unit: 4n },
   l1_data_gas: { max_amount: 5n, max_price_per_unit: 6n },
 };
+const RAW_RESOURCE_ESTIMATE = {
+  l1_gas: { max_amount: 101n, max_price_per_unit: 11n },
+  l1_data_gas: { max_amount: 725n, max_price_per_unit: 13n },
+  l2_gas: { max_amount: 1_001n, max_price_per_unit: 17n },
+};
+const MARGINED_RESOURCE_BOUNDS = {
+  l1_gas: { max_amount: 152n, max_price_per_unit: 17n },
+  l1_data_gas: { max_amount: 2_175n, max_price_per_unit: 20n },
+  l2_gas: { max_amount: 1_502n, max_price_per_unit: 26n },
+};
+const LATEST_ACCOUNT_NONCE = 9n;
 
 function pocEnv(overrides = {}) {
   return {
@@ -82,6 +94,19 @@ function successfulReceipt() {
     isSuccess() { return true; },
     isReverted() { return false; },
   };
+}
+
+async function captureConsoleLog(action) {
+  const original = console.log;
+  const lines = [];
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    return { value: await action(), lines };
+  } finally {
+    console.log = original;
+  }
 }
 
 async function preparedFixture(overrides = {}) {
@@ -196,6 +221,66 @@ test("local decrypt succeeds only with the original identity-derived material", 
   );
 });
 
+test("dry-run sends no proof, estimate, or submission request", async () => {
+  const directory = await mkdtemp(`${tmpdir()}/veil-shielded-dry-run-`);
+  const accountSigner = createStandardPocSigner(PRIVATE_KEY);
+  const ownerPublicKey = await accountSigner.getPubKey();
+  const viewingPublicKey = ec.starkCurve.getStarkKey(VIEWING_KEY);
+  let provingProviders = 0;
+  let estimators = 0;
+  let submissions = 0;
+  const summaryPath = join(directory, "summary.json");
+  try {
+    const summary = await runVeilOfficialShieldedMessagePoc(pocEnv({
+      VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH: summaryPath,
+    }), {
+      accountPreflightPath: join(directory, "preflight.json"),
+      accountPreflightProvider: {
+        async getBlockNumber() { return CURRENT_BLOCK; },
+        async getNonceForAddress() { return "0x1"; },
+        async getClassHashAt() { return ACCOUNT_CLASS_HASH; },
+        async getClass() {
+          return { abi: [{
+            type: "function",
+            name: "get_public_key",
+            inputs: [],
+            outputs: [{ type: "core::felt252" }],
+          }] };
+        },
+        async callContract() { return [ownerPublicKey]; },
+      },
+      chainProvider: {
+        async getClassHashAt() { return SEPOLIA_HELPER_CLASS_HASH; },
+        async callContract(call) {
+          if (call.entrypoint === "get_privacy_pool") return [POOL_ADDRESS];
+          if (call.entrypoint === "get_public_key") return [viewingPublicKey];
+          throw new Error(`unexpected call ${call.entrypoint}`);
+        },
+        async getTransactionReceipt() { return {}; },
+      },
+      createProvingProvider() {
+        provingProviders += 1;
+        throw new Error("dry-run must not create a proving provider");
+      },
+      createResourceEstimator() {
+        estimators += 1;
+        throw new Error("dry-run must not create an estimator");
+      },
+      createSubmissionAccount() {
+        submissions += 1;
+        throw new Error("dry-run must not create a submission account");
+      },
+    });
+    assert.equal(summary, null);
+    assert.equal(provingProviders, 0);
+    assert.equal(estimators, 0);
+    assert.equal(submissions, 0);
+    await assert.rejects(() => readFile(summaryPath), /ENOENT/u);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("proof-only uses current block minus ten consistently and sends no transaction", async () => {
   const directory = await mkdtemp(`${tmpdir()}/veil-shielded-proof-only-`);
   const accountSigner = createStandardPocSigner(PRIVATE_KEY);
@@ -258,8 +343,18 @@ test("proof-only uses current block minus ten consistently and sends no transact
       proofExecutor: {
         async execute(input) {
           proofInput = input;
-          return executeResult();
+          return {
+            result: executeResult(),
+            resourceBounds: RESOURCE_BOUNDS,
+            accountNonce: LATEST_ACCOUNT_NONCE,
+          };
         },
+      },
+      createResourceEstimator() {
+        return {
+          async estimateInvokeV3() { return RAW_RESOURCE_ESTIMATE; },
+          async getAccountNonce() { return LATEST_ACCOUNT_NONCE; },
+        };
       },
       createSubmissionAccount() {
         submissionAccounts += 1;
@@ -308,7 +403,10 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
   const { config, prepared } = await preparedFixture();
   let provedBlock;
   let invocation;
-  const result = await officialShieldedMessageProofExecutor.execute({
+  let invalidations = 0;
+  const lifecycle = [];
+  const { value: execution, lines: diagnostics } = await captureConsoleLog(
+    () => officialShieldedMessageProofExecutor.execute({
     config,
     signer: createStandardPocSigner(PRIVATE_KEY),
     provingBlockId: PROVING_BLOCK,
@@ -326,7 +424,12 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
       },
     },
     provingProvider: {
+      invalidateNonceCache() {
+        invalidations += 1;
+        lifecycle.push("invalidate");
+      },
       async getDefaultDetails() {
+        lifecycle.push("details");
         return {
           versions: ["0x3"],
           nonce: 0n,
@@ -346,12 +449,53 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
         };
       },
       async prove(input, blockId) {
+        lifecycle.push("prove");
         invocation = input;
         provedBlock = blockId;
         return executeResult().callAndProof.proof;
       },
     },
-  });
+    resourceEstimator: {
+      async estimateInvokeV3(input) {
+        lifecycle.push("estimate");
+        assert.equal(BigInt(input.sender_address), BigInt(POOL_ADDRESS));
+        return RAW_RESOURCE_ESTIMATE;
+      },
+      async getAccountNonce(accountAddress) {
+        lifecycle.push("account-nonce");
+        assert.equal(accountAddress, ACCOUNT_ADDRESS);
+        return LATEST_ACCOUNT_NONCE;
+      },
+    },
+    }),
+  );
+  const { result } = execution;
+  assert.equal(invalidations, 1);
+  assert.equal(lifecycle[0], "invalidate");
+  assert.equal(lifecycle.indexOf("estimate") < lifecycle.indexOf("prove"), true);
+  assert.equal(lifecycle.indexOf("account-nonce") < lifecycle.indexOf("prove"), true);
+  assert.equal(execution.accountNonce, LATEST_ACCOUNT_NONCE);
+  assert.deepEqual(execution.resourceBounds, MARGINED_RESOURCE_BOUNDS);
+  assert.equal(
+    diagnostics.includes("SHIELDED_MESSAGE_RESOURCE_ESTIMATE_VALID"),
+    true,
+  );
+  const diagnosticOutput = diagnostics.join("\n");
+  for (const sensitive of [
+    PRIVATE_KEY,
+    VIEWING_KEY,
+    PLAINTEXT,
+    executeResult().callAndProof.proof.data,
+  ]) {
+    assert.equal(diagnosticOutput.includes(sensitive), false);
+  }
+  assert.equal(diagnostics.some((line) => line.includes("l1_gas.max_amount")), true);
+  assert.equal(
+    diagnostics.some((line) => line.includes("l1_data_gas.max_amount")),
+    true,
+  );
+  assert.equal(diagnostics.some((line) => line.includes("l2_gas.max_amount")), true);
+  assert.equal(lifecycle.filter((event) => event === "prove").length, 1);
   assert.equal(provedBlock, PROVING_BLOCK);
   assert.equal(BigInt(invocation.sender_address), BigInt(POOL_ADDRESS));
   assert.equal(invocation.calldata.some((felt) => BigInt(felt) === BigInt(SEPOLIA_HELPER_ADDRESS)), true);
@@ -364,7 +508,43 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
   assert.equal(invocationCalldata.some((_, start) =>
     expectedHelperSpan.every((felt, offset) =>
       invocationCalldata[start + offset] === felt)), true);
+  for (const resource of ["l1_gas", "l1_data_gas", "l2_gas"]) {
+    assert.equal(
+      BigInt(invocation.resource_bounds[resource].max_amount),
+      MARGINED_RESOURCE_BOUNDS[resource].max_amount,
+    );
+    assert.equal(
+      BigInt(invocation.resource_bounds[resource].max_price_per_unit),
+      MARGINED_RESOURCE_BOUNDS[resource].max_price_per_unit,
+    );
+  }
   assert.equal(result.callAndProof.call.entrypoint, "apply_actions");
+  assert.throws(
+    () => {
+      execution.resourceBounds.l1_gas.max_amount = 999n;
+    },
+    TypeError,
+  );
+  let submittedDetails;
+  await submitShieldedMessage({
+    config,
+    provider: storageProvider(prepared),
+    account: {
+      async execute(_call, details) {
+        submittedDetails = details;
+        return { transaction_hash: "0x789" };
+      },
+      async waitForTransaction() { return successfulReceipt(); },
+    },
+    provingProvider: { invalidateNonceCache() {} },
+    resourceBounds: execution.resourceBounds,
+    accountNonce: execution.accountNonce,
+    provingBlockId: PROVING_BLOCK,
+    prepared,
+    result,
+  });
+  assert.equal(submittedDetails.resourceBounds, execution.resourceBounds);
+  assert.deepEqual(submittedDetails.resourceBounds, MARGINED_RESOURCE_BOUNDS);
 });
 
 test("submission uses tip zero and includes non-empty proof facts", async () => {
@@ -383,44 +563,165 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
     },
     provingProvider: { invalidateNonceCache() {} },
     resourceBounds: RESOURCE_BOUNDS,
+    accountNonce: LATEST_ACCOUNT_NONCE,
     provingBlockId: PROVING_BLOCK,
     prepared,
     result: executeResult(["0x2", "0x3"]),
   });
   assert.deepEqual(calls[0].details, {
     tip: 0n,
+    nonce: LATEST_ACCOUNT_NONCE,
     resourceBounds: RESOURCE_BOUNDS,
     proof: executeResult().callAndProof.proof.data,
     proofFacts: ["0x2", "0x3"],
   });
+  assert.equal(calls[0].details.resourceBounds, RESOURCE_BOUNDS);
   assert.notDeepEqual(calls[0].details.proofFacts, []);
   assert.equal(summary.messageEventFound, true);
   assert.equal(summary.storageVerified, true);
   assert.equal(summary.localDecryptVerified, true);
 });
 
-test("submission resource bounds use the finalized block and no fee simulation", async () => {
+test("network estimate receives deterministic bigint margins without fixed fallbacks", () => {
+  const bounds = createShieldedMessageResourceBounds(RAW_RESOURCE_ESTIMATE);
+  assert.deepEqual(bounds, MARGINED_RESOURCE_BOUNDS);
+  assert.equal(
+    bounds.l1_data_gas.max_amount,
+    RAW_RESOURCE_ESTIMATE.l1_data_gas.max_amount * 3n,
+  );
+  assert.equal(
+    bounds.l1_gas.max_amount > RAW_RESOURCE_ESTIMATE.l1_gas.max_amount,
+    true,
+  );
+  assert.equal(
+    bounds.l2_gas.max_amount > RAW_RESOURCE_ESTIMATE.l2_gas.max_amount,
+    true,
+  );
+  assert.equal(
+    bounds.l1_gas.max_price_per_unit
+      > RAW_RESOURCE_ESTIMATE.l1_gas.max_price_per_unit,
+    true,
+  );
+  assert.equal(
+    bounds.l1_data_gas.max_price_per_unit
+      > RAW_RESOURCE_ESTIMATE.l1_data_gas.max_price_per_unit,
+    true,
+  );
+  assert.equal(
+    bounds.l2_gas.max_price_per_unit
+      > RAW_RESOURCE_ESTIMATE.l2_gas.max_price_per_unit,
+    true,
+  );
+  assert.equal(Object.isFrozen(bounds), true);
+  assert.equal(Object.isFrozen(bounds.l1_data_gas), true);
+});
+
+test("official estimator uses latest Invoke V3 state and latest account nonce", async () => {
   const reads = [];
-  const bounds = await createShieldedMessageResourceBounds({
-    rpcUrl: "https://rpc.example",
-    provingBlockId: PROVING_BLOCK,
-    provider: {
-      async getGasPrices(blockIdentifier) {
-        reads.push(blockIdentifier);
-        return {
-          l1DataGasPrice: 10n,
-          l1GasPrice: 20n,
-          l2GasPrice: 30n,
-        };
+  const estimator = createShieldedMessageResourceEstimator(
+    "https://rpc.example",
+    {
+      async getEstimateFeeBulk(invocations, options) {
+        reads.push({ kind: "estimate", options });
+        assert.equal(invocations.length, 1);
+        assert.equal(invocations[0].type, "INVOKE");
+        assert.equal(
+          BigInt(invocations[0].contractAddress),
+          BigInt(POOL_ADDRESS),
+        );
+        assert.deepEqual(invocations[0].paymasterData, []);
+        assert.deepEqual(invocations[0].accountDeploymentData, []);
+        return [{ resourceBounds: RAW_RESOURCE_ESTIMATE }];
+      },
+      async getNonceForAddress(accountAddress, blockIdentifier) {
+        reads.push({ kind: "nonce", blockIdentifier });
+        assert.equal(BigInt(accountAddress), ACCOUNT_ADDRESS);
+        return `0x${LATEST_ACCOUNT_NONCE.toString(16)}`;
       },
     },
+  );
+  const estimate = await estimator.estimateInvokeV3({
+    type: "INVOKE",
+    sender_address: POOL_ADDRESS,
+    calldata: ["0x1"],
+    signature: ["0x2", "0x3"],
+    nonce: "0x4",
+    resource_bounds: {
+      l1_gas: { max_amount: "0x1", max_price_per_unit: "0x0" },
+      l1_data_gas: { max_amount: "0x1", max_price_per_unit: "0x0" },
+      l2_gas: { max_amount: "0x1", max_price_per_unit: "0x0" },
+    },
+    tip: "0x0",
+    paymaster_data: [],
+    account_deployment_data: [],
+    nonce_data_availability_mode: "L1",
+    fee_data_availability_mode: "L1",
+    version: "0x3",
   });
-  assert.deepEqual(reads, [PROVING_BLOCK]);
-  assert.deepEqual(bounds, {
-    l1_gas: { max_amount: 0n, max_price_per_unit: 28n },
-    l1_data_gas: { max_amount: 1024n, max_price_per_unit: 14n },
-    l2_gas: { max_amount: 110000000n, max_price_per_unit: 42n },
-  });
+  const nonce = await estimator.getAccountNonce(ACCOUNT_ADDRESS);
+  assert.equal(estimate, RAW_RESOURCE_ESTIMATE);
+  assert.equal(nonce, LATEST_ACCOUNT_NONCE);
+  assert.deepEqual(reads, [
+    {
+      kind: "estimate",
+      options: { blockIdentifier: "latest", skipValidate: true },
+    },
+    { kind: "nonce", blockIdentifier: "latest" },
+  ]);
+});
+
+test("estimation failure stops before proof generation", async () => {
+  const { config, prepared } = await preparedFixture();
+  let proveCalls = 0;
+  await assert.rejects(
+    () => officialShieldedMessageProofExecutor.execute({
+      config,
+      signer: createStandardPocSigner(PRIVATE_KEY),
+      provingBlockId: PROVING_BLOCK,
+      prepared,
+      provider: {
+        async getClassHashAt() { return SEPOLIA_HELPER_CLASS_HASH; },
+        async getTransactionReceipt() { return {}; },
+        async callContract(call) {
+          if (call.entrypoint === "get_num_of_channels") return ["0x0"];
+          if (call.entrypoint === "get_public_key") {
+            return [ec.starkCurve.getStarkKey(VIEWING_KEY)];
+          }
+          throw new Error(`unexpected discovery call ${call.entrypoint}`);
+        },
+      },
+      provingProvider: {
+        invalidateNonceCache() {},
+        async getDefaultDetails() {
+          return {
+            versions: ["0x3"],
+            nonce: 7n,
+            skipValidate: true,
+            resourceBounds: RESOURCE_BOUNDS,
+            tip: 0n,
+            paymasterData: [],
+            accountDeploymentData: [],
+            nonceDataAvailabilityMode: "L1",
+            feeDataAvailabilityMode: "L1",
+            version: "0x3",
+            chainId: constants.StarknetChainId.SN_SEPOLIA,
+          };
+        },
+        async prove() {
+          proveCalls += 1;
+          return executeResult().callAndProof.proof;
+        },
+      },
+      resourceEstimator: {
+        async estimateInvokeV3() {
+          throw new Error("network estimate unavailable");
+        },
+        async getAccountNonce() { return LATEST_ACCOUNT_NONCE; },
+      },
+    }),
+    /network estimate unavailable/u,
+  );
+  assert.equal(proveCalls, 0);
 });
 
 test("proofFacts empty is never sent", async () => {
@@ -438,11 +739,16 @@ test("proofFacts empty is never sent", async () => {
     },
     provingProvider: { invalidateNonceCache() {} },
     resourceBounds: RESOURCE_BOUNDS,
+    accountNonce: LATEST_ACCOUNT_NONCE,
     provingBlockId: PROVING_BLOCK,
     prepared,
     result: executeResult([]),
   });
-  assert.deepEqual(details, { tip: 0n, resourceBounds: RESOURCE_BOUNDS });
+  assert.deepEqual(details, {
+    tip: 0n,
+    nonce: LATEST_ACCOUNT_NONCE,
+    resourceBounds: RESOURCE_BOUNDS,
+  });
   assert.equal(Object.hasOwn(details, "proof"), false);
   assert.equal(Object.hasOwn(details, "proofFacts"), false);
 });
@@ -469,6 +775,7 @@ test("reverted receipt fails and invalidates the official nonce cache", async ()
         invalidateNonceCache() { invalidations += 1; },
       },
       resourceBounds: RESOURCE_BOUNDS,
+      accountNonce: LATEST_ACCOUNT_NONCE,
       provingBlockId: PROVING_BLOCK,
       prepared,
       result: executeResult(),
@@ -546,12 +853,32 @@ test("summary contains only allowed fields and no plaintext or secrets", async (
 });
 
 test("workflow keeps the official InvokeExternal path and has no direct fallback", async () => {
-  const source = await readFile(
-    "tools/veil-official-shielded-message-poc.ts",
-    "utf8",
-  );
+  const [source, workflow] = await Promise.all([
+    readFile("tools/veil-official-shielded-message-poc.ts", "utf8"),
+    readFile(
+      ".github/workflows/veil-official-shielded-message-poc.yml",
+      "utf8",
+    ),
+  ]);
   assert.equal(source.includes(".invoke(() =>"), true);
   assert.equal(source.includes("entrypoint: \"privacy_invoke\""), false);
   assert.equal(source.includes("direct/unshielded"), false);
   assert.equal(source.includes("DirectHelperTransport"), false);
+  assert.equal(source.includes("SHIELDED_MESSAGE_L1_DATA_GAS_MAX_AMOUNT"), false);
+  assert.equal(source.includes("SHIELDED_MESSAGE_L2_GAS_MAX_AMOUNT"), false);
+  assert.equal(/\b(?:1024|4096)\b/u.test(source), false);
+  assert.equal(source.includes("blockIdentifier: \"latest\""), true);
+  assert.equal(source.includes("executeWithInvocation("), true);
+  const estimateStep = workflow.indexOf(
+    "Estimate shielded-message resources before prover build",
+  );
+  const proverBuildStep = workflow.indexOf(
+    "Build x86-64-v3 transaction prover",
+  );
+  assert.equal(estimateStep >= 0, true);
+  assert.equal(proverBuildStep > estimateStep, true);
+  assert.equal(
+    workflow.includes("VEIL_POC_RESOURCE_ESTIMATE_ONLY: \"true\""),
+    true,
+  );
 });
