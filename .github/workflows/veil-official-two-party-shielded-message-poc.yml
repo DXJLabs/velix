@@ -1,0 +1,321 @@
+name: Run Official SDK Two-Party Shielded Message PoC
+
+on:
+  workflow_dispatch:
+    inputs:
+      generate_proof:
+        description: Generate a real A-to-B proof with the saved STWO prover
+        required: true
+        type: boolean
+        default: false
+      submit_onchain:
+        description: Submit A-to-B and verify recipient B decrypts on Sepolia
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  two-party-shielded-message:
+    name: Prove or Submit A to B Shielded Message
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
+
+    steps:
+      - name: Validate workflow inputs
+        shell: bash
+        env:
+          GENERATE_PROOF: ${{ inputs.generate_proof }}
+          SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+        run: |
+          set -euo pipefail
+          if [ "$SUBMIT_ONCHAIN" = "true" ] && [ "$GENERATE_PROOF" != "true" ]; then
+            echo "submit_onchain=true requires generate_proof=true."
+            exit 1
+          fi
+
+      - name: Validate sender and recipient secrets
+        shell: bash
+        env:
+          SENDER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          SENDER_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          SENDER_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          RECIPIENT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          for name in \
+            SENDER_ADDRESS \
+            SENDER_PRIVATE_KEY \
+            SENDER_VIEWING_KEY \
+            RECIPIENT_ADDRESS \
+            RECIPIENT_VIEWING_KEY \
+            RPC_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "A required two-party PoC secret is unavailable: $name"
+              exit 1
+            fi
+          done
+          if [ "$SENDER_ADDRESS" = "$RECIPIENT_ADDRESS" ]; then
+            echo "Sender and recipient must be different accounts."
+            exit 1
+          fi
+          echo "Two-party identity configuration is present; values are not displayed."
+
+      - name: Checkout VEIL source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build VEIL SDK
+        run: npm run build:sdk
+
+      - name: Typecheck PoC tools
+        run: npm run typecheck:poc
+
+      - name: Run two-party PoC unit tests
+        run: >-
+          node --experimental-strip-types --test
+          packages/veil-sdk/tests/veil-official-two-party-shielded-message-poc.test.mjs
+
+      - name: Estimate two-party resources before prover start
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          VEIL_POC_RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_GENERATE_PROOF: "true"
+          VEIL_POC_SUBMIT_ONCHAIN: "false"
+          VEIL_POC_RESOURCE_ESTIMATE_ONLY: "true"
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types \
+            tools/veil-official-two-party-shielded-message-poc.ts
+
+      - name: Log in to GitHub Container Registry
+        if: ${{ inputs.generate_proof }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull saved transaction prover
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PROVER_IMAGE"
+          docker image inspect "$PROVER_IMAGE" >/dev/null
+          echo "SAVED_PROVER_IMAGE_READY"
+
+      - name: Start self-hosted prover
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          docker rm -f veil-two-party-prover 2>/dev/null || true
+          docker run -d \
+            --name veil-two-party-prover \
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            "$PROVER_IMAGE"
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Running}}' veil-two-party-prover 2>/dev/null || true)" != "true" ]; then
+              echo "The prover container stopped before becoming ready."
+              exit 1
+            fi
+            response="$(curl -sS --connect-timeout 2 --max-time 5 \
+              -X POST http://127.0.0.1:3000 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+              2>/dev/null || true)"
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+            echo "Waiting for prover: $attempt/60"
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "The prover did not become ready."
+            exit 1
+          fi
+          echo "Self-hosted prover is ready."
+
+      - name: Run Official SDK A to B PoC
+        shell: bash
+        env:
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          VEIL_POC_RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_GENERATE_PROOF: ${{ inputs.generate_proof }}
+          VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+          VEIL_POC_TWO_PARTY_SUMMARY_PATH: ${{ github.workspace }}/veil-two-party-shielded-message-summary.json
+          VEIL_POC_TWO_PARTY_ERROR_PATH: ${{ github.workspace }}/veil-two-party-shielded-message-error.json
+        run: |
+          set -euo pipefail
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-two-party-shielded-message-summary.json" \
+            "$GITHUB_WORKSPACE/veil-two-party-shielded-message-error.json"
+          timeout 300m node --experimental-strip-types \
+            tools/veil-official-two-party-shielded-message-runner.ts
+
+      - name: Validate safe two-party summary
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
+        run: |
+          set -euo pipefail
+          summary="$GITHUB_WORKSPACE/veil-two-party-shielded-message-summary.json"
+          if [ ! -s "$summary" ]; then
+            echo "Two-party summary is missing or empty."
+            exit 1
+          fi
+          node --input-type=module - "$summary" "$SUBMIT_ONCHAIN" <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const [summaryPath, submitOnchain] = process.argv.slice(2);
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          const expectedKeys = [
+            "result",
+            "network",
+            "helperAddress",
+            "privacyPoolAddress",
+            "senderAddress",
+            "recipientAddress",
+            "provingBlockId",
+            "transactionHash",
+            "finalityStatus",
+            "executionStatus",
+            "messageLocator",
+            "payloadCommitment",
+            "ciphertextChunkCount",
+            "recipientChannelIndex",
+            "proofPresent",
+            "proofFactsCount",
+            "messageEventFound",
+            "storageVerified",
+            "senderLocalDecryptVerified",
+            "recipientChannelRecovered",
+            "recipientDecryptVerified",
+            "unrelatedViewingKeyRejected",
+          ];
+          if (JSON.stringify(Object.keys(summary)) !== JSON.stringify(expectedKeys)) {
+            throw new Error("Two-party summary contains unexpected fields.");
+          }
+          for (const field of [
+            "helperAddress",
+            "privacyPoolAddress",
+            "senderAddress",
+            "recipientAddress",
+            "messageLocator",
+            "payloadCommitment",
+          ]) {
+            if (!/^0x[0-9a-f]+$/u.test(summary[field])) {
+              throw new Error(`Invalid felt in ${field}.`);
+            }
+          }
+          if (summary.senderAddress === summary.recipientAddress) {
+            throw new Error("Two-party verdict used the same account twice.");
+          }
+          if (summary.network !== "SN_SEPOLIA" || summary.proofPresent !== true) {
+            throw new Error("Two-party proof verdict is invalid.");
+          }
+          if (submitOnchain === "true") {
+            if (summary.result !== "OFFICIAL_SDK_TWO_PARTY_SHIELDED_MESSAGE_SUBMITTED_ONCHAIN"
+                || summary.finalityStatus !== "ACCEPTED_ON_L2"
+                || summary.executionStatus !== "SUCCEEDED"
+                || !summary.transactionHash
+                || summary.messageEventFound !== true
+                || summary.storageVerified !== true
+                || summary.senderLocalDecryptVerified !== true
+                || summary.recipientChannelRecovered !== true
+                || summary.recipientDecryptVerified !== true
+                || summary.unrelatedViewingKeyRejected !== true) {
+              throw new Error("Real A-to-B verification failed.");
+            }
+          } else if (summary.result !== "OFFICIAL_SDK_TWO_PARTY_SHIELDED_MESSAGE_PROOF_GENERATED"
+              || summary.transactionHash !== null
+              || summary.finalityStatus !== "NOT_SUBMITTED"
+              || summary.executionStatus !== "NOT_SUBMITTED"
+              || summary.senderLocalDecryptVerified !== true
+              || summary.recipientChannelRecovered !== false
+              || summary.recipientDecryptVerified !== false) {
+            throw new Error("Two-party proof-only verdict is invalid.");
+          }
+          console.log(summary.result);
+          if (summary.transactionHash) console.log("transaction hash:", summary.transactionHash);
+          console.log(summary.finalityStatus);
+          console.log(summary.executionStatus);
+          NODE
+
+      - name: Ensure dry-run emitted no proof artifact
+        if: ${{ !inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e "$GITHUB_WORKSPACE/veil-two-party-shielded-message-summary.json" ]; then
+            echo "Proof summary was created while generate_proof=false."
+            exit 1
+          fi
+          echo "OFFICIAL_SDK_TWO_PARTY_SHIELDED_MESSAGE_DRY_RUN_VALID"
+
+      - name: Save redacted prover logs and stop container
+        if: ${{ always() && inputs.generate_proof }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker logs veil-two-party-prover 2>&1 \
+            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+            > veil-two-party-prover.log || true
+          docker rm -f veil-two-party-prover || true
+
+      - name: Upload safe two-party artifacts
+        if: ${{ always() && inputs.generate_proof }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-official-two-party-shielded-message-results
+          path: |
+            veil-account-preflight.json
+            veil-two-party-shielded-message-summary.json
+            veil-two-party-shielded-message-error.json
+            veil-two-party-prover.log
+          if-no-files-found: warn
+          retention-days: 14
