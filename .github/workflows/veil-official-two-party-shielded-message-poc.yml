@@ -105,10 +105,12 @@ jobs:
           VEIL_POC_GENERATE_PROOF: "true"
           VEIL_POC_SUBMIT_ONCHAIN: "false"
           VEIL_POC_RESOURCE_ESTIMATE_ONLY: "true"
+          VEIL_POC_TWO_PARTY_ERROR_PATH: ${{ github.workspace }}/veil-two-party-shielded-message-error.json
         run: |
           set -euo pipefail
+          rm -f "$GITHUB_WORKSPACE/veil-two-party-shielded-message-error.json"
           node --experimental-strip-types \
-            tools/veil-official-two-party-shielded-message-poc.ts
+            tools/veil-official-two-party-shielded-message-runner.ts
 
       - name: Log in to GitHub Container Registry
         if: ${{ inputs.generate_proof }}
@@ -302,10 +304,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker logs veil-two-party-prover 2>&1 \
-            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
-            > veil-two-party-prover.log || true
-          docker rm -f veil-two-party-prover || true
+          if docker inspect veil-two-party-prover >/dev/null 2>&1; then
+            docker logs veil-two-party-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-two-party-prover.log || true
+            docker rm -f veil-two-party-prover || true
+          else
+            printf '%s\n' "Prover container was not started."               > veil-two-party-prover.log
+          fi
 
       - name: Upload safe two-party artifacts
         if: ${{ always() && inputs.generate_proof }}
