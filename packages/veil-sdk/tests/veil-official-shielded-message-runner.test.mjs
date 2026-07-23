@@ -182,7 +182,7 @@ test("runner stage markers follow proof and submission lifecycle", () => {
   assert.equal(state.stage, "SUBMISSION_ESTIMATING");
   updateShieldedMessageRunnerStageFromLog(
     state,
-    "SHIELDED_MESSAGE_SUBMISSION_RESOURCE_ESTIMATE_VALID",
+    "SHIELDED_MESSAGE_SUBMISSION_OFFICIAL_EXECUTE_READY",
     true,
   );
   assert.equal(state.stage, "SUBMISSION_SENDING");

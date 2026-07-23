@@ -236,7 +236,7 @@ export function updateShieldedMessageRunnerStageFromLog(
     state.stage = "PROVING_INVOCATION_PREPARED";
   } else if (line.includes("OFFICIAL_SDK_SHIELDED_MESSAGE_PROOF_GENERATED")) {
     state.stage = submitOnchain ? "SUBMISSION_ESTIMATING" : "PROOF_RESULT_VALID";
-  } else if (line.includes("SHIELDED_MESSAGE_SUBMISSION_RESOURCE_ESTIMATE_VALID")) {
+  } else if (line.includes("SHIELDED_MESSAGE_SUBMISSION_OFFICIAL_EXECUTE_READY")) {
     state.stage = "SUBMISSION_SENDING";
   } else if (line.includes("SHIELDED_MESSAGE_TRANSACTION_SUBMITTED")) {
     state.stage = "WAITING_FOR_RECEIPT";

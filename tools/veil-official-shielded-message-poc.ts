@@ -1186,26 +1186,17 @@ export async function submitShieldedMessage(input: {
   const { call, proof } = input.result.callAndProof;
   const proofFacts = Array.isArray(proof.proofFacts) ? proof.proofFacts : [];
   try {
-    const accountNonce = BigInt(await input.account.getNonce("latest"));
     const proofDetails = proofFacts.length > 0
       ? { proof: proof.data, proofFacts }
       : {};
-    const estimateDetails = {
+    const executionDetails = {
       tip: 0n,
-      nonce: accountNonce,
       ...proofDetails,
     };
-    const estimate = await input.account.estimateInvokeFee(
-      call as never,
-      estimateDetails,
-    );
-    const submissionResourceBounds =
-      createShieldedMessageSubmissionResourceBounds(estimate.resourceBounds);
-    console.log("SHIELDED_MESSAGE_SUBMISSION_RESOURCE_ESTIMATE_VALID");
-    const executionDetails = {
-      ...estimateDetails,
-      resourceBounds: submissionResourceBounds,
-    };
+    // Follow the official SNIP-36 submission path and the already successful
+    // register PoC: Account.execute estimates, signs, and broadcasts one
+    // internally consistent outer Invoke V3 transaction.
+    console.log("SHIELDED_MESSAGE_SUBMISSION_OFFICIAL_EXECUTE_READY");
     const transaction = await input.account.execute(call as never, executionDetails);
     if (!transaction.transaction_hash) {
       throw new Error("Shielded-message submission returned no transaction hash.");

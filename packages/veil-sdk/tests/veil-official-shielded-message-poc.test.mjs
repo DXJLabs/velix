@@ -531,27 +531,16 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
     },
     TypeError,
   );
-  let estimatedCall;
-  let estimatedDetails;
+  let submittedCall;
   let submittedDetails;
   const { lines: submissionDiagnostics } = await captureConsoleLog(
     () => submitShieldedMessage({
       config,
       provider: storageProvider(prepared),
       account: {
-        async getNonce(blockIdentifier) {
-          lifecycle.push("account-nonce");
-          assert.equal(blockIdentifier, "latest");
-          return `0x${LATEST_ACCOUNT_NONCE.toString(16)}`;
-        },
-        async estimateInvokeFee(call, details) {
-          lifecycle.push("outer-estimate");
-          estimatedCall = call;
-          estimatedDetails = details;
-          return { resourceBounds: RAW_RESOURCE_ESTIMATE };
-        },
-        async execute(_call, details) {
+        async execute(call, details) {
           lifecycle.push("execute");
+          submittedCall = call;
           submittedDetails = details;
           return { transaction_hash: "0x789" };
         },
@@ -563,33 +552,18 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
       result,
     }),
   );
-  assert.equal(
-    lifecycle.indexOf("prove") < lifecycle.indexOf("account-nonce"),
-    true,
-  );
-  assert.equal(
-    lifecycle.indexOf("account-nonce") < lifecycle.indexOf("outer-estimate"),
-    true,
-  );
-  assert.equal(
-    lifecycle.indexOf("outer-estimate") < lifecycle.indexOf("execute"),
-    true,
-  );
-  assert.equal(estimatedCall, result.callAndProof.call);
-  assert.deepEqual(estimatedDetails, {
+  assert.equal(lifecycle.indexOf("prove") < lifecycle.indexOf("execute"), true);
+  assert.equal(submittedCall, result.callAndProof.call);
+  assert.deepEqual(submittedDetails, {
     tip: 0n,
-    nonce: LATEST_ACCOUNT_NONCE,
     proof: result.callAndProof.proof.data,
     proofFacts: result.callAndProof.proof.proofFacts,
   });
-  assert.deepEqual(submittedDetails.resourceBounds, MARGINED_RESOURCE_BOUNDS);
-  assert.notDeepEqual(
-    submittedDetails.resourceBounds,
-    execution.provingResourceBounds,
-  );
+  assert.equal(Object.hasOwn(submittedDetails, "nonce"), false);
+  assert.equal(Object.hasOwn(submittedDetails, "resourceBounds"), false);
   assert.equal(
     submissionDiagnostics.includes(
-      "SHIELDED_MESSAGE_SUBMISSION_RESOURCE_ESTIMATE_VALID",
+      "SHIELDED_MESSAGE_SUBMISSION_OFFICIAL_EXECUTE_READY",
     ),
     true,
   );
@@ -612,14 +586,6 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
     config,
     provider,
     account: {
-      async getNonce(blockIdentifier) {
-        assert.equal(blockIdentifier, "latest");
-        return `0x${LATEST_ACCOUNT_NONCE.toString(16)}`;
-      },
-      async estimateInvokeFee(call, details) {
-        calls.push({ stage: "estimate", call, details });
-        return { resourceBounds: RAW_RESOURCE_ESTIMATE };
-      },
       async execute(call, details) {
         calls.push({ stage: "execute", call, details });
         return { transaction_hash: "0x789" };
@@ -633,17 +599,14 @@ test("submission uses tip zero and includes non-empty proof facts", async () => 
   });
   assert.deepEqual(calls[0].details, {
     tip: 0n,
-    nonce: LATEST_ACCOUNT_NONCE,
     proof: executeResult().callAndProof.proof.data,
     proofFacts: ["0x2", "0x3"],
   });
-  assert.deepEqual(calls[1].details, {
-    ...calls[0].details,
-    resourceBounds: MARGINED_RESOURCE_BOUNDS,
-  });
-  assert.equal(calls[0].stage, "estimate");
-  assert.equal(calls[1].stage, "execute");
-  assert.notDeepEqual(calls[1].details.proofFacts, []);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].stage, "execute");
+  assert.equal(Object.hasOwn(calls[0].details, "nonce"), false);
+  assert.equal(Object.hasOwn(calls[0].details, "resourceBounds"), false);
+  assert.notDeepEqual(calls[0].details.proofFacts, []);
   assert.equal(summary.messageEventFound, true);
   assert.equal(summary.storageVerified, true);
   assert.equal(summary.localDecryptVerified, true);
@@ -815,19 +778,11 @@ test("estimation failure stops before proof generation", async () => {
 
 test("proofFacts empty is never sent", async () => {
   const { config, prepared } = await preparedFixture();
-  let estimateDetails;
   let details;
   await submitShieldedMessage({
     config,
     provider: storageProvider(prepared),
     account: {
-      async getNonce() {
-        return `0x${LATEST_ACCOUNT_NONCE.toString(16)}`;
-      },
-      async estimateInvokeFee(_call, input) {
-        estimateDetails = input;
-        return { resourceBounds: RAW_RESOURCE_ESTIMATE };
-      },
       async execute(_call, input) {
         details = input;
         return { transaction_hash: "0x789" };
@@ -839,16 +794,9 @@ test("proofFacts empty is never sent", async () => {
     prepared,
     result: executeResult([]),
   });
-  assert.deepEqual(estimateDetails, {
-    tip: 0n,
-    nonce: LATEST_ACCOUNT_NONCE,
-  });
-  assert.deepEqual(details, {
-    ...estimateDetails,
-    resourceBounds: MARGINED_RESOURCE_BOUNDS,
-  });
-  assert.equal(Object.hasOwn(estimateDetails, "proof"), false);
-  assert.equal(Object.hasOwn(estimateDetails, "proofFacts"), false);
+  assert.deepEqual(details, { tip: 0n });
+  assert.equal(Object.hasOwn(details, "nonce"), false);
+  assert.equal(Object.hasOwn(details, "resourceBounds"), false);
   assert.equal(Object.hasOwn(details, "proof"), false);
   assert.equal(Object.hasOwn(details, "proofFacts"), false);
 });
@@ -889,7 +837,7 @@ test("reverted receipt fails and invalidates the official nonce cache", async ()
   assert.equal(invalidations, 1);
 });
 
-test("outer submission estimation failure sends no transaction", async () => {
+test("official outer execute failure invalidates the proof nonce cache", async () => {
   const { config, prepared } = await preparedFixture();
   let executeCalls = 0;
   let invalidations = 0;
@@ -898,22 +846,14 @@ test("outer submission estimation failure sends no transaction", async () => {
       config,
       provider: storageProvider(prepared),
       account: {
-        async getNonce(blockIdentifier) {
-          assert.equal(blockIdentifier, "latest");
-          return `0x${LATEST_ACCOUNT_NONCE.toString(16)}`;
-        },
-        async estimateInvokeFee(_call, details) {
+        async execute(_call, details) {
+          executeCalls += 1;
           assert.deepEqual(details, {
             tip: 0n,
-            nonce: LATEST_ACCOUNT_NONCE,
             proof: executeResult().callAndProof.proof.data,
             proofFacts: ["0x2"],
           });
-          throw new Error("outer Invoke V3 estimate unavailable");
-        },
-        async execute() {
-          executeCalls += 1;
-          return { transaction_hash: "0x789" };
+          throw new Error("official outer Invoke V3 submission failed");
         },
         async waitForTransaction() { return successfulReceipt(); },
       },
@@ -924,9 +864,9 @@ test("outer submission estimation failure sends no transaction", async () => {
       prepared,
       result: executeResult(),
     }),
-    /outer Invoke V3 estimate unavailable/u,
+    /official outer Invoke V3 submission failed/u,
   );
-  assert.equal(executeCalls, 0);
+  assert.equal(executeCalls, 1);
   assert.equal(invalidations, 1);
 });
 
@@ -1026,7 +966,7 @@ test("workflow keeps the official InvokeExternal path and has no direct fallback
     true,
   );
   assert.equal(
-    source.includes("SHIELDED_MESSAGE_SUBMISSION_RESOURCE_ESTIMATE_VALID"),
+    source.includes("SHIELDED_MESSAGE_SUBMISSION_OFFICIAL_EXECUTE_READY"),
     true,
   );
   const estimateStep = workflow.indexOf(
