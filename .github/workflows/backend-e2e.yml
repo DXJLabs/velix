@@ -1,0 +1,48 @@
+name: VEIL Backend E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "api/messaging/**"
+      - "api/indexer/**"
+      - "backend/**"
+      - "packages/veil-sdk/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/backend-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-e2e:
+    name: Backend boundaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci
+
+      - name: Run backend E2E tests
+        run: npm run test:backend
+
+      - name: Run API security tests
+        run: npm run test:api
+
+      - name: Run repository typecheck
+        run: npm run typecheck

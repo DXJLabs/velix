@@ -8,16 +8,25 @@
     "node": ">=24"
   },
   "packageManager": "npm@11.6.2",
+  "imports": {
+    "#veil-sdk/errors": "./packages/veil-sdk/dist/privacy/errors.js",
+    "#veil-sdk/official-sdk": "./packages/veil-sdk/dist/privacy/official-sdk.js",
+    "#veil-sdk/namespace": "./packages/veil-sdk/dist/privacy/namespace.js",
+    "#veil-sdk/canonical-payload": "./packages/veil-sdk/dist/privacy/canonical-payload.js",
+    "#veil-sdk/transaction-prover": "./packages/veil-sdk/dist/privacy/transaction-prover.js"
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run typecheck && npm run build:backend && vite build",
     "build:sdk": "tsc -p packages/veil-sdk/tsconfig.json",
+    "build:backend": "npm run build:sdk && tsc -p backend/tsconfig.json",
     "test:sdk": "npm run build:sdk && node --test packages/veil-sdk/tests/*.test.mjs",
     "test:app": "node --test tests/*.test.mjs",
-    "test:api": "node --test api/tests/*.test.mjs",
-    "test:all": "npm run test:sdk && npm run test:app && npm run test:api",
+    "test:backend": "npm run build:backend && node --test backend/dist/tests/*.test.js",
+    "test:api": "npm run build:backend && node --test api/tests/*.test.mjs",
+    "test:all": "npm run test:sdk && npm run test:backend && npm run test:app && npm run test:api",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "npm run build:sdk && tsc -p tsconfig.json --noEmit && npm run typecheck:poc",
+    "typecheck": "npm run build:sdk && tsc -p backend/tsconfig.json --noEmit && tsc -p tsconfig.json --noEmit && npm run typecheck:poc",
     "typecheck:poc": "tsc -p tools/tsconfig.json"
   },
   "devDependencies": {
