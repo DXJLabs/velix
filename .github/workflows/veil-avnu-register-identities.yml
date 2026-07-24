@@ -1,6 +1,6 @@
 name: Register VEIL Identities in AVNU Pool
 
-run-name: Register Wallet A and B in AVNU Privacy Pool
+run-name: Register Wallet A or B in AVNU Privacy Pool
 
 on:
   workflow_dispatch:
@@ -46,11 +46,9 @@ jobs:
           old = 'poolMode: "compatibility",'
           new = 'poolMode: "screening",'
 
-          count = source.count(old)
-
-          if count != 1:
+          if source.count(old) != 1:
               raise SystemExit(
-                  f"Expected exactly one compatibility pool mode, found {count}."
+                  "Expected exactly one compatibility poolMode setting."
               )
 
           path.write_text(
@@ -70,11 +68,11 @@ jobs:
       - name: Install pinned dependencies
         run: npm ci --ignore-scripts
 
-      - name: Build VEIL SDK
-        run: npm run build:sdk
-
-      - name: Typecheck PoC tools
-        run: npm run typecheck:poc
+      - name: Build and typecheck
+        run: |
+          set -euo pipefail
+          npm run build:sdk
+          npm run typecheck:poc
 
       - name: Validate selected wallet
         shell: bash
@@ -90,26 +88,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${RPC_URL:-}" ]; then
+          test -n "${RPC_URL:-}" || {
             echo "Secret STARKNET_SEPOLIA_RPC_URL belum tersedia."
             exit 1
-          fi
+          }
 
           case "$WALLET" in
             wallet-a)
               for name in A_ADDRESS A_PRIVATE_KEY A_VIEWING_KEY; do
-                if [ -z "${!name:-}" ]; then
+                test -n "${!name:-}" || {
                   echo "Secret $name belum tersedia."
                   exit 1
-                fi
+                }
               done
               ;;
             wallet-b)
               for name in B_ADDRESS B_PRIVATE_KEY B_VIEWING_KEY; do
-                if [ -z "${!name:-}" ]; then
+                test -n "${!name:-}" || {
                   echo "Secret $name belum tersedia."
                   exit 1
-                fi
+                }
               done
               ;;
             *)
@@ -119,108 +117,6 @@ jobs:
           esac
 
           echo "AVNU_POOL_IDENTITY_CONFIGURATION_READY"
-          echo "Nilai rahasia tidak ditampilkan."
-
-      - name: Check AVNU pool RPC compatibility
-        shell: bash
-        env:
-          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          WALLET: ${{ inputs.wallet }}
-          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
-        run: |
-          set -euo pipefail
-
-          node --input-type=module <<'NODE'
-          import { RpcProvider } from "starknet-proof";
-
-          const POOL =
-            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
-
-          const walletAddress =
-            process.env.WALLET === "wallet-a"
-              ? process.env.A_ADDRESS
-              : process.env.B_ADDRESS;
-
-          if (!process.env.RPC_URL || !walletAddress) {
-            throw new Error("RPC preflight configuration is incomplete.");
-          }
-
-          const provider = new RpcProvider({
-            nodeUrl: process.env.RPC_URL,
-          });
-
-          function safeError(error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-
-            return {
-              name:
-                error instanceof Error
-                  ? error.name
-                  : "UnknownError",
-              code:
-                typeof error?.code === "number"
-                  ? error.code
-                  : null,
-              message: message
-                .replace(
-                  /https?:\/\/[^\s"'<>]+/giu,
-                  "[RPC_URL_REDACTED]",
-                )
-                .replace(
-                  /\b0x[0-9a-f]{40,}\b/giu,
-                  "[LONG_HEX_REDACTED]",
-                ),
-            };
-          }
-
-          async function failClosed(label, operation) {
-            try {
-              return await operation();
-            } catch (error) {
-              console.error(
-                label,
-                JSON.stringify(safeError(error)),
-              );
-              process.exit(1);
-            }
-          }
-
-          console.log("AVNU_POOL_RPC_PREFLIGHT_START");
-
-          const chainId = await failClosed(
-            "CHAIN_ID_RPC_FAILED",
-            () => provider.getChainId(),
-          );
-          console.log(`CHAIN_ID=${chainId}`);
-
-          const classHash = await failClosed(
-            "POOL_CLASS_HASH_RPC_FAILED",
-            () => provider.getClassHashAt(POOL, "latest"),
-          );
-          console.log(
-            `POOL_CLASS_HASH=0x${BigInt(classHash).toString(16)}`,
-          );
-
-          const poolNonce = await failClosed(
-            "POOL_NONCE_RPC_FAILED",
-            () => provider.getNonceForAddress(POOL, "latest"),
-          );
-          console.log(
-            `POOL_NONCE=0x${BigInt(poolNonce).toString(16)}`,
-          );
-
-          const walletNonce = await failClosed(
-            "WALLET_NONCE_RPC_FAILED",
-            () => provider.getNonceForAddress(walletAddress, "latest"),
-          );
-          console.log(
-            `WALLET_NONCE=0x${BigInt(walletNonce).toString(16)}`,
-          );
-
-          console.log("AVNU_POOL_RPC_PREFLIGHT_OK");
-          NODE
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -233,22 +129,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           docker pull "$PROVER_IMAGE"
           docker image inspect "$PROVER_IMAGE" >/dev/null
-
           echo "AVNU_POOL_PROVER_IMAGE_READY"
 
       - name: Prepare prover memory
         shell: bash
         run: |
           set -euo pipefail
-
-          echo "=== MEMORY BEFORE SWAP ==="
-          free -h
-
-          echo "=== DISK BEFORE SWAP ==="
-          df -h /
 
           available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
           reserve_kb="$((3 * 1024 * 1024))"
@@ -265,22 +153,14 @@ jobs:
             exit 1
           fi
 
-          if swapon --show --noheadings --raw \
-              | awk '{ print $1 }' \
-              | grep -Fxq "$swap_path"; then
-            sudo swapoff "$swap_path"
-          fi
-
           sudo rm -f "$swap_path"
           sudo fallocate -l "${swap_kb}K" "$swap_path"
           sudo chmod 600 "$swap_path"
           sudo mkswap "$swap_path"
           sudo swapon "$swap_path"
 
-          echo "=== MEMORY AFTER SWAP ==="
           free -h
           swapon --show
-          df -h /
 
       - name: Start official prover
         shell: bash
@@ -320,8 +200,6 @@ jobs:
 
             if [ "$running" != "true" ]; then
               echo "Prover berhenti sebelum siap."
-              docker logs veil-avnu-register-prover 2>&1 \
-                | tail -n 200 || true
               exit 1
             fi
 
@@ -391,6 +269,7 @@ jobs:
           timeout 300m node \
             --experimental-strip-types \
             --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
           import {
             runVeilOfficialRegisterPoc,
             sanitizeProvingDiagnosticData,
@@ -403,9 +282,7 @@ jobs:
           ].filter(Boolean);
 
           try {
-            const summary =
-              await runVeilOfficialRegisterPoc();
-
+            const summary = await runVeilOfficialRegisterPoc();
             console.log(JSON.stringify(summary));
           } catch (error) {
             const baseError =
@@ -457,17 +334,14 @@ jobs:
               ),
             };
 
-            await import("node:fs/promises").then(
-              ({ writeFile }) =>
-                writeFile(
-                  process.env.VEIL_POC_ERROR_PATH ??
-                    "veil-avnu-register-error.json",
-                  `${JSON.stringify(diagnostic, null, 2)}\n`,
-                  {
-                    encoding: "utf8",
-                    mode: 0o600,
-                  },
-                ),
+            await writeFile(
+              process.env.VEIL_POC_ERROR_PATH ??
+                "veil-avnu-register-error.json",
+              `${JSON.stringify(diagnostic, null, 2)}\n`,
+              {
+                encoding: "utf8",
+                mode: 0o600,
+              },
             );
 
             console.error(
@@ -502,22 +376,14 @@ jobs:
             "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
 
           const wallet = process.env.WALLET;
-
           const address =
             wallet === "wallet-a"
               ? process.env.A_ADDRESS
               : process.env.B_ADDRESS;
-
           const viewingKey =
             wallet === "wallet-a"
               ? process.env.A_VIEWING_KEY
               : process.env.B_VIEWING_KEY;
-
-          if (!address || !viewingKey || !process.env.RPC_URL) {
-            throw new Error(
-              "Registration validation configuration is incomplete.",
-            );
-          }
 
           const summary = JSON.parse(
             await readFile(
@@ -559,493 +425,6 @@ jobs:
           }
 
           const registeredPublicKey = BigInt(result[0]);
-
-          const expectedPublicKey = BigInt(
-            ec.starkCurve.getStarkKey(
-              `0x${BigInt(viewingKey).toString(16)}`,
-            ),
-          );
-
-          if (registeredPublicKey === 0n) {
-            throw new Error(
-              "Wallet is still not registered in AVNU Privacy Pool.",
-            );
-          }
-
-          if (registeredPublicKey !== expectedPublicKey) {
-            throw new Error(
-              "Wallet is registered with a different viewing key.",
-            );
-          }
-
-          console.log("AVNU_POOL_IDENTITY_REGISTERED");
-          console.log(`wallet=${wallet}`);
-          console.log(`transaction_hash=${summary.transactionHash}`);
-          console.log(summary.finalityStatus);
-          console.log(summary.executionStatus);
-          NODE
-
-      - name: Stop prover and save redacted logs
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if docker inspect veil-avnu-register-prover \
-              >/dev/null 2>&1; then
-            docker logs veil-avnu-register-prover 2>&1 \
-              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
-              > veil-avnu-register-prover.log || true
-
-            docker rm -f veil-avnu-register-prover || true
-          else
-            printf '%s\n' \
-              "Prover container was not started." \
-              > veil-avnu-register-prover.log
-          fi
-
-      - name: Upload safe artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: veil-avnu-pool-register-${{ inputs.wallet }}
-          path: |
-            veil-avnu-register-preflight.json
-            veil-avnu-register-proof.json
-            veil-avnu-register-submission.json
-            veil-avnu-register-error.json
-            veil-avnu-register-prover.log
-          if-no-files-found: warn
-          retention-days: 14
-          node --input-type=module <<'NODE'
-          import { RpcProvider } from "starknet-proof";
-
-          const POOL =
-            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
-
-          const walletAddress =
-            process.env.WALLET === "wallet-a"
-              ? process.env.A_ADDRESS
-              : process.env.B_ADDRESS;
-
-          if (!process.env.RPC_URL || !walletAddress) {
-            throw new Error("RPC preflight configuration is incomplete.");
-          }
-
-          const provider = new RpcProvider({
-            nodeUrl: process.env.RPC_URL,
-          });
-
-          function safeError(error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-
-            return {
-              name:
-                error instanceof Error
-                  ? error.name
-                  : "UnknownError",
-              code:
-                typeof error?.code === "number"
-                  ? error.code
-                  : null,
-              message: message
-                .replace(
-                  /https?:\/\/[^\s"'<>]+/giu,
-                  "[RPC_URL_REDACTED]",
-                )
-                .replace(
-                  /\b0x[0-9a-f]{40,}\b/giu,
-                  "[LONG_HEX_REDACTED]",
-                ),
-            };
-          }
-
-          async function failClosed(label, operation) {
-            try {
-              return await operation();
-            } catch (error) {
-              console.error(
-                label,
-                JSON.stringify(safeError(error)),
-              );
-              process.exit(1);
-            }
-          }
-
-          console.log("AVNU_POOL_RPC_PREFLIGHT_START");
-
-          const chainId = await failClosed(
-            "CHAIN_ID_RPC_FAILED",
-            () => provider.getChainId(),
-          );
-          console.log(`CHAIN_ID=${chainId}`);
-
-          const classHash = await failClosed(
-            "POOL_CLASS_HASH_RPC_FAILED",
-            () => provider.getClassHashAt(POOL, "latest"),
-          );
-          console.log(
-            `POOL_CLASS_HASH=0x${BigInt(classHash).toString(16)}`,
-          );
-
-          const poolNonce = await failClosed(
-            "POOL_NONCE_RPC_FAILED",
-            () => provider.getNonceForAddress(POOL, "latest"),
-          );
-          console.log(
-            `POOL_NONCE=0x${BigInt(poolNonce).toString(16)}`,
-          );
-
-          const walletNonce = await failClosed(
-            "WALLET_NONCE_RPC_FAILED",
-            () => provider.getNonceForAddress(walletAddress, "latest"),
-          );
-          console.log(
-            `WALLET_NONCE=0x${BigInt(walletNonce).toString(16)}`,
-          );
-
-          console.log("AVNU_POOL_RPC_PREFLIGHT_OK");
-          NODE
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull official transaction prover
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          docker pull "$PROVER_IMAGE"
-          docker image inspect "$PROVER_IMAGE" >/dev/null
-
-          echo "AVNU_POOL_PROVER_IMAGE_READY"
-
-      - name: Prepare prover memory
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "=== MEMORY BEFORE SWAP ==="
-          free -h
-
-          echo "=== DISK BEFORE SWAP ==="
-          df -h /
-
-          available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
-          reserve_kb="$((3 * 1024 * 1024))"
-          maximum_swap_kb="$((10 * 1024 * 1024))"
-          swap_kb="$((available_kb - reserve_kb))"
-          swap_path="/veil-avnu-register.swap"
-
-          if [ "$swap_kb" -gt "$maximum_swap_kb" ]; then
-            swap_kb="$maximum_swap_kb"
-          fi
-
-          if [ "$swap_kb" -lt "$((4 * 1024 * 1024))" ]; then
-            echo "Disk tidak cukup untuk minimum 4 GiB swap prover."
-            exit 1
-          fi
-
-          if swapon --show --noheadings --raw \
-              | awk '{ print $1 }' \
-              | grep -Fxq "$swap_path"; then
-            sudo swapoff "$swap_path"
-          fi
-
-          sudo rm -f "$swap_path"
-          sudo fallocate -l "${swap_kb}K" "$swap_path"
-          sudo chmod 600 "$swap_path"
-          sudo mkswap "$swap_path"
-          sudo swapon "$swap_path"
-
-          echo "=== MEMORY AFTER SWAP ==="
-          free -h
-          swapon --show
-          df -h /
-
-      - name: Start official prover
-        shell: bash
-        env:
-          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-        run: |
-          set -euo pipefail
-
-          docker rm -f veil-avnu-register-prover 2>/dev/null || true
-
-          docker run -d \
-            --name veil-avnu-register-prover \
-            -p 3000:3000 \
-            -e RPC_URL="$RPC_URL" \
-            -e CHAIN_ID="SN_SEPOLIA" \
-            -e PROVER_IP="0.0.0.0" \
-            -e PROVER_PORT="3000" \
-            -e MAX_CONCURRENT_REQUESTS="1" \
-            -e MAX_QUEUED_REQUESTS="1" \
-            -e MAX_CONNECTIONS="2" \
-            -e COMPILED_CLASS_CACHE_SIZE="50" \
-            -e RAYON_NUM_THREADS="2" \
-            -e MALLOC_ARENA_MAX="2" \
-            -e PREFETCH_STATE="false" \
-            -e RUST_LOG="info" \
-            "$PROVER_IMAGE"
-
-          ready=0
-
-          for attempt in $(seq 1 60); do
-            running="$(
-              docker inspect \
-                -f '{{.State.Running}}' \
-                veil-avnu-register-prover \
-                2>/dev/null || true
-            )"
-
-            if [ "$running" != "true" ]; then
-              echo "Prover berhenti sebelum siap."
-              docker logs veil-avnu-register-prover 2>&1 \
-                | tail -n 200 || true
-              exit 1
-            fi
-
-            response="$(
-              curl -sS \
-                --connect-timeout 2 \
-                --max-time 5 \
-                -X POST http://127.0.0.1:3000 \
-                -H 'Content-Type: application/json' \
-                -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
-                2>/dev/null || true
-            )"
-
-            if echo "$response" | grep -q '"result"'; then
-              ready=1
-              break
-            fi
-
-            echo "Waiting for prover: $attempt/60"
-            sleep 2
-          done
-
-          if [ "$ready" -ne 1 ]; then
-            echo "Prover tidak siap dalam batas waktu."
-            exit 1
-          fi
-
-          echo "AVNU_POOL_PROVER_READY"
-
-      - name: Register selected wallet in AVNU pool
-        shell: bash
-        env:
-          WALLET: ${{ inputs.wallet }}
-          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
-          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
-          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
-          B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
-          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
-          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          VEIL_POC_PROVER_URL: "http://127.0.0.1:3000"
-          VEIL_POC_PRIVACY_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
-          VEIL_POC_SUBMIT_ONCHAIN: "true"
-          VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-avnu-register-proof.json
-          VEIL_POC_SUBMISSION_SUMMARY_PATH: ${{ github.workspace }}/veil-avnu-register-submission.json
-          VEIL_POC_ACCOUNT_PREFLIGHT_PATH: ${{ github.workspace }}/veil-avnu-register-preflight.json
-          VEIL_POC_ERROR_PATH: ${{ github.workspace }}/veil-avnu-register-error.json
-        run: |
-          set -euo pipefail
-
-          if [ "$WALLET" = "wallet-a" ]; then
-            export VEIL_POC_ACCOUNT_ADDRESS="$A_ADDRESS"
-            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$A_PRIVATE_KEY"
-            export VEIL_POC_VIEWING_KEY="$A_VIEWING_KEY"
-          else
-            export VEIL_POC_ACCOUNT_ADDRESS="$B_ADDRESS"
-            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$B_PRIVATE_KEY"
-            export VEIL_POC_VIEWING_KEY="$B_VIEWING_KEY"
-          fi
-
-          rm -f \
-            "$GITHUB_WORKSPACE/veil-avnu-register-preflight.json" \
-            "$GITHUB_WORKSPACE/veil-avnu-register-proof.json" \
-            "$GITHUB_WORKSPACE/veil-avnu-register-submission.json" \
-            "$GITHUB_WORKSPACE/veil-avnu-register-error.json"
-
-          timeout 300m node \
-            --experimental-strip-types \
-            --input-type=module <<'NODE'
-          import {
-            runVeilOfficialRegisterPoc,
-            sanitizeProvingDiagnosticData,
-            sanitizeProvingDiagnosticText,
-          } from "./tools/veil-official-register-poc.ts";
-
-          const sensitiveValues = [
-            process.env.VEIL_POC_ACCOUNT_PRIVATE_KEY ?? "",
-            process.env.VEIL_POC_VIEWING_KEY ?? "",
-          ].filter(Boolean);
-
-          try {
-            const summary =
-              await runVeilOfficialRegisterPoc();
-
-            console.log(JSON.stringify(summary));
-          } catch (error) {
-            const baseError =
-              error &&
-              typeof error === "object" &&
-              "baseError" in error
-                ? error.baseError
-                : null;
-
-            const rawMessage =
-              baseError &&
-              typeof baseError === "object" &&
-              typeof baseError.message === "string"
-                ? baseError.message
-                : error instanceof Error
-                  ? error.message
-                  : String(error);
-
-            const rawData =
-              baseError &&
-              typeof baseError === "object" &&
-              "data" in baseError
-                ? baseError.data
-                : null;
-
-            const code =
-              baseError &&
-              typeof baseError === "object" &&
-              typeof baseError.code === "number"
-                ? baseError.code
-                : typeof error?.code === "number"
-                  ? error.code
-                  : null;
-
-            const diagnostic = {
-              name:
-                error instanceof Error
-                  ? error.name
-                  : "UnknownError",
-              code,
-              message: sanitizeProvingDiagnosticText(
-                rawMessage,
-                sensitiveValues,
-              ),
-              data: sanitizeProvingDiagnosticData(
-                rawData,
-                0,
-                sensitiveValues,
-              ),
-            };
-
-            await import("node:fs/promises").then(
-              ({ writeFile }) =>
-                writeFile(
-                  process.env.VEIL_POC_ERROR_PATH ??
-                    "veil-avnu-register-error.json",
-                  `${JSON.stringify(diagnostic, null, 2)}\n`,
-                  {
-                    encoding: "utf8",
-                    mode: 0o600,
-                  },
-                ),
-            );
-
-            console.error(
-              "VEIL_AVNU_REGISTER_FAILED",
-              JSON.stringify(diagnostic),
-            );
-
-            process.exitCode = 1;
-          }
-          NODE
-
-      - name: Validate registration
-        shell: bash
-        env:
-          WALLET: ${{ inputs.wallet }}
-          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
-          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
-          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
-        run: |
-          set -euo pipefail
-
-          node --input-type=module <<'NODE'
-          import { readFile } from "node:fs/promises";
-          import {
-            RpcProvider,
-            ec,
-          } from "starknet";
-
-          const POOL =
-            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
-
-          const wallet = process.env.WALLET;
-
-          const address =
-            wallet === "wallet-a"
-              ? process.env.A_ADDRESS
-              : process.env.B_ADDRESS;
-
-          const viewingKey =
-            wallet === "wallet-a"
-              ? process.env.A_VIEWING_KEY
-              : process.env.B_VIEWING_KEY;
-
-          if (!address || !viewingKey || !process.env.RPC_URL) {
-            throw new Error(
-              "Registration validation configuration is incomplete.",
-            );
-          }
-
-          const summary = JSON.parse(
-            await readFile(
-              "veil-avnu-register-submission.json",
-              "utf8",
-            ),
-          );
-
-          if (
-            summary.result !==
-              "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN" ||
-            summary.finalityStatus !== "ACCEPTED_ON_L2" ||
-            summary.executionStatus !== "SUCCEEDED" ||
-            summary.proofPresent !== true ||
-            !summary.transactionHash
-          ) {
-            throw new Error(
-              "AVNU Pool identity registration submission failed.",
-            );
-          }
-
-          const provider = new RpcProvider({
-            nodeUrl: process.env.RPC_URL,
-          });
-
-          const result = await provider.callContract(
-            {
-              contractAddress: POOL,
-              entrypoint: "get_public_key",
-              calldata: [address],
-            },
-            "latest",
-          );
-
-          if (!Array.isArray(result) || result.length !== 1) {
-            throw new Error(
-              "AVNU Privacy Pool returned invalid public-key data.",
-            );
-          }
-
-          const registeredPublicKey = BigInt(result[0]);
-
           const expectedPublicKey = BigInt(
             ec.starkCurve.getStarkKey(
               `0x${BigInt(viewingKey).toString(16)}`,
