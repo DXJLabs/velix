@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 360
 
     env:
-      PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
+      PROVER_IMAGE: "ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3"
       AVNU_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
 
     steps:
@@ -191,8 +191,8 @@ jobs:
           B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
           B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
-          VEIL_POC_PRIVACY_POOL: 0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91
+          VEIL_POC_PROVER_URL: "http://127.0.0.1:3000"
+          VEIL_POC_PRIVACY_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
           VEIL_POC_SUBMIT_ONCHAIN: "true"
           VEIL_POC_SUMMARY_PATH: ${{ github.workspace }}/veil-avnu-register-proof.json
           VEIL_POC_SUBMISSION_SUMMARY_PATH: ${{ github.workspace }}/veil-avnu-register-submission.json
@@ -285,15 +285,20 @@ jobs:
           console.log(summary.executionStatus);
           NODE
 
-      - name: Stop prover and upload safe results
+      - name: Stop prover and save redacted logs
         if: ${{ always() }}
         shell: bash
         run: |
-          docker logs veil-avnu-register-prover 2>&1 \
-            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
-            > veil-avnu-register-prover.log || true
+          if docker inspect veil-avnu-register-prover >/dev/null 2>&1; then
+            docker logs veil-avnu-register-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-avnu-register-prover.log || true
 
-          docker rm -f veil-avnu-register-prover || true
+            docker rm -f veil-avnu-register-prover || true
+          else
+            echo "Prover container was not started." \
+              > veil-avnu-register-prover.log
+          fi
 
       - name: Upload safe artifacts
         if: ${{ always() }}
