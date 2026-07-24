@@ -1,0 +1,217 @@
+name: Deploy VEIL Helper for AVNU Pool
+
+run-name: Deploy VEIL Helper Bound to AVNU Sepolia Pool
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-helper:
+    name: Deploy and Verify VEIL Helper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout VEIL
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate deployment secrets
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          for name in RPC_URL ACCOUNT_ADDRESS ACCOUNT_PRIVATE_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "Secret $name belum tersedia."
+              exit 1
+            fi
+          done
+
+          echo "VEIL_DEPLOYMENT_SECRETS_AVAILABLE"
+          echo "Nilai rahasia tidak ditampilkan."
+
+      - name: Deploy Helper bound to AVNU Privacy Pool
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          node --input-type=module <<'NODE'
+          import { appendFile, writeFile } from "node:fs/promises";
+
+          import {
+            Account,
+            RpcProvider,
+          } from "starknet-proof";
+
+          const HELPER_CLASS_HASH =
+            "0x2a7b116fd1e7954b019fe02d91fdfb67166a80597bd6f7699bf07374032ee37";
+
+          const AVNU_PRIVACY_POOL =
+            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
+
+          const rpcUrl = process.env.RPC_URL;
+          const accountAddress = process.env.ACCOUNT_ADDRESS;
+          const privateKey = process.env.ACCOUNT_PRIVATE_KEY;
+
+          if (!rpcUrl || !accountAddress || !privateKey) {
+            throw new Error("Deployment configuration is incomplete.");
+          }
+
+          const provider = new RpcProvider({
+            nodeUrl: rpcUrl,
+          });
+
+          const account = new Account({
+            provider,
+            address: accountAddress,
+            signer: privateKey,
+          });
+
+          console.log("VEIL_AVNU_HELPER_DEPLOYMENT_START");
+          console.log(`class_hash=${HELPER_CLASS_HASH}`);
+          console.log(`constructor_privacy_pool=${AVNU_PRIVACY_POOL}`);
+
+          const deployment = await account.deployContract({
+            classHash: HELPER_CLASS_HASH,
+            constructorCalldata: [AVNU_PRIVACY_POOL],
+          });
+
+          if (!deployment.transaction_hash) {
+            throw new Error("Deployment returned no transaction hash.");
+          }
+
+          if (!deployment.contract_address) {
+            throw new Error("Deployment returned no contract address.");
+          }
+
+          console.log(
+            `deployment_transaction_hash=${deployment.transaction_hash}`,
+          );
+          console.log(
+            `new_helper_address=${deployment.contract_address}`,
+          );
+
+          const receipt = await provider.waitForTransaction(
+            deployment.transaction_hash,
+          );
+
+          const finalityStatus =
+            receipt.finality_status ?? "UNKNOWN";
+
+          const executionStatus =
+            receipt.execution_status ?? "UNKNOWN";
+
+          console.log(`finality_status=${finalityStatus}`);
+          console.log(`execution_status=${executionStatus}`);
+
+          if (
+            executionStatus === "REVERTED" ||
+            (typeof receipt.isReverted === "function" &&
+              receipt.isReverted())
+          ) {
+            throw new Error("VEIL Helper deployment reverted.");
+          }
+
+          const response = await provider.callContract(
+            {
+              contractAddress: deployment.contract_address,
+              entrypoint: "get_privacy_pool",
+              calldata: [],
+            },
+            "latest",
+          );
+
+          if (!Array.isArray(response) || response.length !== 1) {
+            throw new Error(
+              `get_privacy_pool returned invalid data: ${JSON.stringify(response)}`,
+            );
+          }
+
+          const storedPool =
+            `0x${BigInt(response[0]).toString(16)}`;
+
+          const poolMatches =
+            BigInt(storedPool) === BigInt(AVNU_PRIVACY_POOL);
+
+          console.log(`stored_privacy_pool=${storedPool}`);
+          console.log(`privacy_pool_matches_avnu=${poolMatches}`);
+
+          if (!poolMatches) {
+            throw new Error(
+              "New Helper stores the wrong Privacy Pool address.",
+            );
+          }
+
+          const summary = {
+            result: "VEIL_AVNU_HELPER_DEPLOYED",
+            network: "SN_SEPOLIA",
+            classHash: HELPER_CLASS_HASH,
+            helperAddress: deployment.contract_address,
+            privacyPoolAddress: storedPool,
+            transactionHash: deployment.transaction_hash,
+            finalityStatus,
+            executionStatus,
+            privacyPoolMatchesAvnu: true,
+          };
+
+          await writeFile(
+            "veil-avnu-helper-deployment.json",
+            `${JSON.stringify(summary, null, 2)}\n`,
+            {
+              encoding: "utf8",
+              mode: 0o600,
+            },
+          );
+
+          const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+
+          if (stepSummary) {
+            await appendFile(
+              stepSummary,
+              [
+                "# VEIL AVNU Helper Deployment",
+                "",
+                `- Helper: \`${deployment.contract_address}\``,
+                `- Privacy Pool: \`${storedPool}\``,
+                `- Transaction: \`${deployment.transaction_hash}\``,
+                `- Finality: \`${finalityStatus}\``,
+                `- Execution: \`${executionStatus}\``,
+                "",
+                "✅ Helper terhubung ke AVNU Privacy Pool.",
+                "",
+              ].join("\n"),
+              "utf8",
+            );
+          }
+
+          console.log("VEIL_AVNU_HELPER_DEPLOYED");
+          console.log("VEIL_AVNU_HELPER_POOL_VERIFIED");
+          NODE
+
+      - name: Upload safe deployment summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-avnu-helper-deployment
+          path: veil-avnu-helper-deployment.json
+          if-no-files-found: error
+          retention-days: 30
