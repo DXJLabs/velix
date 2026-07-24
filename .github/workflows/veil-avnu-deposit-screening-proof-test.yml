@@ -1,0 +1,244 @@
+name: Test AVNU Deposit Screening Proof
+
+run-name: VEIL AVNU 2 STRK Deposit Screening Proof Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deposit-screening-proof:
+    name: Generate Deposit Proof and Check Screening Signature
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    env:
+      PROVER_IMAGE: "ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3"
+      AVNU_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
+      DEPOSIT_AMOUNT_RAW: "2000000000000000000"
+
+    steps:
+      - name: Validate Wallet A secrets
+        shell: bash
+        env:
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+
+          for name in \
+            A_ADDRESS \
+            A_PRIVATE_KEY \
+            A_VIEWING_KEY \
+            RPC_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required secret is unavailable: $name"
+              exit 1
+            fi
+          done
+
+          echo "AVNU_DEPOSIT_TEST_CONFIGURATION_READY"
+
+      - name: Checkout VEIL
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build VEIL SDK
+        run: npm run build:sdk
+
+      - name: Check deposit test runner syntax
+        run: |
+          set -euo pipefail
+          node --check \
+            tools/veil-avnu-deposit-screening-proof-test.mjs
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull official transaction prover
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PROVER_IMAGE"
+          docker image inspect "$PROVER_IMAGE" >/dev/null
+          echo "AVNU_DEPOSIT_PROVER_IMAGE_READY"
+
+      - name: Prepare prover memory
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+          reserve_kb="$((3 * 1024 * 1024))"
+          maximum_swap_kb="$((10 * 1024 * 1024))"
+          swap_kb="$((available_kb - reserve_kb))"
+          swap_path="/veil-avnu-deposit.swap"
+
+          if [ "$swap_kb" -gt "$maximum_swap_kb" ]; then
+            swap_kb="$maximum_swap_kb"
+          fi
+
+          if [ "$swap_kb" -lt "$((4 * 1024 * 1024))" ]; then
+            echo "Insufficient disk for minimum 4 GiB prover swap."
+            exit 1
+          fi
+
+          sudo rm -f "$swap_path"
+          sudo fallocate -l "${swap_kb}K" "$swap_path"
+          sudo chmod 600 "$swap_path"
+          sudo mkswap "$swap_path"
+          sudo swapon "$swap_path"
+
+          free -h
+          swapon --show
+
+      - name: Start official transaction prover
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+
+          docker rm -f veil-avnu-deposit-prover \
+            2>/dev/null || true
+
+          docker run -d \
+            --name veil-avnu-deposit-prover \
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e RAYON_NUM_THREADS="2" \
+            -e MALLOC_ARENA_MAX="2" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            "$PROVER_IMAGE"
+
+          ready=0
+
+          for attempt in $(seq 1 60); do
+            running="$(
+              docker inspect \
+                -f '{{.State.Running}}' \
+                veil-avnu-deposit-prover \
+                2>/dev/null || true
+            )"
+
+            if [ "$running" != "true" ]; then
+              echo "Prover stopped before becoming ready."
+              exit 1
+            fi
+
+            response="$(
+              curl -sS \
+                --connect-timeout 2 \
+                --max-time 5 \
+                -X POST http://127.0.0.1:3000 \
+                -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+                2>/dev/null || true
+            )"
+
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+
+            echo "Waiting for prover: $attempt/60"
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "Prover did not become ready."
+            exit 1
+          fi
+
+          echo "AVNU_DEPOSIT_PROVER_READY"
+
+      - name: Generate deposit proof and inspect screening signature
+        shell: bash
+        env:
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          VEIL_POC_PROVER_URL: "http://127.0.0.1:3000"
+          VEIL_POC_PRIVACY_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
+          VEIL_AVNU_DEPOSIT_AMOUNT_RAW: "2000000000000000000"
+          VEIL_POC_ACCOUNT_PREFLIGHT_PATH: ${{ github.workspace }}/veil-avnu-deposit-preflight.json
+          VEIL_AVNU_DEPOSIT_SUMMARY_PATH: ${{ github.workspace }}/veil-avnu-deposit-screening-proof-summary.json
+          VEIL_AVNU_DEPOSIT_ERROR_PATH: ${{ github.workspace }}/veil-avnu-deposit-screening-proof-error.json
+        run: |
+          set -euo pipefail
+
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-avnu-deposit-preflight.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-deposit-screening-proof-summary.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-deposit-screening-proof-error.json"
+
+          timeout 300m node \
+            --experimental-strip-types \
+            tools/veil-avnu-deposit-screening-proof-test.mjs
+
+      - name: Save redacted prover logs and stop container
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if docker inspect veil-avnu-deposit-prover \
+              >/dev/null 2>&1; then
+            docker logs veil-avnu-deposit-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-avnu-deposit-prover.log || true
+
+            docker inspect veil-avnu-deposit-prover \
+              --format '{{json .State}}' \
+              > veil-avnu-deposit-prover-state.json || true
+
+            docker rm -f veil-avnu-deposit-prover || true
+          else
+            printf '%s\n' \
+              "Prover container was not started." \
+              > veil-avnu-deposit-prover.log
+
+            printf '%s\n' \
+              '{"status":"not_started"}' \
+              > veil-avnu-deposit-prover-state.json
+          fi
+
+      - name: Upload safe deposit test artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-avnu-deposit-screening-proof-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            veil-avnu-deposit-preflight.json
+            veil-avnu-deposit-screening-proof-summary.json
+            veil-avnu-deposit-screening-proof-error.json
+            veil-avnu-deposit-prover.log
+            veil-avnu-deposit-prover-state.json
