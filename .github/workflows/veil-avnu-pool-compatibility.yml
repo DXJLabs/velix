@@ -1,0 +1,99 @@
+name: VEIL AVNU Pool Compatibility
+
+run-name: Check VEIL Helper Against AVNU Privacy Pool
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-pool:
+    name: Verify Helper Privacy Pool
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout VEIL
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Read Helper privacy pool
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${RPC_URL:-}" ]; then
+            echo "STARKNET_SEPOLIA_RPC_URL belum tersedia."
+            exit 1
+          fi
+
+          node --input-type=module <<'NODE'
+          import { RpcProvider } from "starknet";
+
+          const HELPER =
+            "0x69ba6f9f8651ef29d3227114c0b839d76671b8f66620840933f76996cec1359";
+
+          const AVNU_POOL =
+            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
+
+          const CODE_DEFAULT_POOL =
+            "0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5";
+
+          const provider = new RpcProvider({
+            nodeUrl: process.env.RPC_URL,
+          });
+
+          const response = await provider.callContract(
+            {
+              contractAddress: HELPER,
+              entrypoint: "get_privacy_pool",
+              calldata: [],
+            },
+            "latest",
+          );
+
+          if (!Array.isArray(response) || response.length !== 1) {
+            throw new Error(
+              `get_privacy_pool returned invalid data: ${JSON.stringify(response)}`,
+            );
+          }
+
+          const helperPool = `0x${BigInt(response[0]).toString(16)}`;
+
+          console.log("VEIL_HELPER_POOL_READ_OK");
+          console.log(`helper=${HELPER}`);
+          console.log(`helper_pool=${helperPool}`);
+          console.log(`avnu_pool=${AVNU_POOL}`);
+          console.log(`code_default_pool=${CODE_DEFAULT_POOL}`);
+
+          const helperMatchesAvnu =
+            BigInt(helperPool) === BigInt(AVNU_POOL);
+
+          const helperMatchesCodeDefault =
+            BigInt(helperPool) === BigInt(CODE_DEFAULT_POOL);
+
+          console.log(`helper_matches_avnu=${helperMatchesAvnu}`);
+          console.log(
+            `helper_matches_code_default=${helperMatchesCodeDefault}`,
+          );
+
+          if (!helperMatchesAvnu) {
+            throw new Error(
+              "VEIL Helper is not connected to the AVNU-whitelisted Privacy Pool.",
+            );
+          }
+
+          console.log("VEIL_AVNU_POOL_COMPATIBILITY_CONFIRMED");
+          NODE
