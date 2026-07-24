@@ -1,0 +1,310 @@
+name: Test VEIL Private Message through AVNU
+
+run-name: VEIL AVNU Private Message ${{ inputs.direction }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      direction:
+        description: Sender and recipient direction
+        required: true
+        type: choice
+        options:
+          - a-to-b
+          - b-to-a
+        default: a-to-b
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  private-message:
+    name: Prove, Submit, and Diagnose Private Message
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    env:
+      PROVER_IMAGE: "ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3"
+
+    steps:
+      - name: Validate inputs and secrets
+        shell: bash
+        env:
+          DIRECTION: ${{ inputs.direction }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          AVNU_API_KEY: ${{ secrets.AVNU_PAYMASTER_API_KEY }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+        run: |
+          set -euo pipefail
+
+          case "$DIRECTION" in
+            a-to-b|b-to-a) ;;
+            *)
+              echo "Unsupported direction: $DIRECTION"
+              exit 1
+              ;;
+          esac
+
+          for name in \
+            RPC_URL \
+            AVNU_API_KEY \
+            A_ADDRESS \
+            A_PRIVATE_KEY \
+            A_VIEWING_KEY \
+            B_ADDRESS \
+            B_PRIVATE_KEY \
+            B_VIEWING_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required secret is unavailable: $name"
+              exit 1
+            fi
+          done
+
+          if [ "$A_ADDRESS" = "$B_ADDRESS" ]; then
+            echo "Wallet A and Wallet B must be different."
+            exit 1
+          fi
+
+          echo "VEIL_AVNU_PRIVATE_MESSAGE_CONFIGURATION_READY"
+
+      - name: Checkout VEIL
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm install \
+            --no-save \
+            --ignore-scripts \
+            --no-audit \
+            --no-fund \
+            @avnu/avnu-sdk@4.2.0
+
+      - name: Build VEIL SDK
+        run: npm run build:sdk
+
+      - name: Validate isolated AVNU message runner
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -s tools/veil-avnu-private-message-test.mjs || {
+            echo "Missing tools/veil-avnu-private-message-test.mjs"
+            exit 1
+          }
+
+          node --check tools/veil-avnu-private-message-test.mjs
+          echo "VEIL_AVNU_MESSAGE_RUNNER_READY"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull official transaction prover
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PROVER_IMAGE"
+          docker image inspect "$PROVER_IMAGE" >/dev/null
+          echo "VEIL_AVNU_PROVER_IMAGE_READY"
+
+      - name: Prepare prover memory
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+          reserve_kb="$((3 * 1024 * 1024))"
+          maximum_swap_kb="$((10 * 1024 * 1024))"
+          swap_kb="$((available_kb - reserve_kb))"
+          swap_path="/veil-avnu-message.swap"
+
+          if [ "$swap_kb" -gt "$maximum_swap_kb" ]; then
+            swap_kb="$maximum_swap_kb"
+          fi
+
+          if [ "$swap_kb" -lt "$((4 * 1024 * 1024))" ]; then
+            echo "Insufficient disk for minimum 4 GiB prover swap."
+            exit 1
+          fi
+
+          sudo rm -f "$swap_path"
+          sudo fallocate -l "${swap_kb}K" "$swap_path"
+          sudo chmod 600 "$swap_path"
+          sudo mkswap "$swap_path"
+          sudo swapon "$swap_path"
+
+          free -h
+          swapon --show
+
+      - name: Start official transaction prover
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+
+          docker rm -f veil-avnu-message-prover \
+            2>/dev/null || true
+
+          docker run -d \
+            --name veil-avnu-message-prover \
+            -p 3000:3000 \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="0.0.0.0" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e RAYON_NUM_THREADS="2" \
+            -e MALLOC_ARENA_MAX="2" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            "$PROVER_IMAGE"
+
+          ready=0
+
+          for attempt in $(seq 1 60); do
+            running="$(
+              docker inspect \
+                -f '{{.State.Running}}' \
+                veil-avnu-message-prover \
+                2>/dev/null || true
+            )"
+
+            if [ "$running" != "true" ]; then
+              echo "Prover stopped before becoming ready."
+              exit 1
+            fi
+
+            response="$(
+              curl -sS \
+                --connect-timeout 2 \
+                --max-time 5 \
+                -X POST http://127.0.0.1:3000 \
+                -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+                2>/dev/null || true
+            )"
+
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+
+            echo "Waiting for prover: $attempt/60"
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "Prover did not become ready."
+            exit 1
+          fi
+
+          echo "VEIL_AVNU_PROVER_READY"
+
+      - name: Test AVNU private message and expose safe error
+        shell: bash
+        env:
+          DIRECTION: ${{ inputs.direction }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          AVNU_PAYMASTER_API_KEY: ${{ secrets.AVNU_PAYMASTER_API_KEY }}
+          VEIL_POC_PROVER_URL: "http://127.0.0.1:3000"
+          VEIL_POC_PRIVACY_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
+          VEIL_POC_HELPER_ADDRESS: "0x64ee482cd059a16a05b80fca36d56a4264603da30346db54880be6fb592a2d9"
+          VEIL_POC_HELPER_CLASS_HASH: "0x2a7b116fd1e7954b019fe02d91fdfb67166a80597bd6f7699bf07374032ee37"
+          VEIL_POC_ACCOUNT_PREFLIGHT_PATH: ${{ github.workspace }}/veil-avnu-message-preflight.json
+          VEIL_AVNU_MESSAGE_SUMMARY_PATH: ${{ github.workspace }}/veil-avnu-private-message-summary.json
+          VEIL_AVNU_MESSAGE_ERROR_PATH: ${{ github.workspace }}/veil-avnu-private-message-error.json
+        run: |
+          set -euo pipefail
+
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-avnu-message-preflight.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-private-message-summary.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-private-message-error.json"
+
+          if [ "$DIRECTION" = "a-to-b" ]; then
+            export VEIL_POC_ACCOUNT_ADDRESS="$A_ADDRESS"
+            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$A_PRIVATE_KEY"
+            export VEIL_POC_VIEWING_KEY="$A_VIEWING_KEY"
+            export VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS="$B_ADDRESS"
+            export VEIL_POC_RECIPIENT_VIEWING_KEY="$B_VIEWING_KEY"
+          else
+            export VEIL_POC_ACCOUNT_ADDRESS="$B_ADDRESS"
+            export VEIL_POC_ACCOUNT_PRIVATE_KEY="$B_PRIVATE_KEY"
+            export VEIL_POC_VIEWING_KEY="$B_VIEWING_KEY"
+            export VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS="$A_ADDRESS"
+            export VEIL_POC_RECIPIENT_VIEWING_KEY="$A_VIEWING_KEY"
+          fi
+
+          timeout 300m node \
+            --experimental-strip-types \
+            tools/veil-avnu-private-message-test.mjs
+
+      - name: Save redacted prover logs and stop container
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if docker inspect veil-avnu-message-prover \
+              >/dev/null 2>&1; then
+            docker logs veil-avnu-message-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-avnu-message-prover.log || true
+
+            docker inspect veil-avnu-message-prover \
+              --format '{{json .State}}' \
+              > veil-avnu-message-prover-state.json || true
+
+            docker rm -f \
+              veil-avnu-message-prover || true
+          else
+            printf '%s\n' \
+              "Prover container was not started." \
+              > veil-avnu-message-prover.log
+
+            printf '%s\n' \
+              '{"status":"not_started"}' \
+              > veil-avnu-message-prover-state.json
+          fi
+
+      - name: Upload safe AVNU message artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-avnu-private-message-${{ inputs.direction }}-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            veil-avnu-message-preflight.json
+            veil-avnu-private-message-summary.json
+            veil-avnu-private-message-error.json
+            veil-avnu-message-prover.log
+            veil-avnu-message-prover-state.json
