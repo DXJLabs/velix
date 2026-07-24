@@ -44,6 +44,9 @@ jobs:
       - name: Build VEIL SDK
         run: npm run build:sdk
 
+      - name: Typecheck PoC tools
+        run: npm run typecheck:poc
+
       - name: Validate selected wallet
         shell: bash
         env:
@@ -58,33 +61,137 @@ jobs:
         run: |
           set -euo pipefail
 
-          for name in RPC_URL; do
-            if [ -z "${!name:-}" ]; then
-              echo "Secret $name belum tersedia."
-              exit 1
-            fi
-          done
-
-          if [ "$WALLET" = "wallet-a" ]; then
-            for name in A_ADDRESS A_PRIVATE_KEY A_VIEWING_KEY; do
-              if [ -z "${!name:-}" ]; then
-                echo "Secret $name belum tersedia."
-                exit 1
-              fi
-            done
-          elif [ "$WALLET" = "wallet-b" ]; then
-            for name in B_ADDRESS B_PRIVATE_KEY B_VIEWING_KEY; do
-              if [ -z "${!name:-}" ]; then
-                echo "Secret $name belum tersedia."
-                exit 1
-              fi
-            done
-          else
-            echo "Wallet tidak didukung: $WALLET"
+          if [ -z "${RPC_URL:-}" ]; then
+            echo "Secret STARKNET_SEPOLIA_RPC_URL belum tersedia."
             exit 1
           fi
 
+          case "$WALLET" in
+            wallet-a)
+              for name in A_ADDRESS A_PRIVATE_KEY A_VIEWING_KEY; do
+                if [ -z "${!name:-}" ]; then
+                  echo "Secret $name belum tersedia."
+                  exit 1
+                fi
+              done
+              ;;
+            wallet-b)
+              for name in B_ADDRESS B_PRIVATE_KEY B_VIEWING_KEY; do
+                if [ -z "${!name:-}" ]; then
+                  echo "Secret $name belum tersedia."
+                  exit 1
+                fi
+              done
+              ;;
+            *)
+              echo "Wallet tidak didukung: $WALLET"
+              exit 1
+              ;;
+          esac
+
           echo "AVNU_POOL_IDENTITY_CONFIGURATION_READY"
+          echo "Nilai rahasia tidak ditampilkan."
+
+      - name: Check AVNU pool RPC compatibility
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          WALLET: ${{ inputs.wallet }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+        run: |
+          set -euo pipefail
+
+          node --input-type=module <<'NODE'
+          import { RpcProvider } from "starknet-proof";
+
+          const POOL =
+            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
+
+          const walletAddress =
+            process.env.WALLET === "wallet-a"
+              ? process.env.A_ADDRESS
+              : process.env.B_ADDRESS;
+
+          if (!process.env.RPC_URL || !walletAddress) {
+            throw new Error("RPC preflight configuration is incomplete.");
+          }
+
+          const provider = new RpcProvider({
+            nodeUrl: process.env.RPC_URL,
+          });
+
+          function safeError(error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+
+            return {
+              name:
+                error instanceof Error
+                  ? error.name
+                  : "UnknownError",
+              code:
+                typeof error?.code === "number"
+                  ? error.code
+                  : null,
+              message: message
+                .replace(
+                  /https?:\/\/[^\s"'<>]+/giu,
+                  "[RPC_URL_REDACTED]",
+                )
+                .replace(
+                  /\b0x[0-9a-f]{40,}\b/giu,
+                  "[LONG_HEX_REDACTED]",
+                ),
+            };
+          }
+
+          async function failClosed(label, operation) {
+            try {
+              return await operation();
+            } catch (error) {
+              console.error(
+                label,
+                JSON.stringify(safeError(error)),
+              );
+              process.exit(1);
+            }
+          }
+
+          console.log("AVNU_POOL_RPC_PREFLIGHT_START");
+
+          const chainId = await failClosed(
+            "CHAIN_ID_RPC_FAILED",
+            () => provider.getChainId(),
+          );
+          console.log(`CHAIN_ID=${chainId}`);
+
+          const classHash = await failClosed(
+            "POOL_CLASS_HASH_RPC_FAILED",
+            () => provider.getClassHashAt(POOL, "latest"),
+          );
+          console.log(
+            `POOL_CLASS_HASH=0x${BigInt(classHash).toString(16)}`,
+          );
+
+          const poolNonce = await failClosed(
+            "POOL_NONCE_RPC_FAILED",
+            () => provider.getNonceForAddress(POOL, "latest"),
+          );
+          console.log(
+            `POOL_NONCE=0x${BigInt(poolNonce).toString(16)}`,
+          );
+
+          const walletNonce = await failClosed(
+            "WALLET_NONCE_RPC_FAILED",
+            () => provider.getNonceForAddress(walletAddress, "latest"),
+          );
+          console.log(
+            `WALLET_NONCE=0x${BigInt(walletNonce).toString(16)}`,
+          );
+
+          console.log("AVNU_POOL_RPC_PREFLIGHT_OK");
+          NODE
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -97,8 +204,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           docker pull "$PROVER_IMAGE"
           docker image inspect "$PROVER_IMAGE" >/dev/null
+
           echo "AVNU_POOL_PROVER_IMAGE_READY"
 
       - name: Prepare prover memory
@@ -106,27 +215,43 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "=== MEMORY BEFORE SWAP ==="
+          free -h
+
+          echo "=== DISK BEFORE SWAP ==="
+          df -h /
+
           available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
           reserve_kb="$((3 * 1024 * 1024))"
           maximum_swap_kb="$((10 * 1024 * 1024))"
           swap_kb="$((available_kb - reserve_kb))"
+          swap_path="/veil-avnu-register.swap"
 
           if [ "$swap_kb" -gt "$maximum_swap_kb" ]; then
             swap_kb="$maximum_swap_kb"
           fi
 
           if [ "$swap_kb" -lt "$((4 * 1024 * 1024))" ]; then
-            echo "Disk tidak cukup untuk swap prover."
+            echo "Disk tidak cukup untuk minimum 4 GiB swap prover."
             exit 1
           fi
 
-          sudo fallocate -l "${swap_kb}K" /veil-avnu-register.swap
-          sudo chmod 600 /veil-avnu-register.swap
-          sudo mkswap /veil-avnu-register.swap
-          sudo swapon /veil-avnu-register.swap
+          if swapon --show --noheadings --raw \
+              | awk '{ print $1 }' \
+              | grep -Fxq "$swap_path"; then
+            sudo swapoff "$swap_path"
+          fi
 
+          sudo rm -f "$swap_path"
+          sudo fallocate -l "${swap_kb}K" "$swap_path"
+          sudo chmod 600 "$swap_path"
+          sudo mkswap "$swap_path"
+          sudo swapon "$swap_path"
+
+          echo "=== MEMORY AFTER SWAP ==="
           free -h
           swapon --show
+          df -h /
 
       - name: Start official prover
         shell: bash
@@ -157,24 +282,41 @@ jobs:
           ready=0
 
           for attempt in $(seq 1 60); do
-            response="$(curl -sS \
-              --connect-timeout 2 \
-              --max-time 5 \
-              -X POST http://127.0.0.1:3000 \
-              -H 'Content-Type: application/json' \
-              -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
-              2>/dev/null || true)"
+            running="$(
+              docker inspect \
+                -f '{{.State.Running}}' \
+                veil-avnu-register-prover \
+                2>/dev/null || true
+            )"
+
+            if [ "$running" != "true" ]; then
+              echo "Prover berhenti sebelum siap."
+              docker logs veil-avnu-register-prover 2>&1 \
+                | tail -n 200 || true
+              exit 1
+            fi
+
+            response="$(
+              curl -sS \
+                --connect-timeout 2 \
+                --max-time 5 \
+                -X POST http://127.0.0.1:3000 \
+                -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+                2>/dev/null || true
+            )"
 
             if echo "$response" | grep -q '"result"'; then
               ready=1
               break
             fi
 
+            echo "Waiting for prover: $attempt/60"
             sleep 2
           done
 
           if [ "$ready" -ne 1 ]; then
-            echo "Prover tidak siap."
+            echo "Prover tidak siap dalam batas waktu."
             exit 1
           fi
 
@@ -211,8 +353,59 @@ jobs:
             export VEIL_POC_VIEWING_KEY="$B_VIEWING_KEY"
           fi
 
-          timeout 300m node --experimental-strip-types \
-            tools/veil-official-register-poc.ts
+          rm -f \
+            "$GITHUB_WORKSPACE/veil-avnu-register-preflight.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-register-proof.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-register-submission.json" \
+            "$GITHUB_WORKSPACE/veil-avnu-register-error.json"
+
+          timeout 300m node \
+            --experimental-strip-types \
+            --input-type=module <<'NODE'
+          import {
+            runVeilOfficialRegisterPoc,
+            sanitizeProvingDiagnosticText,
+          } from "./tools/veil-official-register-poc.ts";
+
+          const sensitiveValues = [
+            process.env.VEIL_POC_ACCOUNT_PRIVATE_KEY ?? "",
+            process.env.VEIL_POC_VIEWING_KEY ?? "",
+          ].filter(Boolean);
+
+          try {
+            const summary =
+              await runVeilOfficialRegisterPoc();
+
+            console.log(JSON.stringify(summary));
+          } catch (error) {
+            const rawMessage =
+              error instanceof Error
+                ? error.message
+                : String(error);
+
+            const diagnostic = {
+              name:
+                error instanceof Error
+                  ? error.name
+                  : "UnknownError",
+              code:
+                typeof error?.code === "number"
+                  ? error.code
+                  : null,
+              message: sanitizeProvingDiagnosticText(
+                rawMessage,
+                sensitiveValues,
+              ),
+            };
+
+            console.error(
+              "VEIL_AVNU_REGISTER_FAILED",
+              JSON.stringify(diagnostic),
+            );
+
+            process.exitCode = 1;
+          }
+          NODE
 
       - name: Validate registration
         shell: bash
@@ -220,22 +413,39 @@ jobs:
           WALLET: ${{ inputs.wallet }}
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
         run: |
           set -euo pipefail
 
           node --input-type=module <<'NODE'
           import { readFile } from "node:fs/promises";
-          import { RpcProvider } from "starknet";
+          import {
+            RpcProvider,
+            ec,
+          } from "starknet";
 
           const POOL =
             "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
 
           const wallet = process.env.WALLET;
+
           const address =
             wallet === "wallet-a"
               ? process.env.A_ADDRESS
               : process.env.B_ADDRESS;
+
+          const viewingKey =
+            wallet === "wallet-a"
+              ? process.env.A_VIEWING_KEY
+              : process.env.B_VIEWING_KEY;
+
+          if (!address || !viewingKey || !process.env.RPC_URL) {
+            throw new Error(
+              "Registration validation configuration is incomplete.",
+            );
+          }
 
           const summary = JSON.parse(
             await readFile(
@@ -248,7 +458,9 @@ jobs:
             summary.result !==
               "OFFICIAL_SDK_REGISTER_SUBMITTED_ONCHAIN" ||
             summary.finalityStatus !== "ACCEPTED_ON_L2" ||
-            summary.executionStatus !== "SUCCEEDED"
+            summary.executionStatus !== "SUCCEEDED" ||
+            summary.proofPresent !== true ||
+            !summary.transactionHash
           ) {
             throw new Error(
               "AVNU Pool identity registration submission failed.",
@@ -268,13 +480,29 @@ jobs:
             "latest",
           );
 
-          if (
-            !Array.isArray(result) ||
-            result.length !== 1 ||
-            BigInt(result[0]) === 0n
-          ) {
+          if (!Array.isArray(result) || result.length !== 1) {
+            throw new Error(
+              "AVNU Privacy Pool returned invalid public-key data.",
+            );
+          }
+
+          const registeredPublicKey = BigInt(result[0]);
+
+          const expectedPublicKey = BigInt(
+            ec.starkCurve.getStarkKey(
+              `0x${BigInt(viewingKey).toString(16)}`,
+            ),
+          );
+
+          if (registeredPublicKey === 0n) {
             throw new Error(
               "Wallet is still not registered in AVNU Privacy Pool.",
+            );
+          }
+
+          if (registeredPublicKey !== expectedPublicKey) {
+            throw new Error(
+              "Wallet is registered with a different viewing key.",
             );
           }
 
@@ -289,14 +517,18 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: |
-          if docker inspect veil-avnu-register-prover >/dev/null 2>&1; then
+          set -euo pipefail
+
+          if docker inspect veil-avnu-register-prover \
+              >/dev/null 2>&1; then
             docker logs veil-avnu-register-prover 2>&1 \
               | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
               > veil-avnu-register-prover.log || true
 
             docker rm -f veil-avnu-register-prover || true
           else
-            echo "Prover container was not started." \
+            printf '%s\n' \
+              "Prover container was not started." \
               > veil-avnu-register-prover.log
           fi
 
