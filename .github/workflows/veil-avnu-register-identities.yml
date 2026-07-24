@@ -364,6 +364,7 @@ jobs:
             --input-type=module <<'NODE'
           import {
             runVeilOfficialRegisterPoc,
+            sanitizeProvingDiagnosticData,
             sanitizeProvingDiagnosticText,
           } from "./tools/veil-official-register-poc.ts";
 
@@ -378,25 +379,67 @@ jobs:
 
             console.log(JSON.stringify(summary));
           } catch (error) {
+            const baseError =
+              error &&
+              typeof error === "object" &&
+              "baseError" in error
+                ? error.baseError
+                : null;
+
             const rawMessage =
-              error instanceof Error
-                ? error.message
-                : String(error);
+              baseError &&
+              typeof baseError === "object" &&
+              typeof baseError.message === "string"
+                ? baseError.message
+                : error instanceof Error
+                  ? error.message
+                  : String(error);
+
+            const rawData =
+              baseError &&
+              typeof baseError === "object" &&
+              "data" in baseError
+                ? baseError.data
+                : null;
+
+            const code =
+              baseError &&
+              typeof baseError === "object" &&
+              typeof baseError.code === "number"
+                ? baseError.code
+                : typeof error?.code === "number"
+                  ? error.code
+                  : null;
 
             const diagnostic = {
               name:
                 error instanceof Error
                   ? error.name
                   : "UnknownError",
-              code:
-                typeof error?.code === "number"
-                  ? error.code
-                  : null,
+              code,
               message: sanitizeProvingDiagnosticText(
                 rawMessage,
                 sensitiveValues,
               ),
+              data: sanitizeProvingDiagnosticData(
+                rawData,
+                0,
+                sensitiveValues,
+              ),
             };
+
+            await import("node:fs/promises").then(
+              ({ writeFile }) =>
+                writeFile(
+                  process.env.VEIL_POC_ERROR_PATH ??
+                    "veil-avnu-register-error.json",
+                  `${JSON.stringify(diagnostic, null, 2)}\n`,
+                  {
+                    encoding: "utf8",
+                    mode: 0o600,
+                  },
+                ),
+            );
 
             console.error(
               "VEIL_AVNU_REGISTER_FAILED",
