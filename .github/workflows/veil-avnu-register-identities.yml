@@ -26,7 +26,7 @@ jobs:
 
     env:
       PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
-      AVNU_POOL: 0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91
+      AVNU_POOL: "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91"
 
     steps:
       - name: Checkout VEIL
