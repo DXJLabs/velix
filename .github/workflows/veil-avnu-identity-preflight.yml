@@ -1,0 +1,161 @@
+name: VEIL AVNU Identity Preflight
+
+run-name: Check Wallet Registration in AVNU Privacy Pool
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity-preflight:
+    name: Check A and B Registration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout VEIL
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check AVNU Pool identities
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          A_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          A_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+          B_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          B_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+        run: |
+          set -euo pipefail
+
+          for name in RPC_URL A_ADDRESS A_VIEWING_KEY B_ADDRESS B_VIEWING_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "Secret $name belum tersedia."
+              exit 1
+            fi
+          done
+
+          node --input-type=module <<'NODE'
+          import {
+            RpcProvider,
+            ec,
+          } from "starknet";
+
+          const POOL =
+            "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
+
+          const HELPER =
+            "0x64ee482cd059a16a05b80fca36d56a4264603da30346db54880be6fb592a2d9";
+
+          const provider = new RpcProvider({
+            nodeUrl: process.env.RPC_URL,
+          });
+
+          function feltHex(value) {
+            return `0x${BigInt(value).toString(16)}`;
+          }
+
+          async function readSingle(contractAddress, entrypoint, calldata) {
+            const response = await provider.callContract(
+              {
+                contractAddress,
+                entrypoint,
+                calldata,
+              },
+              "latest",
+            );
+
+            if (!Array.isArray(response) || response.length !== 1) {
+              throw new Error(`${entrypoint} returned invalid data.`);
+            }
+
+            return BigInt(response[0]);
+          }
+
+          async function checkIdentity(label, address, viewingKey) {
+            const registeredPublicKey = await readSingle(
+              POOL,
+              "get_public_key",
+              [feltHex(address)],
+            );
+
+            const expectedPublicKey = BigInt(
+              ec.starkCurve.getStarkKey(feltHex(viewingKey)),
+            );
+
+            const registered = registeredPublicKey !== 0n;
+            const viewingKeyMatches =
+              registered && registeredPublicKey === expectedPublicKey;
+
+            const channelCount = await readSingle(
+              POOL,
+              "get_num_of_channels",
+              [feltHex(address)],
+            );
+
+            console.log(`${label}_REGISTERED=${registered}`);
+            console.log(
+              `${label}_VIEWING_KEY_MATCHES=${viewingKeyMatches}`,
+            );
+            console.log(`${label}_CHANNEL_COUNT=${channelCount}`);
+
+            if (registered && !viewingKeyMatches) {
+              throw new Error(
+                `${label} is registered with a different viewing key.`,
+              );
+            }
+
+            return {
+              registered,
+              viewingKeyMatches,
+              channelCount,
+            };
+          }
+
+          const helperPool = await readSingle(
+            HELPER,
+            "get_privacy_pool",
+            [],
+          );
+
+          if (helperPool !== BigInt(POOL)) {
+            throw new Error(
+              "New VEIL Helper is not bound to the AVNU Privacy Pool.",
+            );
+          }
+
+          console.log("VEIL_AVNU_HELPER_BINDING_OK");
+
+          const a = await checkIdentity(
+            "WALLET_A",
+            process.env.A_ADDRESS,
+            process.env.A_VIEWING_KEY,
+          );
+
+          const b = await checkIdentity(
+            "WALLET_B",
+            process.env.B_ADDRESS,
+            process.env.B_VIEWING_KEY,
+          );
+
+          if (
+            a.registered &&
+            a.viewingKeyMatches &&
+            b.registered &&
+            b.viewingKeyMatches
+          ) {
+            console.log("AVNU_POOL_IDENTITIES_READY");
+          } else {
+            console.log("AVNU_POOL_REGISTRATION_REQUIRED");
+          }
+          NODE
