@@ -1,0 +1,100 @@
+name: VEIL AVNU Privacy Paymaster Preflight
+
+run-name: AVNU Sepolia Privacy Paymaster Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  avnu-paymaster-preflight:
+    name: Check AVNU Sponsored Private Access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Validate AVNU API key secret
+        shell: bash
+        env:
+          AVNU_PAYMASTER_API_KEY: ${{ secrets.AVNU_PAYMASTER_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AVNU_PAYMASTER_API_KEY:-}" ]; then
+            echo "Secret AVNU_PAYMASTER_API_KEY belum tersedia."
+            exit 1
+          fi
+
+          echo "AVNU_API_KEY_SECRET_AVAILABLE"
+          echo "Nilai API key tidak ditampilkan."
+
+      - name: Install isolated AVNU SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$RUNNER_TEMP/avnu-preflight"
+          cd "$RUNNER_TEMP/avnu-preflight"
+
+          npm init -y >/dev/null
+
+          npm install \
+            --no-audit \
+            --no-fund \
+            --save-exact \
+            @avnu/avnu-sdk@4.2.0
+
+          npm list @avnu/avnu-sdk
+
+      - name: Request sponsored private fee
+        shell: bash
+        env:
+          AVNU_PAYMASTER_API_KEY: ${{ secrets.AVNU_PAYMASTER_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          cd "$RUNNER_TEMP/avnu-preflight"
+
+          node --input-type=module <<'NODE'
+          import {
+            buildPrivateSwapFee,
+            SEPOLIA_PAYMASTER_BASE_URL,
+            SEPOLIA_PRIVACY_POOL_ADDRESS,
+          } from "@avnu/avnu-sdk";
+
+          const STRK =
+            "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
+          const apiKey = process.env.AVNU_PAYMASTER_API_KEY;
+
+          if (!apiKey) {
+            throw new Error("AVNU_PAYMASTER_API_KEY is missing");
+          }
+
+          const fee = await buildPrivateSwapFee(
+            {
+              poolAddress: SEPOLIA_PRIVACY_POOL_ADDRESS,
+              feeMode: {
+                poolFeeToken: STRK,
+                tip: "normal",
+              },
+              paymasterApiKey: apiKey,
+            },
+            {
+              paymasterBaseUrl: SEPOLIA_PAYMASTER_BASE_URL,
+            },
+          );
+
+          console.log("AVNU_PRIVACY_PAYMASTER_PREFLIGHT_OK");
+          console.log(`pool_address=${SEPOLIA_PRIVACY_POOL_ADDRESS}`);
+          console.log(`fee_token=${fee.token}`);
+          console.log(`fee_recipient=${fee.recipient}`);
+          console.log(`fee_amount_raw=${fee.amount.toString()}`);
+          NODE
