@@ -258,6 +258,57 @@ describe("Phase 4 transaction prover endpoint and compatibility boundary", () =>
 });
 
 describe("Phase 4 proof request validation", () => {
+  it("prepares a canonical proof fingerprint without contacting the prover", async () => {
+    const { client, mocked } =
+      createClient();
+
+    const input =
+      validProofInput();
+
+    const prepared =
+      await client.prepareRequest(
+        input,
+      );
+
+    assert.equal(
+      mocked.calls.length,
+      0,
+    );
+
+    assert.equal(
+      prepared.canonical.requestId,
+      input.canonical.requestId,
+    );
+
+    assert.equal(
+      prepared.blockId,
+      "latest",
+    );
+
+    assert.equal(
+      prepared.transaction.version,
+      "0x3",
+    );
+
+    assert.equal(
+      prepared.poolAddress,
+      POOL,
+    );
+
+    assert.match(
+      prepared.requestFingerprint,
+      /^veil-proof-intent-v1:[0-9a-f]{64}$/u,
+    );
+
+    const proof =
+      await client.prove(input);
+
+    assert.equal(
+      proof.requestFingerprint,
+      prepared.requestFingerprint,
+    );
+  });
+
   it("accepts only an Invoke V3 intent bound to one allowlisted helper payload", async () => {
     const { client } = createClient();
     const result = await client.prove(validProofInput());

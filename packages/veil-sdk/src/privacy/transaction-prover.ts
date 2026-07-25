@@ -184,6 +184,23 @@ export interface TransactionProofRequestInput {
   transaction: ProverInvokeV3Transaction | unknown;
 }
 
+export interface PreparedTransactionProofRequest {
+  readonly canonical:
+    PreparedOfficialPrivacyTransport;
+
+  readonly blockId:
+    TransactionProverBlockId;
+
+  readonly transaction:
+    ProverInvokeV3Transaction;
+
+  readonly poolAddress:
+    string;
+
+  readonly requestFingerprint:
+    string;
+}
+
 export interface TransactionProofResult {
   status: VeilLocalProofStatus;
   requestId: string;
@@ -490,6 +507,14 @@ export class TransactionProverClient {
     }
   }
 
+  async prepareRequest(
+    input: TransactionProofRequestInput,
+  ): Promise<PreparedTransactionProofRequest> {
+    return this.#prepareProofRequest(
+      input,
+    );
+  }
+
   async prove(input: TransactionProofRequestInput, signal?: AbortSignal): Promise<TransactionProofResult> {
     const startedAt = this.#now();
     const prepared = await this.#prepareProofRequest(input);
@@ -603,13 +628,9 @@ export class TransactionProverClient {
     });
   }
 
-  async #prepareProofRequest(input: TransactionProofRequestInput): Promise<{
-    canonical: ReturnType<OfficialPrivacyTransport["prepare"]>;
-    blockId: TransactionProverBlockId;
-    transaction: ProverInvokeV3Transaction;
-    poolAddress: string;
-    requestFingerprint: string;
-  }> {
+  async #prepareProofRequest(
+    input: TransactionProofRequestInput,
+  ): Promise<PreparedTransactionProofRequest> {
     if (this.#compatibility.reasons.length > 0) {
       const first = this.#compatibility.reasons[0] as TransactionProverReason;
       throw new TransactionProverError(first.code, first.message, this.#compatibility.status);
