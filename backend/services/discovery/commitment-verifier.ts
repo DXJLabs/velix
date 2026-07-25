@@ -6,7 +6,15 @@ import {
 } from "#veil-sdk/canonical-payload";
 import { toHexFelt } from "./rpc-discovery.js";
 
-const DOMAIN_FELT = shortString.encodeShortString(VEIL_CANONICAL_COMMITMENT_DOMAIN);
+const CANONICAL_DOMAIN_FELT =
+  shortString.encodeShortString(
+    VEIL_CANONICAL_COMMITMENT_DOMAIN,
+  );
+
+const TIMELINE_DOMAIN_FELT =
+  shortString.encodeShortString(
+    "VEIL_TIMELINE_V1",
+  );
 
 export interface CommitmentVerificationInput {
   messageLocator: string;
@@ -35,7 +43,7 @@ export function computePayloadCommitment(
   const chunks = input.payloadChunks.map((value) => toHexFelt(value, "payload chunk"));
 
   return toHexFelt(hash.computePoseidonHashOnElements([
-    DOMAIN_FELT,
+    CANONICAL_DOMAIN_FELT,
     String(version),
     locator,
     String(chunks.length),
@@ -54,5 +62,115 @@ export function verifyPayloadCommitment(input: CommitmentVerificationInput): Com
     computedCommitment,
     claimedCommitment,
     chunkCount: input.payloadChunks.length,
+  });
+}
+
+
+export interface TimelineCommitmentVerificationInput {
+  conversationTag: string;
+  eventType: string;
+  encryptedPayload: string;
+  payloadChunks: readonly string[];
+  claimedCommitment: string;
+}
+
+export interface TimelineCommitmentVerificationResult {
+  valid: true;
+  computedCommitment: string;
+  claimedCommitment: string;
+  chunkCount: number;
+}
+
+export function computeTimelineCommitment(
+  input: Omit<
+    TimelineCommitmentVerificationInput,
+    "claimedCommitment"
+  >,
+): string {
+  if (
+    input.payloadChunks.length
+      > VEIL_CANONICAL_MAX_CHUNKS
+  ) {
+    throw new RangeError(
+      `payloadChunks cannot exceed ${VEIL_CANONICAL_MAX_CHUNKS} felts.`,
+    );
+  }
+
+  const conversationTag =
+    toHexFelt(
+      input.conversationTag,
+      "conversationTag",
+    );
+
+  if (
+    BigInt(conversationTag) === 0n
+  ) {
+    throw new TypeError(
+      "conversationTag must be nonzero.",
+    );
+  }
+
+  const eventType =
+    toHexFelt(
+      input.eventType,
+      "eventType",
+    );
+
+  const encryptedPayload =
+    toHexFelt(
+      input.encryptedPayload,
+      "encryptedPayload",
+    );
+
+  const payloadChunks =
+    input.payloadChunks.map(
+      (value) =>
+        toHexFelt(
+          value,
+          "timeline payload chunk",
+        ),
+    );
+
+  return toHexFelt(
+    hash.computePoseidonHashOnElements([
+      TIMELINE_DOMAIN_FELT,
+      conversationTag,
+      eventType,
+      encryptedPayload,
+      String(payloadChunks.length),
+      ...payloadChunks,
+    ]),
+    "timeline payload commitment",
+  );
+}
+
+export function verifyTimelineCommitment(
+  input:
+    TimelineCommitmentVerificationInput,
+): TimelineCommitmentVerificationResult {
+  const computedCommitment =
+    computeTimelineCommitment(input);
+
+  const claimedCommitment =
+    toHexFelt(
+      input.claimedCommitment,
+      "claimedTimelineCommitment",
+    );
+
+  if (
+    computedCommitment
+      !== claimedCommitment
+  ) {
+    throw new TypeError(
+      "The Helper timeline commitment does not match the ciphertext fields and chunks.",
+    );
+  }
+
+  return Object.freeze({
+    valid: true,
+    computedCommitment,
+    claimedCommitment,
+    chunkCount:
+      input.payloadChunks.length,
   });
 }

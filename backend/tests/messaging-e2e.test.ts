@@ -9,7 +9,15 @@ import {
   type TransactionProofRequestInput,
 } from "#veil-sdk/transaction-prover";
 import { loadProverEnvironment } from "../config/backend-env.js";
-import { computePayloadCommitment, verifyPayloadCommitment } from "../services/discovery/commitment-verifier.js";
+import {
+  computePayloadCommitment,
+  computeTimelineCommitment,
+  verifyPayloadCommitment,
+  verifyTimelineCommitment,
+} from "../services/discovery/commitment-verifier.js";
+import {
+  discoverVerifiedTimelineCiphertexts,
+} from "../services/discovery/timeline-discovery.js";
 import { RpcDiscoveryClient } from "../services/discovery/rpc-discovery.js";
 import { createBackendProverClient } from "../services/prover/prover-client.js";
 import { parseMessageProofRequest, requestMessageProof } from "../services/prover/proof-request.js";
@@ -419,3 +427,395 @@ test("canonical commitment verifier binds locator, chunk count, and ciphertext c
     /does not match/u,
   );
 });
+
+
+test(
+  "timeline commitment verifier uses the deployed Helper domain",
+  () => {
+    const input = {
+      conversationTag:
+        "0x77",
+
+      eventType:
+        "0x2",
+
+      encryptedPayload:
+        "0x3",
+
+      payloadChunks: [
+        "0x4",
+        "0x5",
+      ],
+    };
+
+    const timelineCommitment =
+      computeTimelineCommitment(
+        input,
+      );
+
+    const verified =
+      verifyTimelineCommitment({
+        ...input,
+
+        claimedCommitment:
+          timelineCommitment,
+      });
+
+    assert.equal(
+      verified.valid,
+      true,
+    );
+
+    assert.equal(
+      verified.chunkCount,
+      2,
+    );
+
+    const canonicalCommitment =
+      computePayloadCommitment({
+        messageLocator:
+          input.conversationTag,
+
+        payloadChunks:
+          input.payloadChunks,
+      });
+
+    assert.notEqual(
+      timelineCommitment,
+      canonicalCommitment,
+    );
+
+    assert.throws(
+      () =>
+        verifyTimelineCommitment({
+          ...input,
+
+          payloadChunks: [
+            "0x4",
+            "0x6",
+          ],
+
+          claimedCommitment:
+            timelineCommitment,
+        }),
+
+      /does not match/u,
+    );
+  },
+);
+
+function selectorHex(
+  name: string,
+): string {
+  return `0x${BigInt(
+    hash.getSelectorFromName(
+      name,
+    ),
+  ).toString(16)}`;
+}
+
+function createVerifiedTimelineFixture(
+  privacyPoolOrigin:
+    "0x0" | "0x1",
+) {
+  const conversationTag =
+    "0x77";
+
+  const eventId =
+    "0x1";
+
+  const eventType =
+    "0x2";
+
+  const encryptedPayload =
+    "0x3";
+
+  const payloadChunks = [
+    "0x4",
+    "0x5",
+  ];
+
+  const payloadHash =
+    computeTimelineCommitment({
+      conversationTag,
+      eventType,
+      encryptedPayload,
+      payloadChunks,
+    });
+
+  return {
+    conversationTag,
+    eventId,
+    eventType,
+    encryptedPayload,
+    payloadChunks,
+    payloadHash,
+
+    rpc: {
+      async getEvents() {
+        return {
+          events: [
+            {
+              from_address:
+                HELPER,
+
+              keys: [
+                hash.getSelectorFromName(
+                  "TimelineCommitmentStored",
+                ),
+
+                conversationTag,
+                eventId,
+              ],
+
+              data: [
+                payloadHash,
+              ],
+
+              block_number:
+                123,
+
+              block_hash:
+                "0xabc",
+
+              transaction_hash:
+                "0xdef",
+
+              event_index:
+                7,
+            },
+          ],
+
+          continuationToken:
+            null,
+        };
+      },
+
+      async callContract(
+        input: {
+          entrypointSelector:
+            string;
+
+          calldata:
+            readonly string[];
+        },
+      ): Promise<
+        readonly string[]
+      > {
+        if (
+          input.entrypointSelector
+          === selectorHex(
+            "get_event",
+          )
+        ) {
+          return [
+            eventId,
+            conversationTag,
+            eventType,
+            encryptedPayload,
+            payloadHash,
+            "0x2",
+            "0x64",
+          ];
+        }
+
+        if (
+          input.entrypointSelector
+          === selectorHex(
+            "get_payload_chunk",
+          )
+        ) {
+          const chunkIndex =
+            Number(
+              BigInt(
+                input.calldata[2]
+                ?? "0x0",
+              ),
+            );
+
+          const chunk =
+            payloadChunks[
+              chunkIndex
+            ];
+
+          if (
+            chunk === undefined
+          ) {
+            throw new Error(
+              "Unexpected timeline chunk index.",
+            );
+          }
+
+          return [
+            chunk,
+          ];
+        }
+
+        if (
+          input.entrypointSelector
+          === selectorHex(
+            "is_payload_committed",
+          )
+        ) {
+          return [
+            "0x1",
+          ];
+        }
+
+        if (
+          input.entrypointSelector
+          === selectorHex(
+            "is_privacy_pool_event",
+          )
+        ) {
+          return [
+            privacyPoolOrigin,
+          ];
+        }
+
+        throw new Error(
+          "Unexpected Helper reader selector.",
+        );
+      },
+    },
+  };
+}
+
+test(
+  "verified timeline discovery accepts Privacy Pool ciphertext",
+  async () => {
+    const fixture =
+      createVerifiedTimelineFixture(
+        "0x1",
+      );
+
+    const messages =
+      await discoverVerifiedTimelineCiphertexts(
+        fixture.rpc,
+        {
+          helperAddress:
+            HELPER,
+
+          conversationTag:
+            fixture.conversationTag,
+
+          fromBlock:
+            123,
+
+          toBlock:
+            123,
+
+          maximumEvents:
+            10,
+        },
+      );
+
+    assert.equal(
+      messages.length,
+      1,
+    );
+
+    const message =
+      messages[0];
+
+    assert.ok(message);
+
+    assert.equal(
+      message.provenance,
+      "privacy-pool",
+    );
+
+    assert.equal(
+      message.commitmentVerified,
+      true,
+    );
+
+    assert.equal(
+      message.eventId,
+      fixture.eventId,
+    );
+
+    assert.equal(
+      message.conversationTag,
+      fixture.conversationTag,
+    );
+
+    assert.equal(
+      message.payloadHash,
+      fixture.payloadHash,
+    );
+
+    assert.equal(
+      message.blockNumber,
+      123,
+    );
+
+    assert.equal(
+      message.blockHash,
+      "0xabc",
+    );
+
+    assert.equal(
+      message.transactionHash,
+      "0xdef",
+    );
+
+    assert.equal(
+      message.eventIndex,
+      7,
+    );
+
+    assert.equal(
+      message.timestamp,
+      100_000,
+    );
+
+    assert.deepEqual(
+      message.payloadChunks,
+      fixture.payloadChunks,
+    );
+  },
+);
+
+test(
+  "verified timeline discovery rejects direct Helper events",
+  async () => {
+    const fixture =
+      createVerifiedTimelineFixture(
+        "0x0",
+      );
+
+    await assert.rejects(
+      () =>
+        discoverVerifiedTimelineCiphertexts(
+          fixture.rpc,
+          {
+            helperAddress:
+              HELPER,
+
+            conversationTag:
+              fixture.conversationTag,
+
+            fromBlock:
+              123,
+
+            toBlock:
+              123,
+
+            maximumEvents:
+              10,
+          },
+        ),
+
+      (
+        error: unknown,
+      ) =>
+        error instanceof Error
+        && error.name
+          === "TimelineDiscoveryError"
+        && "code" in error
+        && error.code
+          === "TIMELINE_DIRECT_EVENT_FORBIDDEN",
+    );
+  },
+);

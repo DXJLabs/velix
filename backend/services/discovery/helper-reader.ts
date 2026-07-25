@@ -1,4 +1,7 @@
-import { RpcDiscoveryClient, toHexFelt } from "./rpc-discovery.js";
+import {
+  toHexFelt,
+  type StarknetEventPage,
+} from "./rpc-discovery.js";
 
 export interface HelperReaderInput {
   helperAddress: string;
@@ -17,8 +20,24 @@ export interface HelperEvent {
   eventIndex: number | null;
 }
 
+export interface HelperReaderRpc {
+  getEvents(
+    filter: {
+      fromBlock: number;
+      toBlock: number;
+      address: string;
+      keys: readonly (
+        readonly string[]
+      )[];
+      chunkSize: number;
+      continuationToken?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<StarknetEventPage>;
+}
+
 export async function readHelperEvents(
-  rpc: RpcDiscoveryClient,
+  rpc: HelperReaderRpc,
   input: HelperReaderInput,
   signal?: AbortSignal,
 ): Promise<readonly HelperEvent[]> {
@@ -63,6 +82,16 @@ function normalizeEvent(value: unknown, helperAddress: string, input: HelperRead
   if (!isPlainRecord(value) || !Array.isArray(value.keys) || !Array.isArray(value.data)) {
     throw new TypeError("The helper event does not match the Starknet event schema.");
   }
+
+  if (
+    value.keys.length > 128
+    || value.data.length > 128
+  ) {
+    throw new TypeError(
+      "The helper event exceeds the bounded key or data schema.",
+    );
+  }
+
   if (!Number.isSafeInteger(value.block_number) || Number(value.block_number) < input.fromBlock || Number(value.block_number) > input.toBlock) {
     throw new TypeError("The helper event block is outside the requested range.");
   }
