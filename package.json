@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.1",
+    "@types/pg": "8.20.0",
     "@types/react": "19.2.17",
     "tailwindcss": "4.3.1",
     "typescript": "6.0.3",
@@ -42,6 +43,7 @@
     "@starkware-libs/starknet-privacy-sdk": "file:vendor/starkware-libs-starknet-privacy-sdk-0.14.3-rc.2.tgz",
     "ethers": "6.15.0",
     "lucide": "1.24.0",
+    "pg": "8.22.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "starknet": "9.4.2",
