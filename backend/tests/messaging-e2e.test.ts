@@ -21,6 +21,16 @@ import {
 import { RpcDiscoveryClient } from "../services/discovery/rpc-discovery.js";
 import { createBackendProverClient } from "../services/prover/prover-client.js";
 import { parseMessageProofRequest, requestMessageProof } from "../services/prover/proof-request.js";
+import {
+  enqueueMessageProof,
+} from "../services/prover/proof-enqueue-service.js";
+import {
+  decryptProofPayload,
+} from "../services/prover/proof-payload.js";
+import type {
+  ProofEnqueueInput,
+  ProofEnqueueRepository,
+} from "../services/prover/proof-enqueue-repository.js";
 import { getProverStatus } from "../services/prover/proof-status.js";
 
 /*
@@ -816,6 +826,143 @@ test(
         && "code" in error
         && error.code
           === "TIMELINE_DIRECT_EVENT_FORBIDDEN",
+    );
+  },
+);
+
+
+test(
+  "durable enqueue validates, encrypts, and stores one canonical proof work item",
+  async () => {
+    const request:
+      TransactionProofRequestInput = {
+        canonical:
+          validCanonical(),
+
+        blockId:
+          "latest",
+
+        transaction:
+          validTransaction(),
+      };
+
+    const stored:
+      ProofEnqueueInput[] = [];
+
+    const repository:
+      ProofEnqueueRepository = {
+        async createOrGet(input) {
+          stored.push(input);
+
+          return {
+            created:
+              true,
+
+            job:
+              input.job,
+
+            payload:
+              input.payload,
+          };
+        },
+      };
+
+    const key =
+      Buffer.alloc(32, 7);
+
+    const client =
+      createBackendProverClient({
+        env:
+          backendEnv(),
+
+        fetch: async () => {
+          throw new Error(
+            "prepareRequest must not contact the prover.",
+          );
+        },
+      });
+
+    const result =
+      await enqueueMessageProof(
+        {
+          prover:
+            client,
+
+          repository,
+
+          keyring: {
+            activeKeyVersion:
+              "v1",
+
+            resolveKey() {
+              return Buffer.from(key);
+            },
+          },
+
+          now:
+            () => 1_000,
+        },
+        {
+          request,
+
+          idempotencyKey:
+            "enqueue-message-request-0001",
+        },
+      );
+
+    assert.equal(
+      result.created,
+      true,
+    );
+
+    assert.equal(
+      result.state,
+      "queued",
+    );
+
+    assert.match(
+      result.jobId,
+      /^job_[0-9a-f]{64}$/u,
+    );
+
+    assert.match(
+      result.requestFingerprint,
+      /^veil-proof-intent-v1:[0-9a-f]{64}$/u,
+    );
+
+    assert.equal(
+      stored.length,
+      1,
+    );
+
+    const persisted =
+      stored[0];
+
+    assert.ok(persisted);
+
+    assert.equal(
+      persisted.job.payloadReference,
+      persisted.payload.payloadReference,
+    );
+
+    const decrypted =
+      decryptProofPayload(
+        persisted.payload,
+        key,
+        1_001,
+      ) as {
+        schemaVersion: string;
+        request: TransactionProofRequestInput;
+      };
+
+    assert.equal(
+      decrypted.schemaVersion,
+      "veil-proof-work-item-v1",
+    );
+
+    assert.deepEqual(
+      decrypted.request,
+      request,
     );
   },
 );
