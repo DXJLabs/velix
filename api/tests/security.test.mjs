@@ -137,6 +137,8 @@ test("indexer query accepts only an opaque felt tag and bounded fields", () => {
   }, ROUTE_CONTEXT), {
     conversationTag: "0x123",
     cursor: "",
+    verification:
+      "legacy-compatible",
     limit: 3,
     pageBlocks: 25,
   });
@@ -321,7 +323,7 @@ test("legacy ciphertext events remain readable without fabricated shielded prove
   assert.equal(messages[0].commitmentVerified, true);
 });
 
-test("indexer handler starts from the verified deployment block and returns a signed cursor", async () => {
+test("strict indexer starts from the verified deployment block and returns a signed cursor", async () => {
   resetRateLimitsForTest();
   const originalFetch = globalThis.fetch;
   const originalInfo = console.info;
@@ -342,19 +344,66 @@ test("indexer handler starts from the verified deployment block and returns a si
   globalThis.fetch = async (_url, init) => {
     const request = JSON.parse(init.body);
     rpcRequests.push(request);
-    if (request.method === "starknet_chainId") return rpcResponse("0x534e5f5345504f4c4941");
-    if (request.method === "starknet_blockNumber") return rpcResponse(200);
+    const respond = (
+      result,
+      status = 200,
+    ) =>
+      rpcResponse(
+        result,
+        status,
+        request.id,
+      );
+    if (request.method === "starknet_chainId") {
+      return respond(
+        "0x534e5f5345504f4c4941",
+        200,
+        request.id,
+      );
+    }
+
+    if (request.method === "starknet_blockNumber") {
+      return respond(
+        200,
+        200,
+        request.id,
+      );
+    }
     if (request.method === "starknet_getTransactionReceipt") {
-      return rpcResponse({
-        block_number: 100,
-        transaction_hash: request.params[0],
-      });
+      return respond(
+        {
+          block_number:
+            100,
+
+          transaction_hash:
+            request.params[0],
+        },
+
+        200,
+        request.id,
+      );
     }
     if (request.method === "starknet_getBlockWithTxHashes") {
-      return rpcResponse({ block_hash: "0xabc", transactions: [] });
+      return respond(
+        {
+          block_hash:
+            "0xabc",
+
+          transactions: [],
+        },
+
+        200,
+        request.id,
+      );
     }
     if (request.method === "starknet_getEvents") {
-      return rpcResponse({ events: [], continuation_token: null });
+      return respond(
+        {
+          events: [],
+        },
+
+        200,
+        request.id,
+      );
     }
     throw new Error(`Unexpected RPC method ${request.method}`);
   };
@@ -364,11 +413,32 @@ test("indexer handler starts from the verified deployment block and returns a si
     await indexerHandler({
       method: "GET",
       headers: { "x-forwarded-for": "192.0.2.8" },
-      query: { conversationTag: "0x123", limit: "5", pageBlocks: "10" },
+      query: {
+        conversationTag:
+          "0x123",
+
+        limit:
+          "5",
+
+        pageBlocks:
+          "10",
+
+        verification:
+          "privacy-pool",
+      },
     }, response);
 
     assert.equal(response.statusCode, 200);
-    assert.equal(response.payload.source, "bounded-rpc-bridge");
+    assert.equal(
+      response.payload.source,
+      "verified-privacy-pool-rpc",
+    );
+
+    assert.equal(
+      response.payload.verification,
+      "privacy-pool",
+    );
+
     assert.equal(response.payload.page.fromBlock, 100);
     assert.equal(response.payload.page.toBlock, 109);
     assert.ok(response.payload.nextCursor.length > 20);
@@ -480,11 +550,25 @@ function createResponse() {
   };
 }
 
-function rpcResponse(result, status = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result }), {
+function rpcResponse(
+  result,
+  status = 200,
+  id = 1,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      result,
+    }),
+    {
     status,
-    headers: { "content-type": "application/json" },
-  });
+      headers: {
+        "content-type":
+          "application/json",
+      },
+    },
+  );
 }
 
 function restoreEnvironment(previous) {

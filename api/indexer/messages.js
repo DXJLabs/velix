@@ -25,8 +25,27 @@ import {
   toHexFelt,
 } from "./_lib/starknet-rpc.js";
 import { materializeTimeline } from "./_lib/timeline.js";
+import {
+  RpcDiscoveryClient,
+  RpcDiscoveryError,
+} from "../../backend/dist/services/discovery/rpc-discovery.js";
+import {
+  discoverVerifiedTimelineCiphertexts,
+  TimelineDiscoveryError,
+} from "../../backend/dist/services/discovery/timeline-discovery.js";
 
-const ALLOWED_QUERY_FIELDS = new Set(["conversationTag", "cursor", "limit", "pageBlocks"]);
+const ALLOWED_QUERY_FIELDS = new Set([
+  "conversationTag",
+  "cursor",
+  "limit",
+  "pageBlocks",
+  "verification",
+]);
+
+const INDEXER_VERIFICATION_MODES = new Set([
+  "legacy-compatible",
+  "privacy-pool",
+]);
 const DEFAULT_CONFIRMATIONS = 12;
 const DEFAULT_MESSAGE_LIMIT = 5;
 const DEFAULT_PAGE_BLOCKS = 2_000;
@@ -99,21 +118,71 @@ export default async function handler(request, response) {
     if (safeTip >= fromBlock) {
       toBlock = Math.min(safeTip, fromBlock + query.pageBlocks - 1);
       const pageHashBefore = await rpcClient.blockHash(toBlock);
-      const rawEvents = await rpcClient.getEvents({
-        fromBlock,
-        toBlock,
-        helperAddress: config.helperAddress,
-        conversationTag: query.conversationTag,
-        maxRawEvents: Math.min(2_000, query.limit * 66),
-      });
-      messages = await materializeTimeline({
-        events: rawEvents,
-        conversationTag: query.conversationTag,
-        helperAddress: config.helperAddress,
-        rpcClient,
-        messageLimit: query.limit,
-        context,
-      });
+      if (query.verification === "privacy-pool") {
+        /*
+         * This route accepts only commitment-verified ciphertext with
+         * explicit Privacy Pool provenance. Direct Helper events and
+         * unverified legacy provenance are rejected without fallback.
+         */
+        const verifiedRpcClient =
+          new RpcDiscoveryClient({
+            rpcUrl: config.rpcUrl,
+          });
+
+        messages =
+          await discoverVerifiedTimelineCiphertexts(
+            verifiedRpcClient,
+            {
+              helperAddress:
+                config.helperAddress,
+
+              conversationTag:
+                query.conversationTag,
+
+              fromBlock,
+              toBlock,
+
+              maximumEvents:
+                query.limit,
+            },
+
+            request.signal,
+          );
+      } else {
+        /*
+         * Compatibility mode remains available for the currently
+         * deployed application while strict discovery is validated.
+         * Its results must not be represented as shielded unless the
+         * existing reader independently verifies that provenance.
+         */
+        const rawEvents =
+          await rpcClient.getEvents({
+            fromBlock,
+            toBlock,
+            helperAddress:
+              config.helperAddress,
+            conversationTag:
+              query.conversationTag,
+            maxRawEvents:
+              Math.min(
+                2_000,
+                query.limit * 66,
+              ),
+          });
+
+        messages =
+          await materializeTimeline({
+            events: rawEvents,
+            conversationTag:
+              query.conversationTag,
+            helperAddress:
+              config.helperAddress,
+            rpcClient,
+            messageLimit:
+              query.limit,
+            context,
+          });
+      }
       const pageHashAfter = await rpcClient.blockHash(toBlock);
       if (pageHashBefore !== pageHashAfter) {
         throw new ApiError(
@@ -146,8 +215,17 @@ export default async function handler(request, response) {
 
     response.status(200).json({
       schemaVersion: "veil-indexer-page-v1",
-      source: "bounded-rpc-bridge",
-      chainId: config.chainId,
+      source:
+        query.verification
+          === "privacy-pool"
+          ? "verified-privacy-pool-rpc"
+          : "bounded-rpc-bridge",
+
+      verification:
+        query.verification,
+
+      chainId:
+        config.chainId,
       helperAddress: config.helperAddress,
       conversationTag: query.conversationTag,
       messages,
@@ -166,8 +244,76 @@ export default async function handler(request, response) {
       },
     });
   } catch (error) {
-    sendError(response, context, error);
+    sendError(
+      response,
+      context,
+      asIndexerError(
+        error,
+        context,
+      ),
+    );
   }
+}
+
+
+function asIndexerError(
+  error,
+  context,
+) {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (
+    error
+    instanceof TimelineDiscoveryError
+  ) {
+    const directEvent =
+      error.code
+      === "TIMELINE_DIRECT_EVENT_FORBIDDEN";
+
+    return new ApiError(
+      directEvent ? 422 : 502,
+      error.code,
+      context.route,
+      error.message,
+      directEvent
+        ? "Discard the direct Helper event and request only canonical Privacy Pool history."
+        : "Do not decrypt or display this page; verify the Helper ABI, commitment, provenance readers, and RPC response.",
+    );
+  }
+
+  if (
+    error
+    instanceof RpcDiscoveryError
+  ) {
+    const unavailable =
+      error.code === "RPC_TIMEOUT"
+      || error.code
+        === "RPC_UNAVAILABLE"
+      || error.code
+        === "RPC_CANCELLED";
+
+    return new ApiError(
+      unavailable ? 503 : 502,
+      `INDEXER_${error.code}`,
+      context.route,
+      error.message,
+      "Retry the same signed cursor once, then verify the reviewed Starknet Sepolia RPC configuration.",
+    );
+  }
+
+  if (error instanceof TypeError) {
+    return new ApiError(
+      502,
+      "INDEXER_VERIFICATION_FAILED",
+      context.route,
+      "The strict ciphertext verification boundary rejected malformed Helper or RPC data.",
+      "Do not decrypt or display the page; verify the reviewed Helper deployment and replay the same cursor.",
+    );
+  }
+
+  return error;
 }
 
 async function verifiedNetworkMetadata(rpcClient, config, context) {
@@ -213,7 +359,7 @@ export function validateQuery(query, context) {
       "INDEXER_QUERY_INVALID",
       context.route,
       "The indexer query contains unsupported fields.",
-      "Send only conversationTag, cursor, limit, and pageBlocks.",
+      "Send only conversationTag, cursor, limit, pageBlocks, and verification.",
     );
   }
 
@@ -232,9 +378,26 @@ export function validateQuery(query, context) {
     : singleQueryValue(query.cursor, "cursor", context);
   if (cursor.length > 2_048) throw invalidQuery(context);
 
+  const verification =
+    query.verification === undefined
+      ? "legacy-compatible"
+      : singleQueryValue(
+          query.verification,
+          "verification",
+          context,
+        );
+
+  if (
+    !INDEXER_VERIFICATION_MODES
+      .has(verification)
+  ) {
+    throw invalidQuery(context);
+  }
+
   return {
     conversationTag,
     cursor,
+    verification,
     limit: boundedQueryInteger(query.limit, "limit", 1, MAX_MESSAGE_LIMIT, DEFAULT_MESSAGE_LIMIT, context),
     pageBlocks: boundedQueryInteger(
       query.pageBlocks,
