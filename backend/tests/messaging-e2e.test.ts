@@ -26,7 +26,15 @@ import {
 } from "../services/prover/proof-enqueue-service.js";
 import {
   decryptProofPayload,
+  encryptProofPayload,
 } from "../services/prover/proof-payload.js";
+import {
+  claimProofJob,
+  createQueuedProofJob,
+} from "../services/prover/proof-job.js";
+import {
+  runProofWorkerOnce,
+} from "../services/prover/proof-worker.js";
 import type {
   ProofEnqueueInput,
   ProofEnqueueRepository,
@@ -963,6 +971,249 @@ test(
     assert.deepEqual(
       decrypted.request,
       request,
+    );
+  },
+);
+
+
+test(
+  "durable proof worker decrypts, proves, stores a result reference, and completes the job",
+  async () => {
+    const request:
+      TransactionProofRequestInput = {
+        canonical:
+          validCanonical(),
+
+        blockId:
+          "latest",
+
+        transaction:
+          validTransaction(),
+      };
+
+    const client =
+      createBackendProverClient({
+        env:
+          backendEnv(),
+
+        fetch:
+          proverFetch(),
+      });
+
+    const prepared =
+      await client.prepareRequest(
+        request,
+      );
+
+    const key =
+      Buffer.alloc(32, 9);
+
+    const payloadReference =
+      `payload_${"c".repeat(64)}`;
+
+    const payload =
+      encryptProofPayload({
+        payloadReference,
+
+        requestFingerprint:
+          prepared.requestFingerprint,
+
+        keyVersion:
+          "v1",
+
+        key,
+
+        payload: {
+          schemaVersion:
+            "veil-proof-work-item-v1",
+
+          request,
+        },
+
+        nowMs:
+          1_000,
+
+        expiresAtMs:
+          100_000,
+      });
+
+    const leaseOwnerHash =
+      "d".repeat(64);
+
+    const queued =
+      createQueuedProofJob({
+        jobId:
+          `job_${"a".repeat(64)}`,
+
+        requestFingerprint:
+          prepared.requestFingerprint,
+
+        idempotencyKeyHash:
+          "b".repeat(64),
+
+        payloadReference,
+
+        nowMs:
+          1_000,
+
+        maxAttempts:
+          3,
+      });
+
+    const claimed =
+      claimProofJob(
+        queued,
+        {
+          leaseOwnerHash,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            10_000,
+        },
+      );
+
+    let storedResultReference:
+      string | null = null;
+
+    const result =
+      await runProofWorkerOnce(
+        {
+          jobs: {
+            async createOrGetByIdempotency() {
+              throw new Error(
+                "not used",
+              );
+            },
+
+            async getById() {
+              return null;
+            },
+
+            async getByIdempotencyKeyHash() {
+              return null;
+            },
+
+            async claimNextAvailable() {
+              return claimed;
+            },
+
+            async compareAndSwap(input) {
+              assert.equal(
+                input.expectedRevision,
+                claimed.revision,
+              );
+
+              return input.next;
+            },
+          },
+
+          payloads: {
+            async createOrGet() {
+              throw new Error(
+                "not used",
+              );
+            },
+
+            async getByReference(reference) {
+              assert.equal(
+                reference,
+                payloadReference,
+              );
+
+              return payload;
+            },
+
+            async deleteByReference() {
+              throw new Error(
+                "not used",
+              );
+            },
+
+            async deleteExpired() {
+              throw new Error(
+                "not used",
+              );
+            },
+          },
+
+          prover: {
+            async prove(input, signal) {
+              return client.prove(
+                input,
+                signal,
+              );
+            },
+          },
+
+          results: {
+            async persist(input) {
+              assert.equal(
+                input.job.jobId,
+                claimed.jobId,
+              );
+
+              assert.equal(
+                input.result.requestFingerprint,
+                prepared.requestFingerprint,
+              );
+
+              storedResultReference =
+                "proof_result_0001";
+
+              return {
+                resultReference:
+                  storedResultReference,
+              };
+            },
+          },
+
+          keyring: {
+            activeKeyVersion:
+              "v1",
+
+            resolveKey(version) {
+              assert.equal(
+                version,
+                "v1",
+              );
+
+              return Buffer.from(
+                key,
+              );
+            },
+          },
+
+          now:
+            () => 1_000,
+        },
+        {
+          leaseOwnerHash,
+
+          leaseDurationMs:
+            10_000,
+        },
+      );
+
+    assert.equal(
+      result.outcome,
+      "succeeded",
+    );
+
+    assert.equal(
+      result.state,
+      "succeeded",
+    );
+
+    assert.equal(
+      result.attempts,
+      1,
+    );
+
+    assert.equal(
+      storedResultReference,
+      "proof_result_0001",
     );
   },
 );
