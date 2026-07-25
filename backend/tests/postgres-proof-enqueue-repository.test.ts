@@ -337,7 +337,6 @@ test(
       new ScriptedProvider([
         result(),
         result(jobRow(job)),
-        result(),
         result(payloadRow(payload)),
       ]);
 
@@ -375,7 +374,7 @@ test(
 );
 
 test(
-  "PostgreSQL enqueue rejects an existing job with a newly inserted payload",
+  "PostgreSQL enqueue rejects an existing job with a missing payload",
   async () => {
     const job =
       queuedJob();
@@ -387,7 +386,7 @@ test(
       new ScriptedProvider([
         result(),
         result(jobRow(job)),
-        result(payloadRow(payload)),
+        result(),
       ]);
 
     const repository =

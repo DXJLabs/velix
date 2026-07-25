@@ -294,10 +294,25 @@ test(
 );
 
 test(
-  "rejects encrypted payload reference rebinding",
+  "accepts the stored randomized encryption on an idempotent retry",
   async () => {
     const input =
       enqueueInput();
+
+    const storedPayload =
+      encryptedPayload({
+        nonce:
+          Buffer.alloc(12, 4),
+
+        authenticationTag:
+          Buffer.alloc(16, 5),
+
+        ciphertext:
+          Buffer.alloc(32, 9),
+
+        ciphertextSha256:
+          "f".repeat(64),
+      });
 
     const repository =
       new ScriptedRepository({
@@ -308,23 +323,23 @@ test(
           input.job,
 
         payload:
-          encryptedPayload({
-            ciphertext:
-              Buffer.alloc(32, 9),
-
-            ciphertextSha256:
-              "f".repeat(64),
-          }),
+          storedPayload,
       });
 
-    await assert.rejects(
-      () => createOrGetProofEnqueue(
+    const result =
+      await createOrGetProofEnqueue(
         repository,
         input,
-      ),
-      hasCode(
-        "PROOF_ENQUEUE_PAYLOAD_CONFLICT",
-      ),
+      );
+
+    assert.equal(
+      result.created,
+      false,
+    );
+
+    assert.deepEqual(
+      result.payload,
+      storedPayload,
     );
   },
 );

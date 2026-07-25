@@ -60,15 +60,37 @@ implements ProofEnqueueRepository {
             input.job,
           );
 
-        const payloadResult =
-          await payloadRepository.createOrGet(
-            input.payload,
+        if (jobResult.created) {
+          const payloadResult =
+            await payloadRepository.createOrGet(
+              input.payload,
+            );
+
+          if (!payloadResult.created) {
+            throw new ProofEnqueueRepositoryError(
+              "PROOF_ENQUEUE_PARTIAL_STATE",
+              "The database contains an incomplete proof enqueue record.",
+            );
+          }
+
+          return Object.freeze({
+            created:
+              true,
+
+            job:
+              jobResult.job,
+
+            payload:
+              payloadResult.payload,
+          });
+        }
+
+        const storedPayload =
+          await payloadRepository.getByReference(
+            jobResult.job.payloadReference,
           );
 
-        if (
-          jobResult.created
-          !== payloadResult.created
-        ) {
+        if (storedPayload === null) {
           throw new ProofEnqueueRepositoryError(
             "PROOF_ENQUEUE_PARTIAL_STATE",
             "The database contains an incomplete proof enqueue record.",
@@ -77,13 +99,13 @@ implements ProofEnqueueRepository {
 
         return Object.freeze({
           created:
-            jobResult.created,
+            false,
 
           job:
             jobResult.job,
 
           payload:
-            payloadResult.payload,
+            storedPayload,
         });
       },
     );

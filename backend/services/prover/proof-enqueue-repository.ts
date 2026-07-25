@@ -57,22 +57,15 @@ export async function createOrGetProofEnqueue(
       result,
     );
   } else {
+    /*
+     * AES-GCM uses a fresh nonce for every encryption. An idempotent
+     * retry therefore returns the originally stored encrypted payload
+     * rather than requiring the new ciphertext bytes to match.
+     */
     assertIdempotentIntent(
       input.job,
       result.job,
     );
-
-    if (
-      !samePayload(
-        input.payload,
-        result.payload,
-      )
-    ) {
-      throw enqueueError(
-        "PROOF_ENQUEUE_PAYLOAD_CONFLICT",
-        "The payload reference is already bound to different encrypted data.",
-      );
-    }
   }
 
   return Object.freeze({
