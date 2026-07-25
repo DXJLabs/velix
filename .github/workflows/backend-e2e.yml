@@ -2,6 +2,20 @@ name: VEIL Backend E2E
 
 on:
   workflow_dispatch:
+
+  push:
+    branches:
+      - main
+
+    paths:
+      - "api/messaging/**"
+      - "api/indexer/**"
+      - "backend/**"
+      - "packages/veil-sdk/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/backend-e2e.yml"
+
   pull_request:
     paths:
       - "api/messaging/**"

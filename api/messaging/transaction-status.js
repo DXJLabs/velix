@@ -29,8 +29,21 @@ export default async function handler(request, response) {
     enforceRateLimit(request, response, context, { limit: 30, windowMs: 60_000 });
     const transactionHash = validateQuery(request.query ?? {}, context);
     const environment = loadRpcEnvironment();
-    const rpc = new RpcDiscoveryClient({ rpcUrl: environment.rpcUrl });
-    const status = await rpc.transactionStatus(transactionHash, request.signal);
+    const rpc = new RpcDiscoveryClient({
+      rpcUrl: environment.rpcUrl,
+    });
+
+    const verifiedRpcChainId =
+      await rpc.assertChainId(
+        environment.chainId,
+        request.signal,
+      );
+
+    const status =
+      await rpc.transactionStatus(
+        transactionHash,
+        request.signal,
+      );
 
     logEvent("info", "messaging.transaction_status.complete", context, {
       status: status.finalityStatus,
@@ -40,6 +53,13 @@ export default async function handler(request, response) {
     response.status(200).json({
       schemaVersion: "veil-transaction-status-v1",
       chainId: environment.chainId,
+
+      verifiedRpcChainId:
+        toHexFelt(
+          verifiedRpcChainId,
+          "verifiedRpcChainId",
+        ),
+
       ...status,
     });
   } catch (error) {
@@ -83,7 +103,14 @@ function invalidQuery(context) {
 function asApiError(error, context) {
   if (error instanceof ApiError) return error;
   if (error instanceof RpcDiscoveryError) {
-    const status = error.code === "RPC_TIMEOUT" ? 504 : error.code === "RPC_REJECTED" ? 404 : 502;
+    const status =
+      error.code === "RPC_TIMEOUT"
+        ? 504
+        : error.code === "RPC_REJECTED"
+          ? 404
+          : error.code === "RPC_CHAIN_MISMATCH"
+            ? 503
+            : 502;
     return new ApiError(
       status,
       error.code,

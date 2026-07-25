@@ -1,6 +1,8 @@
 const FELT_MODULUS = 2n ** 251n + 17n * 2n ** 192n + 1n;
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const STARKNET_SEPOLIA_CHAIN_ID_HEX =
+  "0x534e5f5345504f4c4941";
 
 export interface RpcDiscoveryConfig {
   rpcUrl: string;
@@ -56,8 +58,39 @@ export class RpcDiscoveryClient {
     if (typeof this.#fetch !== "function") throw new RpcDiscoveryError("RPC_FETCH_MISSING", "Fetch is unavailable.");
   }
 
-  async chainId(signal?: AbortSignal): Promise<string> {
-    return normalizeFelt(await this.request("starknet_chainId", [], signal), "chainId");
+  async chainId(
+    signal?: AbortSignal,
+  ): Promise<string> {
+    return normalizeFelt(
+      await this.request(
+        "starknet_chainId",
+        [],
+        signal,
+      ),
+      "chainId",
+    );
+  }
+
+  async assertChainId(
+    expectedChainId: string,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const actual =
+      await this.chainId(signal);
+
+    const expected =
+      normalizeExpectedChainId(
+        expectedChainId,
+      );
+
+    if (actual !== expected) {
+      throw new RpcDiscoveryError(
+        "RPC_CHAIN_MISMATCH",
+        "The configured Starknet RPC is not Starknet Sepolia.",
+      );
+    }
+
+    return actual;
   }
 
   async blockNumber(signal?: AbortSignal): Promise<number> {
@@ -217,6 +250,29 @@ function validateRpcUrl(value: string): string {
   }
   parsed.hash = "";
   return parsed.toString();
+}
+
+function normalizeExpectedChainId(
+  value: string,
+): string {
+  const normalized =
+    value.trim().toUpperCase();
+
+  if (
+    normalized === "SN_SEPOLIA"
+    || normalized
+      === STARKNET_SEPOLIA_CHAIN_ID_HEX
+        .toUpperCase()
+  ) {
+    return BigInt(
+      STARKNET_SEPOLIA_CHAIN_ID_HEX,
+    ).toString();
+  }
+
+  throw new RpcDiscoveryError(
+    "RPC_CHAIN_EXPECTATION_INVALID",
+    "Only Starknet Sepolia is supported by this backend.",
+  );
 }
 
 function boundedInteger(value: number | undefined, minimum: number, maximum: number, fallback: number, label: string): number {

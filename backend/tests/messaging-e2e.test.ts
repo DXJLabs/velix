@@ -15,8 +15,15 @@ import { createBackendProverClient } from "../services/prover/prover-client.js";
 import { parseMessageProofRequest, requestMessageProof } from "../services/prover/proof-request.js";
 import { getProverStatus } from "../services/prover/proof-status.js";
 
-const POOL = "0x222";
-const HELPER = "0x555";
+/*
+ * Test transaction felts must use the canonical lowercase form
+ * required by TransactionProverClient: no leading zero after 0x.
+ */
+const POOL =
+  "0x3a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5";
+
+const HELPER =
+  "0x52390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23";
 const COMPILE_ACTIONS_SELECTOR = hash.getSelectorFromName("compile_actions");
 const PROOF_PROGRAM = "0x5649525455414c5f534e4f53";
 const PROOF_OUTPUT = "0x5649525455414c5f534e4f5330";
@@ -29,6 +36,10 @@ function backendEnv(): NodeJS.ProcessEnv {
     VEIL_CHANNEL_HELPER_ADDRESS: HELPER,
     VEIL_PROVER_URL: "http://127.0.0.1:3000",
     VEIL_PROVER_MODE: "local",
+
+    VEIL_EXPERIMENTAL_DIRECT_PROVER:
+      "true",
+
     VEIL_DISCOVERY_URL: "http://127.0.0.1:3000/api/indexer/messages",
     VEIL_PROVER_HEALTH_RETRIES: "0",
     VEIL_PROVER_JOB_RETRIES: "0",
@@ -141,6 +152,25 @@ function jsonResponse(value: unknown): Response {
   });
 }
 
+test(
+  "backend environment fails closed when the experimental direct prover is not acknowledged",
+  () => {
+    const environment = backendEnv();
+
+    delete environment
+      .VEIL_EXPERIMENTAL_DIRECT_PROVER;
+
+    assert.throws(
+      () =>
+        loadProverEnvironment(
+          environment,
+        ),
+
+      /experimental/u,
+    );
+  },
+);
+
 test("backend environment fails closed for insecure remote prover endpoints", () => {
   assert.throws(
     () => loadProverEnvironment({
@@ -186,6 +216,127 @@ test("proof request rejects private material before contacting the prover", () =
   );
 });
 
+
+test(
+  "proof request rejects nested private-material aliases",
+  () => {
+    assert.throws(
+      () =>
+        parseMessageProofRequest({
+          canonical:
+            validCanonical(),
+
+          blockId:
+            "latest",
+
+          transaction: {
+            ...validTransaction(),
+
+            metadata: {
+              recipientViewingMaterial:
+                "never-send-this",
+            },
+          },
+        }),
+
+      /Private field/u,
+    );
+  },
+);
+
+test(
+  "proof request rejects non-message product operations",
+  () => {
+    const canonical = {
+      ...validCanonical(),
+
+      operation:
+        "offer",
+
+      keyDomain:
+        "VEIL_OFFER_KEY_V1",
+    };
+
+    assert.throws(
+      () =>
+        parseMessageProofRequest({
+          canonical,
+
+          blockId:
+            "latest",
+
+          transaction:
+            validTransaction(
+              canonical,
+            ),
+        }),
+
+      /Only canonical message operations/u,
+    );
+  },
+);
+
+test(
+  "proof request rejects unknown canonical envelope fields",
+  () => {
+    assert.throws(
+      () =>
+        parseMessageProofRequest({
+          canonical: {
+            ...validCanonical(),
+
+            envelope: {
+              ...validEnvelope(),
+
+              extra:
+                "not-allowed",
+            },
+          },
+
+          blockId:
+            "latest",
+
+          transaction:
+            validTransaction(),
+        }),
+
+      /unknown or missing fields/u,
+    );
+  },
+);
+
+test(
+  "proof request requires one exact privacy_invoke application boundary",
+  () => {
+    assert.throws(
+      () =>
+        parseMessageProofRequest({
+          canonical: {
+            ...validCanonical(),
+
+            applicationInvokes: [
+              {
+                contractAddress:
+                  HELPER,
+
+                selector:
+                  "invoke",
+              },
+            ],
+          },
+
+          blockId:
+            "latest",
+
+          transaction:
+            validTransaction(),
+        }),
+
+      /privacy_invoke/u,
+    );
+  },
+);
+
 test("transaction status is read through the bounded Starknet RPC boundary", async () => {
   const fetchMock: typeof fetch = async (_input, init = {}) => {
     const request = JSON.parse(String(init.body)) as { id: string; method: string; params: unknown[] };
@@ -208,6 +359,54 @@ test("transaction status is read through the bounded Starknet RPC boundary", asy
   assert.equal(status.executionStatus, "SUCCEEDED");
   assert.equal(status.blockNumber, 123);
 });
+
+test(
+  "RPC chain verification rejects a non-Sepolia endpoint",
+  async () => {
+    const fetchMock:
+      typeof fetch =
+      async (_input, init = {}) => {
+        const request =
+          JSON.parse(
+            String(init.body),
+          ) as {
+            id: string;
+            method: string;
+          };
+
+        assert.equal(
+          request.method,
+          "starknet_chainId",
+        );
+
+        return jsonResponse({
+          jsonrpc: "2.0",
+          id: request.id,
+
+          result:
+            "0x534e5f4d41494e",
+        });
+      };
+
+    const rpc =
+      new RpcDiscoveryClient({
+        rpcUrl:
+          "https://rpc.example.test",
+
+        fetch:
+          fetchMock,
+      });
+
+    await assert.rejects(
+      () =>
+        rpc.assertChainId(
+          "SN_SEPOLIA",
+        ),
+
+      /not Starknet Sepolia/u,
+    );
+  },
+);
 
 test("canonical commitment verifier binds locator, chunk count, and ciphertext chunks", () => {
   const input = { messageLocator: "0x77", payloadChunks: ["0x1", "0x2", "0x3"] };

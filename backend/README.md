@@ -16,6 +16,16 @@ This directory contains reusable server-side boundaries for private messaging. I
 - `GET /api/messaging/transaction-status?transactionHash=0x...`: bounded Sepolia transaction-receipt status.
 - `GET /api/indexer/messages`: existing ciphertext timeline indexer. It remains unchanged during this backend introduction.
 
+## Current prover boundary
+
+The current `TransactionProverClient` supports the Phase 4
+`sdk-direct` proof boundary only. This mode requires
+`VEIL_EXPERIMENTAL_DIRECT_PROVER=true` and remains diagnostic.
+
+It must not be represented as production wallet-owned custody.
+The backend must not store plaintext, account private keys,
+viewing keys, persistent channel secrets, or decrypted messages.
+
 ## Required server environment
 
 - `VEIL_PROVER_URL` or `VEIL_TRANSACTION_PROVER_URL`
