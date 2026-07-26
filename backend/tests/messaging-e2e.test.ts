@@ -22,6 +22,7 @@ import { RpcDiscoveryClient } from "../services/discovery/rpc-discovery.js";
 import { createBackendProverClient } from "../services/prover/prover-client.js";
 import { parseMessageProofRequest, requestMessageProof } from "../services/prover/proof-request.js";
 import {
+  enqueueAuthenticatedMessageProof,
   enqueueMessageProof,
 } from "../services/prover/proof-enqueue-service.js";
 import {
@@ -1228,6 +1229,165 @@ test(
     assert.equal(
       storedResultReference,
       "proof_result_0001",
+    );
+  },
+);
+
+
+test(
+  "authenticated durable enqueue stores only a job-scoped identity hash",
+  async () => {
+    const request:
+      TransactionProofRequestInput = {
+        canonical:
+          validCanonical(),
+
+        blockId:
+          "latest",
+
+        transaction:
+          validTransaction(),
+      };
+
+    const stored:
+      ProofEnqueueInput[] = [];
+
+    const repository:
+      ProofEnqueueRepository = {
+        async createOrGet(input) {
+          stored.push(input);
+
+          return {
+            created:
+              true,
+
+            job:
+              input.job,
+
+            payload:
+              input.payload,
+
+            ...(input.access === undefined
+              ? {}
+              : {
+                  access:
+                    input.access,
+                }),
+          };
+        },
+      };
+
+    const key =
+      Buffer.alloc(
+        32,
+        7,
+      );
+
+    const accessSecret =
+      Buffer.alloc(
+        32,
+        8,
+      );
+
+    const client =
+      createBackendProverClient({
+        env:
+          backendEnv(),
+
+        fetch: async () => {
+          throw new Error(
+            "prepareRequest must not contact the prover.",
+          );
+        },
+      });
+
+    const authenticatedSubject =
+      "did:privy:user-private-001";
+
+    const result =
+      await enqueueAuthenticatedMessageProof(
+        {
+          prover:
+            client,
+
+          repository,
+
+          keyring: {
+            activeKeyVersion:
+              "v1",
+
+            resolveKey() {
+              return Buffer.from(
+                key,
+              );
+            },
+          },
+
+          accessSecret,
+
+          now:
+            () => 1_000,
+        },
+        {
+          request,
+
+          idempotencyKey:
+            "authenticated-message-request-0001",
+
+          identityProvider:
+            "privy",
+
+          authenticatedSubject,
+        },
+      );
+
+    assert.equal(
+      result.state,
+      "queued",
+    );
+
+    const persisted =
+      stored[0];
+
+    assert.ok(persisted);
+    assert.ok(
+      persisted.access,
+    );
+
+    assert.equal(
+      persisted.access.jobId,
+      result.jobId,
+    );
+
+    assert.match(
+      persisted.access.subjectHash,
+      /^[0-9a-f]{64}$/u,
+    );
+
+    const serialized =
+      JSON.stringify(
+        persisted.access,
+      );
+
+    assert.equal(
+      serialized.includes(
+        authenticatedSubject,
+      ),
+      false,
+    );
+
+    assert.equal(
+      serialized.includes(
+        "requestFingerprint",
+      ),
+      false,
+    );
+
+    assert.equal(
+      serialized.includes(
+        "payloadReference",
+      ),
+      false,
     );
   },
 );

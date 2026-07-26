@@ -65,12 +65,18 @@ export async function createOrGetProofJobAccess(
     result.access,
   );
 
-  if (
-    !sameAccess(
-      requested,
-      result.access,
-    )
-  ) {
+  const matches =
+    result.created
+      ? sameSnapshot(
+          requested,
+          result.access,
+        )
+      : sameBinding(
+          requested,
+          result.access,
+        );
+
+  if (!matches) {
     throw repositoryError(
       result.created
         ? "PROOF_JOB_ACCESS_CREATE_MISMATCH"
@@ -101,7 +107,21 @@ export function proofJobAccessRepositoryError(
   );
 }
 
-function sameAccess(
+function sameSnapshot(
+  left: ProofJobAccessRecord,
+  right: ProofJobAccessRecord,
+): boolean {
+  return (
+    sameBinding(
+      left,
+      right,
+    )
+    && left.createdAtMs
+      === right.createdAtMs
+  );
+}
+
+function sameBinding(
   left: ProofJobAccessRecord,
   right: ProofJobAccessRecord,
 ): boolean {
@@ -112,8 +132,6 @@ function sameAccess(
       === right.jobId
     && left.subjectHash
       === right.subjectHash
-    && left.createdAtMs
-      === right.createdAtMs
   );
 }
 

@@ -6,15 +6,22 @@ import type {
   EncryptedProofPayload,
 } from "./proof-payload.js";
 
+import {
+  assertProofJobAccessRecord,
+  type ProofJobAccessRecord,
+} from "../security/proof-job-access.js";
+
 export interface ProofEnqueueInput {
   readonly job: ProofJobRecord;
   readonly payload: EncryptedProofPayload;
+  readonly access?: ProofJobAccessRecord;
 }
 
 export interface ProofEnqueueResult {
   readonly created: boolean;
   readonly job: ProofJobRecord;
   readonly payload: EncryptedProofPayload;
+  readonly access?: ProofJobAccessRecord;
 }
 
 export interface ProofEnqueueRepository {
@@ -36,7 +43,8 @@ extends Error {
     this.name =
       "ProofEnqueueRepositoryError";
 
-    this.code = code;
+    this.code =
+      code;
   }
 }
 
@@ -50,6 +58,10 @@ export async function createOrGetProofEnqueue(
     await repository.createOrGet(input);
 
   assertBinding(result);
+  assertAccessResult(
+    input,
+    result,
+  );
 
   if (result.created) {
     assertCreatedSnapshot(
@@ -69,9 +81,21 @@ export async function createOrGetProofEnqueue(
   }
 
   return Object.freeze({
-    created: result.created,
-    job: result.job,
-    payload: result.payload,
+    created:
+      result.created,
+
+    job:
+      result.job,
+
+    payload:
+      result.payload,
+
+    ...(result.access === undefined
+      ? {}
+      : {
+          access:
+            result.access,
+        }),
   });
 }
 
@@ -97,6 +121,63 @@ function assertBinding(
     throw enqueueError(
       "PROOF_ENQUEUE_BINDING_INVALID",
       "The proof job and encrypted payload are not bound to the same request.",
+    );
+  }
+
+  if (input.access !== undefined) {
+    assertProofJobAccessRecord(
+      input.access,
+    );
+
+    if (
+      input.access.jobId
+        !== input.job.jobId
+    ) {
+      throw enqueueError(
+        "PROOF_ENQUEUE_ACCESS_BINDING_INVALID",
+        "The proof access record is not bound to the same job.",
+      );
+    }
+  }
+}
+
+function assertAccessResult(
+  expected: ProofEnqueueInput,
+  actual: ProofEnqueueResult,
+): void {
+  if (expected.access === undefined) {
+    if (actual.access !== undefined) {
+      throw enqueueError(
+        "PROOF_ENQUEUE_ACCESS_UNEXPECTED",
+        "The repository returned unexpected proof access metadata.",
+      );
+    }
+
+    return;
+  }
+
+  if (actual.access === undefined) {
+    throw enqueueError(
+      "PROOF_ENQUEUE_ACCESS_MISSING",
+      "The repository did not persist the required proof access binding.",
+    );
+  }
+
+  const matches =
+    actual.created
+      ? sameAccessSnapshot(
+          expected.access,
+          actual.access,
+        )
+      : sameAccessBinding(
+          expected.access,
+          actual.access,
+        );
+
+  if (!matches) {
+    throw enqueueError(
+      "PROOF_ENQUEUE_ACCESS_MISMATCH",
+      "The repository returned a different proof access binding.",
     );
   }
 }
@@ -139,6 +220,34 @@ function assertIdempotentIntent(
       "The idempotency key is already bound to another proof request.",
     );
   }
+}
+
+function sameAccessSnapshot(
+  expected: ProofJobAccessRecord,
+  actual: ProofJobAccessRecord,
+): boolean {
+  return (
+    sameAccessBinding(
+      expected,
+      actual,
+    )
+    && expected.createdAtMs
+      === actual.createdAtMs
+  );
+}
+
+function sameAccessBinding(
+  expected: ProofJobAccessRecord,
+  actual: ProofJobAccessRecord,
+): boolean {
+  return (
+    expected.schemaVersion
+      === actual.schemaVersion
+    && expected.jobId
+      === actual.jobId
+    && expected.subjectHash
+      === actual.subjectHash
+  );
 }
 
 function samePayload(

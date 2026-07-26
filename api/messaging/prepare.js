@@ -6,6 +6,7 @@ import {
   requirePost,
   sendError,
 } from "../_lib/privy.js";
+
 import {
   assertJsonBodyWithinLimit,
   setPrivateResponseHeaders,
@@ -14,20 +15,45 @@ import {
 import {
   enforceDistributedRateLimit,
 } from "../_lib/distributed-rate-limit.js";
-import { createBackendProverClient } from "../../backend/dist/services/prover/prover-client.js";
-import { normalizeProofError } from "../../backend/dist/services/prover/proof-errors.js";
-import { requestMessageProof } from "../../backend/dist/services/prover/proof-request.js";
 
-const MAX_PROOF_REQUEST_BYTES = 512 * 1024;
+import {
+  asProofJobApiError,
+  enqueueAuthenticatedProofJob,
+} from "../_lib/proof-jobs.js";
 
-export default async function handler(request, response) {
-  const context = createRequestContext(request, "/api/messaging/prepare");
-  const startedAt = Date.now();
+const MAX_PROOF_REQUEST_BYTES =
+  512 * 1024;
+
+export default async function handler(
+  request,
+  response,
+) {
+  const context =
+    createRequestContext(
+      request,
+      "/api/messaging/prepare",
+    );
+
+  const startedAt =
+    Date.now();
 
   try {
-    setPrivateResponseHeaders(response);
-    requirePost(request, response, context);
-    assertJsonBodyWithinLimit(request, context, MAX_PROOF_REQUEST_BYTES);
+    setPrivateResponseHeaders(
+      response,
+    );
+
+    requirePost(
+      request,
+      response,
+      context,
+    );
+
+    assertJsonBodyWithinLimit(
+      request,
+      context,
+      MAX_PROOF_REQUEST_BYTES,
+    );
+
     await enforceDistributedRateLimit(
       request,
       response,
@@ -43,40 +69,119 @@ export default async function handler(request, response) {
           60_000,
       },
     );
-    await authenticatePrivyRequest(request, context);
 
-    const client = createBackendProverClient({
-      onStatus(event) {
-        logEvent("info", "messaging.prover.status", context, {
-          status: event.responseStatus,
-          retryCount: event.retryCount,
-          durationMs: event.durationMs,
-          errorCode: event.errorCode,
-        });
+    const authentication =
+      await authenticatePrivyRequest(
+        request,
+        context,
+      );
+
+    const result =
+      await enqueueAuthenticatedProofJob({
+        request:
+          request.body,
+
+        idempotencyKey:
+          requireIdempotencyKey(
+            request,
+            context,
+          ),
+
+        authenticatedSubject:
+          authentication.userId,
+
+        onStatus(event) {
+          logEvent(
+            "info",
+            "messaging.prover.prepare_status",
+            context,
+            {
+              status:
+                event.responseStatus,
+
+              retryCount:
+                event.retryCount,
+
+              durationMs:
+                event.durationMs,
+
+              errorCode:
+                event.errorCode,
+            },
+          );
+        },
+      });
+
+    logEvent(
+      "info",
+      "messaging.prepare.queued",
+      context,
+      {
+        status:
+          result.state,
+
+        durationMs:
+          Date.now()
+            - startedAt,
+
+        ok:
+          true,
       },
-    });
-    const result = await requestMessageProof(client, request.body, request.signal);
+    );
 
-    logEvent("info", "messaging.prepare.complete", context, {
-      status: result.status,
-      retryCount: result.retryCount,
-      durationMs: Date.now() - startedAt,
+    response.status(202).json({
+      schemaVersion:
+        result.schemaVersion,
+
+      created:
+        result.created,
+
+      jobId:
+        result.jobId,
+
+      state:
+        result.state,
+
+      createdAtMs:
+        result.createdAtMs,
+
+      expiresAtMs:
+        result.expiresAtMs,
     });
-    response.status(200).json(result);
   } catch (error) {
-    sendError(response, context, asApiError(error, context));
+    sendError(
+      response,
+      context,
+      asProofJobApiError(
+        error,
+        context,
+      ),
+    );
   }
 }
 
-function asApiError(error, context) {
-  if (error instanceof ApiError) return error;
-  const normalized = normalizeProofError(error);
-  return new ApiError(
-    normalized.status,
-    normalized.code,
-    context.route,
-    normalized.why,
-    normalized.howToFix,
-    { errorName: error?.name, errorCode: error?.code },
-  );
+function requireIdempotencyKey(
+  request,
+  context,
+) {
+  const raw =
+    request.headers
+      ?.["idempotency-key"]
+    ?? request.headers
+      ?.["x-idempotency-key"];
+
+  if (
+    Array.isArray(raw)
+    || typeof raw !== "string"
+  ) {
+    throw new ApiError(
+      400,
+      "PROOF_IDEMPOTENCY_KEY_MISSING",
+      context.route,
+      "The request did not include a valid Idempotency-Key header.",
+      "Send one opaque Idempotency-Key value containing between 16 and 200 safe characters.",
+    );
+  }
+
+  return raw;
 }

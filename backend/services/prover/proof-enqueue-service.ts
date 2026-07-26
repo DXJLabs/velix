@@ -1,4 +1,6 @@
-import { createHash } from "node:crypto";
+import {
+  createHash,
+} from "node:crypto";
 
 import type {
   PreparedTransactionProofRequest,
@@ -8,6 +10,12 @@ import type {
 import type {
   ProofPayloadKeyring,
 } from "../../config/proof-payload-env.js";
+
+import {
+  createProofJobAccessRecord,
+  deriveProofJobSubjectHash,
+  type ProofIdentityProvider,
+} from "../security/proof-job-access.js";
 
 import {
   createQueuedProofJob,
@@ -46,13 +54,29 @@ export interface ProofEnqueueServiceDependencies {
   readonly now?: () => number;
 }
 
+export interface AuthenticatedProofEnqueueServiceDependencies
+extends ProofEnqueueServiceDependencies {
+  readonly accessSecret: Uint8Array;
+}
+
 export interface EnqueueMessageProofInput {
   readonly request: unknown;
   readonly idempotencyKey: string;
 }
 
+export interface AuthenticatedEnqueueMessageProofInput
+extends EnqueueMessageProofInput {
+  readonly identityProvider:
+    ProofIdentityProvider;
+
+  readonly authenticatedSubject:
+    string;
+}
+
 export interface EnqueueMessageProofResult {
-  readonly schemaVersion: "veil-proof-enqueue-v1";
+  readonly schemaVersion:
+    "veil-proof-enqueue-v1";
+
   readonly created: boolean;
   readonly jobId: string;
   readonly state: ProofJobState;
@@ -61,19 +85,71 @@ export interface EnqueueMessageProofResult {
   readonly expiresAtMs: number;
 }
 
-export class ProofEnqueueServiceError extends Error {
+interface EnqueueIdentity {
+  readonly provider:
+    ProofIdentityProvider;
+
+  readonly subject:
+    string;
+
+  readonly secret:
+    Uint8Array;
+}
+
+export class ProofEnqueueServiceError
+extends Error {
   readonly code: string;
 
-  constructor(code: string, message: string) {
+  constructor(
+    code: string,
+    message: string,
+  ) {
     super(message);
-    this.name = "ProofEnqueueServiceError";
-    this.code = code;
+
+    this.name =
+      "ProofEnqueueServiceError";
+
+    this.code =
+      code;
   }
 }
 
 export async function enqueueMessageProof(
   dependencies: ProofEnqueueServiceDependencies,
   input: EnqueueMessageProofInput,
+): Promise<EnqueueMessageProofResult> {
+  return enqueueMessageProofInternal(
+    dependencies,
+    input,
+  );
+}
+
+export async function enqueueAuthenticatedMessageProof(
+  dependencies:
+    AuthenticatedProofEnqueueServiceDependencies,
+  input:
+    AuthenticatedEnqueueMessageProofInput,
+): Promise<EnqueueMessageProofResult> {
+  return enqueueMessageProofInternal(
+    dependencies,
+    input,
+    {
+      provider:
+        input.identityProvider,
+
+      subject:
+        input.authenticatedSubject,
+
+      secret:
+        dependencies.accessSecret,
+    },
+  );
+}
+
+async function enqueueMessageProofInternal(
+  dependencies: ProofEnqueueServiceDependencies,
+  input: EnqueueMessageProofInput,
+  identity?: EnqueueIdentity,
 ): Promise<EnqueueMessageProofResult> {
   const idempotencyKey =
     requireIdempotencyKey(
@@ -171,13 +247,38 @@ export async function enqueueMessageProof(
       maxAttempts: 3,
     });
 
+  const access =
+    identity === undefined
+      ? undefined
+      : createProofJobAccessRecord({
+          jobId,
+
+          subjectHash:
+            deriveProofJobSubjectHash(
+              identity.secret,
+              identity.provider,
+              identity.subject,
+              jobId,
+            ),
+
+          createdAtMs:
+            nowMs,
+        });
+
   const result =
     await createOrGetProofEnqueue(
       dependencies.repository,
       {
         job,
+
         payload:
           encryptedPayload,
+
+        ...(access === undefined
+          ? {}
+          : {
+              access,
+            }),
       },
     );
 

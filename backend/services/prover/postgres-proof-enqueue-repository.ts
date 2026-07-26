@@ -21,6 +21,14 @@ import {
   PostgresProofPayloadRepository,
 } from "./postgres-proof-payload-repository.js";
 
+import {
+  createOrGetProofJobAccess,
+} from "../security/proof-job-access-repository.js";
+
+import {
+  PostgresProofJobAccessRepository,
+} from "../security/postgres-proof-job-access-repository.js";
+
 const QUEUE_ADMISSION_LOCK_SQL = `
 SELECT pg_advisory_xact_lock($1, $2)
 `;
@@ -59,7 +67,9 @@ implements ProofEnqueueRepository {
       );
     }
 
-    this.#provider = provider;
+    this.#provider =
+      provider;
+
     this.#maxQueuedJobs =
       maxQueuedJobs;
   }
@@ -94,6 +104,28 @@ implements ProofEnqueueRepository {
             scopedProvider,
           );
 
+        const accessRepository =
+          new PostgresProofJobAccessRepository(
+            scopedProvider,
+          );
+
+        const requestedAccess =
+          input.access;
+
+        const bindAccess =
+          async () => {
+            if (
+              requestedAccess === undefined
+            ) {
+              return undefined;
+            }
+
+            return createOrGetProofJobAccess(
+              accessRepository,
+              requestedAccess,
+            );
+          };
+
         const jobResult =
           await createOrGetProofJob(
             jobRepository,
@@ -113,7 +145,7 @@ implements ProofEnqueueRepository {
 
           if (
             queuedJobs
-            > this.#maxQueuedJobs
+              > this.#maxQueuedJobs
           ) {
             throw new ProofEnqueueRepositoryError(
               "PROOF_ENQUEUE_QUEUE_FULL",
@@ -133,6 +165,9 @@ implements ProofEnqueueRepository {
             );
           }
 
+          const accessResult =
+            await bindAccess();
+
           return Object.freeze({
             created:
               true,
@@ -142,6 +177,13 @@ implements ProofEnqueueRepository {
 
             payload:
               payloadResult.payload,
+
+            ...(accessResult === undefined
+              ? {}
+              : {
+                  access:
+                    accessResult.access,
+                }),
           });
         }
 
@@ -157,6 +199,9 @@ implements ProofEnqueueRepository {
           );
         }
 
+        const accessResult =
+          await bindAccess();
+
         return Object.freeze({
           created:
             false,
@@ -166,6 +211,13 @@ implements ProofEnqueueRepository {
 
           payload:
             storedPayload,
+
+          ...(accessResult === undefined
+            ? {}
+            : {
+                access:
+                  accessResult.access,
+              }),
         });
       },
     );
@@ -217,7 +269,8 @@ implements PostgresTransactionProvider {
   constructor(
     executor: PostgresQueryExecutor,
   ) {
-    this.#executor = executor;
+    this.#executor =
+      executor;
   }
 
   query<

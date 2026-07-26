@@ -272,3 +272,54 @@ test(
     );
   },
 );
+
+
+test(
+  "PostgreSQL preserves the original access creation time on retry",
+  async () => {
+    const existing =
+      accessRecord({
+        createdAtMs:
+          1_000,
+      });
+
+    const requested =
+      accessRecord({
+        createdAtMs:
+          2_000,
+      });
+
+    const provider =
+      new ScriptedProvider([
+        result(),
+        result(
+          databaseRow(existing),
+        ),
+      ]);
+
+    const repository =
+      new PostgresProofJobAccessRepository(
+        provider,
+      );
+
+    const repeated =
+      await repository.createOrGet(
+        requested,
+      );
+
+    assert.equal(
+      repeated.created,
+      false,
+    );
+
+    assert.equal(
+      repeated.access.createdAtMs,
+      1_000,
+    );
+
+    assert.equal(
+      repeated.access.subjectHash,
+      requested.subjectHash,
+    );
+  },
+);
