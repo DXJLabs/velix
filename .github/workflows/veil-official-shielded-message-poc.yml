@@ -108,6 +108,7 @@ jobs:
           packages/veil-sdk/tests/veil-poc-identity.test.mjs
           packages/veil-sdk/tests/veil-official-shielded-message-poc.test.mjs
           packages/veil-sdk/tests/veil-official-shielded-message-runner.test.mjs
+          packages/veil-sdk/tests/veil-durable-message-fixture.test.mjs
 
       - name: Estimate shielded-message resources before prover start
         if: ${{ inputs.generate_proof }}
@@ -203,11 +204,14 @@ jobs:
           VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
           VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH: ${{ github.workspace }}/veil-shielded-message-summary.json
           VEIL_POC_SHIELDED_MESSAGE_ERROR_PATH: ${{ github.workspace }}/veil-shielded-message-error.json
+          VEIL_POC_DURABLE_FIXTURE_PATH: ${{ github.workspace }}/veil-real-message-proof-fixture.json
         run: |
           set -euo pipefail
           rm -f \
             "$GITHUB_WORKSPACE/veil-shielded-message-summary.json" \
-            "$GITHUB_WORKSPACE/veil-shielded-message-error.json"
+            "$GITHUB_WORKSPACE/veil-shielded-message-error.json" \
+            "$GITHUB_WORKSPACE/veil-real-message-proof-fixture.json" \
+            "$GITHUB_WORKSPACE/veil-real-message-proof-fixture.b64"
           timeout 300m node --experimental-strip-types \
             tools/veil-official-shielded-message-runner.ts
 
@@ -288,6 +292,106 @@ jobs:
           console.log(summary.executionStatus);
           NODE
 
+
+      - name: Validate and encode durable message proof fixture
+        if: ${{ inputs.generate_proof }}
+        shell: bash
+        env:
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+          VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
+        run: |
+          set -euo pipefail
+
+          fixture="$GITHUB_WORKSPACE/veil-real-message-proof-fixture.json"
+          encoded="$GITHUB_WORKSPACE/veil-real-message-proof-fixture.b64"
+
+          if [ ! -s "$fixture" ]; then
+            echo "veil-real-message-proof-fixture.json is missing or empty."
+            exit 1
+          fi
+
+          node --input-type=module - \
+            "$fixture" \
+            "$ACCOUNT_PRIVATE_KEY" \
+            "$VIEWING_KEY" \
+            <<'NODE'
+          import {
+            readFile,
+          } from "node:fs/promises";
+
+          const [
+            fixturePath,
+            privateKey,
+            viewingKey,
+          ] = process.argv.slice(2);
+
+          const serialized =
+            await readFile(
+              fixturePath,
+              "utf8",
+            );
+
+          const fixture =
+            JSON.parse(
+              serialized,
+            );
+
+          const expectedKeys = [
+            "schemaVersion",
+            "idempotencyKey",
+            "authenticatedSubject",
+            "request",
+          ];
+
+          if (
+            JSON.stringify(
+              Object.keys(fixture),
+            )
+            !== JSON.stringify(
+              expectedKeys,
+            )
+            || fixture.schemaVersion
+              !== "veil-real-message-proof-fixture-v1"
+          ) {
+            throw new Error(
+              "The durable message proof fixture schema is invalid.",
+            );
+          }
+
+          for (
+            const sensitive
+            of [
+              privateKey,
+              viewingKey,
+              "VEIL_PRIVATE_MESSAGE_POC_V1",
+            ]
+          ) {
+            if (
+              sensitive
+              && serialized.includes(
+                sensitive,
+              )
+            ) {
+              throw new Error(
+                "The durable message proof fixture contains sensitive material.",
+              );
+            }
+          }
+
+          console.log(
+            "DURABLE_MESSAGE_PROOF_FIXTURE_SAFE",
+          );
+          NODE
+
+          base64 -w 0 "$fixture" \
+            > "$encoded"
+
+          chmod 600 \
+            "$fixture" \
+            "$encoded"
+
+          echo "DURABLE_MESSAGE_PROOF_FIXTURE_BASE64_READY"
+
       - name: Ensure dry-run emitted no proof artifact
         if: ${{ !inputs.generate_proof }}
         shell: bash
@@ -295,6 +399,11 @@ jobs:
           set -euo pipefail
           if [ -e "$GITHUB_WORKSPACE/veil-shielded-message-summary.json" ]; then
             echo "Proof summary was created while generate_proof=false."
+            exit 1
+          fi
+
+          if [ -e "$GITHUB_WORKSPACE/veil-real-message-proof-fixture.json" ]; then
+            echo "Durable proof fixture was created while generate_proof=false."
             exit 1
           fi
           echo "OFFICIAL_SDK_SHIELDED_MESSAGE_DRY_RUN_VALID"
@@ -318,6 +427,8 @@ jobs:
             veil-account-preflight.json
             veil-shielded-message-summary.json
             veil-shielded-message-error.json
+            veil-real-message-proof-fixture.json
+            veil-real-message-proof-fixture.b64
             veil-shielded-prover.log
           if-no-files-found: ignore
           retention-days: 7

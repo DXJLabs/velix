@@ -69,6 +69,10 @@ import {
   loadVeilPocIdentityConfig,
 } from "./veil-poc-identity.ts";
 import type { VeilPocIdentityConfig } from "./veil-poc-identity.ts";
+import {
+  createDurableMessageProofFixture,
+  writeDurableMessageProofFixture,
+} from "./veil-durable-message-fixture.ts";
 
 export const SHIELDED_MESSAGE_IDENTITY_VALID =
   "SHIELDED_MESSAGE_IDENTITY_CONFIG_VALID";
@@ -83,9 +87,9 @@ export const MESSAGE_STORAGE_VERIFIED = "MESSAGE_STORAGE_VERIFIED";
 export const LOCAL_DECRYPT_VERIFIED = "LOCAL_DECRYPT_VERIFIED";
 
 export const SEPOLIA_HELPER_ADDRESS =
-  "0x69ba6f9f8651ef29d3227114c0b839d76671b8f66620840933f76996cec1359";
+  "0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23";
 export const SEPOLIA_HELPER_CLASS_HASH =
-  "0x2a7b116fd1e7954b019fe02d91fdfb67166a80597bd6f7699bf07374032ee37";
+  "0x7892efb93c77260c410d2e3e29cf6a28421d8e1ab0c688ffaf64304e7e47d97";
 export const DEFAULT_SHIELDED_MESSAGE_SUMMARY_PATH =
   "veil-shielded-message-summary.json";
 
@@ -150,6 +154,7 @@ export interface ShieldedMessageProofExecutorInput {
 export interface ShieldedMessageProofExecution {
   result: ExecuteResult;
   provingResourceBounds: ProofResourceBounds;
+  proofInvocation?: ProofInvocation;
 }
 
 export interface ShieldedMessageProofExecutor {
@@ -986,7 +991,12 @@ export const officialShieldedMessageProofExecutor: ShieldedMessageProofExecutor 
       finalInvocation.invocation,
       provingResourceBounds,
     );
-    return { result, provingResourceBounds };
+    return {
+      result,
+      provingResourceBounds,
+      proofInvocation:
+        finalInvocation.invocation,
+    };
   },
 };
 
@@ -1351,6 +1361,47 @@ export async function runVeilOfficialShieldedMessagePoc(
     ...proofInput,
   });
   const { result } = proofExecution;
+  const durableFixturePath =
+    env.VEIL_POC_DURABLE_FIXTURE_PATH
+      ?.trim();
+
+  if (durableFixturePath) {
+    if (!proofExecution.proofInvocation) {
+      throw new Error(
+        "The official proof executor returned no proof invocation for durable export.",
+      );
+    }
+
+    const fixture =
+      createDurableMessageProofFixture({
+        prepared,
+        provingBlockId,
+
+        helperAddress:
+          feltHex(
+            config.helperAddress,
+          ),
+
+        invocation:
+          proofExecution
+            .proofInvocation,
+
+        sensitiveValues,
+      });
+
+    await writeDurableMessageProofFixture({
+      path:
+        durableFixturePath,
+
+      fixture,
+      sensitiveValues,
+    });
+
+    console.log(
+      "DURABLE_MESSAGE_PROOF_FIXTURE_WRITTEN",
+    );
+  }
+
   let summary = createShieldedMessageProofSummary({
     config,
     provingBlockId,
