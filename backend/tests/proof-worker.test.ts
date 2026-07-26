@@ -81,7 +81,7 @@ test(
       },
 
       results: {
-        async persist() {
+        async finalize() {
           throw new Error("not used");
         },
       },
@@ -259,7 +259,7 @@ test(
       },
 
       results: {
-        async persist() {
+        async finalize() {
           throw new Error("not used");
         },
       },
@@ -414,7 +414,7 @@ test(
           },
 
           results: {
-            async persist() {
+            async finalize() {
               throw new Error("not used");
             },
           },

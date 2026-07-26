@@ -1156,9 +1156,9 @@ test(
           },
 
           results: {
-            async persist(input) {
+            async finalize(input) {
               assert.equal(
-                input.job.jobId,
+                input.currentJob.jobId,
                 claimed.jobId,
               );
 
@@ -1168,11 +1168,14 @@ test(
               );
 
               storedResultReference =
-                "proof_result_0001";
+                input.result.resultReference;
 
               return {
-                resultReference:
-                  storedResultReference,
+                job:
+                  input.completedJob,
+
+                result:
+                  input.result,
               };
             },
           },
@@ -1226,9 +1229,9 @@ test(
       1,
     );
 
-    assert.equal(
-      storedResultReference,
-      "proof_result_0001",
+    assert.match(
+      storedResultReference ?? "",
+      /^result_[0-9a-f]{64}$/u,
     );
   },
 );

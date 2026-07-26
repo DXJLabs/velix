@@ -3,7 +3,10 @@
     "declaration": true,
     "declarationMap": true,
     "exactOptionalPropertyTypes": true,
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noUncheckedIndexedAccess": true,
@@ -12,8 +15,16 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2022",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "verbatimModuleSyntax": true
   },
-  "include": ["config/**/*.ts", "services/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "config/**/*.ts",
+    "services/**/*.ts",
+    "tests/**/*.ts",
+    "worker/**/*.ts",
+    "integration/**/*.ts"
+  ]
 }

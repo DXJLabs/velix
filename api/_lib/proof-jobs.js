@@ -35,6 +35,14 @@ import {
 } from "../../backend/dist/services/prover/proof-job-status.js";
 
 import {
+  readAuthorizedProofResult,
+} from "../../backend/dist/services/prover/proof-result-access.js";
+
+import {
+  PostgresProofResultRepository,
+} from "../../backend/dist/services/prover/postgres-proof-result-repository.js";
+
+import {
   PostgresProofJobAccessRepository,
 } from "../../backend/dist/services/security/postgres-proof-job-access-repository.js";
 
@@ -48,7 +56,7 @@ import {
 
 const SERVICE_CACHE =
   Symbol.for(
-    "veil.api.proof-jobs.v1",
+    "veil.api.proof-jobs.v2",
   );
 
 export async function enqueueAuthenticatedProofJob(
@@ -127,11 +135,49 @@ export async function readAuthenticatedProofJobStatus(
   );
 }
 
+export async function readAuthenticatedProofResult(
+  input,
+) {
+  const services =
+    proofJobServices();
+
+  return readAuthorizedProofResult(
+    {
+      jobs:
+        services.jobRepository,
+
+      access:
+        services.accessRepository,
+
+      results:
+        services.resultRepository,
+
+      keyring:
+        services.keyring,
+
+      accessSecret:
+        services.accessSecret,
+    },
+    {
+      identityProvider:
+        "privy",
+
+      authenticatedSubject:
+        input.authenticatedSubject,
+
+      jobId:
+        input.jobId,
+    },
+  );
+}
+
 export function asProofJobApiError(
   error,
   context,
 ) {
-  if (error instanceof ApiError) {
+  if (
+    error instanceof ApiError
+  ) {
     return error;
   }
 
@@ -150,6 +196,32 @@ export function asProofJobApiError(
       context.route,
       "The requested proof job was not found.",
       "Confirm the job identifier and use the same authenticated account that created it.",
+    );
+  }
+
+  if (
+    code
+      === "PROOF_RESULT_NOT_READY"
+  ) {
+    return new ApiError(
+      409,
+      code,
+      context.route,
+      "The durable proof result is not ready.",
+      "Read the private proving status and retry after the job reaches succeeded.",
+    );
+  }
+
+  if (
+    code
+      === "PROOF_RESULT_UNAVAILABLE"
+  ) {
+    return new ApiError(
+      409,
+      code,
+      context.route,
+      "The durable proof job cannot provide a proof result.",
+      "Inspect the private job status and submit a new idempotent proof request only when retryable.",
     );
   }
 
@@ -223,10 +295,11 @@ export function asProofJobApiError(
   ) {
     return new ApiError(
       503,
-      code || "PROOF_JOB_STORAGE_UNAVAILABLE",
+      code
+        || "PROOF_JOB_STORAGE_UNAVAILABLE",
       context.route,
       "The durable proof job boundary is unavailable.",
-      "Retry later after the server database and proof queue configuration have recovered.",
+      "Retry later after the server database, proof queue, and encrypted result storage have recovered.",
     );
   }
 
@@ -247,7 +320,9 @@ export function asProofJobApiError(
 }
 
 function proofJobServices() {
-  if (globalThis[SERVICE_CACHE]) {
+  if (
+    globalThis[SERVICE_CACHE]
+  ) {
     return globalThis[SERVICE_CACHE];
   }
 
@@ -275,6 +350,11 @@ function proofJobServices() {
 
       accessRepository:
         new PostgresProofJobAccessRepository(
+          provider,
+        ),
+
+      resultRepository:
+        new PostgresProofResultRepository(
           provider,
         ),
 

@@ -14,6 +14,15 @@ import {
 } from "./proof-job.js";
 
 import {
+  encryptProofResult,
+} from "./proof-result.js";
+
+import {
+  finalizeProofSuccess,
+  type ProofSuccessFinalizer,
+} from "./proof-success-finalizer.js";
+
+import {
   claimNextProofJob,
   persistProofJobTransition,
   recoverExpiredProofJobs,
@@ -33,16 +42,6 @@ export interface ProofExecutor {
   ): Promise<TransactionProofResult>;
 }
 
-export interface ProofResultWriter {
-  persist(input: {
-    readonly job: ProofJobRecord;
-    readonly result: TransactionProofResult;
-    readonly nowMs: number;
-  }): Promise<{
-    readonly resultReference: string;
-  }>;
-}
-
 export interface ProofWorkerDependencies {
   readonly jobs:
     ProofJobRepository
@@ -55,7 +54,7 @@ export interface ProofWorkerDependencies {
     ProofExecutor;
 
   readonly results:
-    ProofResultWriter;
+    ProofSuccessFinalizer;
 
   readonly keyring:
     ProofPayloadKeyring;
@@ -552,16 +551,12 @@ export async function executeClaimedProofJob(
       ),
     );
 
-  const result =
+  const proof =
     await dependencies.prover.prove(
       request,
       heartbeat.signal,
     );
 
-  /*
-   * Stop and await heartbeat activity before creating the terminal
-   * transition. This provides the latest durable job revision.
-   */
   const activeJob =
     await heartbeat.stop();
 
@@ -571,22 +566,37 @@ export async function executeClaimedProofJob(
         ?? Date.now(),
     );
 
-  /*
-   * Proof bytes are stored outside the job table. The job receives only
-   * the opaque result reference returned by the durable result writer.
-   */
-  const persistedResult =
-    await dependencies.results.persist({
-      job:
-        activeJob,
+  const keyVersion =
+    dependencies.keyring
+      .activeKeyVersion;
 
-      result,
+  const key =
+    dependencies.keyring
+      .resolveKey(
+        keyVersion,
+      );
 
-      nowMs:
-        completedAtMs,
-    });
+  const encryptedResult = (() => {
+    try {
+      return encryptProofResult({
+        job:
+          activeJob,
 
-  const completed =
+        result:
+          proof,
+
+        keyVersion,
+        key,
+
+        nowMs:
+          completedAtMs,
+      });
+    } finally {
+      key.fill(0);
+    }
+  })();
+
+  const completedJob =
     completeProofJobSuccess(
       activeJob,
       {
@@ -594,7 +604,7 @@ export async function executeClaimedProofJob(
           input.leaseOwnerHash,
 
         resultReference:
-          persistedResult
+          encryptedResult
             .resultReference,
 
         nowMs:
@@ -602,11 +612,18 @@ export async function executeClaimedProofJob(
       },
     );
 
-  const stored =
-    await persistProofJobTransition(
-      dependencies.jobs,
-      activeJob,
-      completed,
+  const finalized =
+    await finalizeProofSuccess(
+      dependencies.results,
+      {
+        currentJob:
+          activeJob,
+
+        completedJob,
+
+        result:
+          encryptedResult,
+      },
     );
 
   return Object.freeze({
@@ -617,13 +634,13 @@ export async function executeClaimedProofJob(
       "succeeded",
 
     jobId:
-      stored.jobId,
+      finalized.job.jobId,
 
     state:
-      stored.state,
+      finalized.job.state,
 
     attempts:
-      stored.attempts,
+      finalized.job.attempts,
   });
 }
 
@@ -731,6 +748,38 @@ export async function runProofWorkerOnce(
         heartbeat.current();
     }
 
+    const latest =
+      await dependencies.jobs
+        .getById(
+          activeJob.jobId,
+        );
+
+    if (
+      latest !== null
+    ) {
+      if (
+        latest.state
+          !== "running"
+      ) {
+        return workerResultFromStoredJob(
+          latest,
+        );
+      }
+
+      if (
+        latest.leaseOwnerHash
+          !== input.leaseOwnerHash
+      ) {
+        throw workerError(
+          "PROOF_WORKER_LEASE_LOST",
+          "The proof worker no longer owns the durable job lease.",
+        );
+      }
+
+      activeJob =
+        latest;
+    }
+
     const failure =
       normalizeWorkerFailure(
         failureSource,
@@ -765,34 +814,67 @@ export async function runProofWorkerOnce(
         },
       );
 
-    const stored =
-      await persistProofJobTransition(
-        dependencies.jobs,
-        activeJob,
-        next,
+    try {
+      const stored =
+        await persistProofJobTransition(
+          dependencies.jobs,
+          activeJob,
+          next,
+        );
+
+      return workerResultFromStoredJob(
+        stored,
       );
+    } catch (transitionError) {
+      const refreshed =
+        await dependencies.jobs
+          .getById(
+            activeJob.jobId,
+          );
 
-    return Object.freeze({
-      schemaVersion:
-        "veil-proof-worker-result-v1",
+      if (
+        refreshed !== null
+        && refreshed.state
+          !== "running"
+      ) {
+        return workerResultFromStoredJob(
+          refreshed,
+        );
+      }
 
-      outcome:
-        stored.state === "queued"
-          ? "requeued"
-          : stored.state === "cancelled"
-            ? "cancelled"
-            : "failed",
-
-      jobId:
-        stored.jobId,
-
-      state:
-        stored.state,
-
-      attempts:
-        stored.attempts,
-    });
+      throw transitionError;
+    }
   }
+}
+
+function workerResultFromStoredJob(
+  job: ProofJobRecord,
+): ProofWorkerResult {
+  const outcome:
+    ProofWorkerOutcome =
+      job.state === "succeeded"
+        ? "succeeded"
+        : job.state === "queued"
+          ? "requeued"
+          : job.state === "cancelled"
+            ? "cancelled"
+            : "failed";
+
+  return Object.freeze({
+    schemaVersion:
+      "veil-proof-worker-result-v1",
+
+    outcome,
+
+    jobId:
+      job.jobId,
+
+    state:
+      job.state,
+
+    attempts:
+      job.attempts,
+  });
 }
 
 
