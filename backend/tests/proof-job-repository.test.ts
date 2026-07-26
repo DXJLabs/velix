@@ -157,6 +157,24 @@ class TestProofJobRepository
   async claimNextAvailable(
     input: ProofJobAtomicClaimInput,
   ): Promise<ProofJobRecord | null> {
+    const runningJobs =
+      [...this.#byId.values()]
+        .filter(
+          (job) =>
+            job.state === "running"
+            && job.leaseExpiresAtMs !== null
+            && job.leaseExpiresAtMs
+              > input.nowMs,
+        )
+        .length;
+
+    if (
+      runningJobs
+      >= input.maxRunningJobs
+    ) {
+      return null;
+    }
+
     const candidates =
       [...this.#byId.values()]
         .filter(
@@ -376,6 +394,9 @@ test(
 
           leaseDurationMs:
             5_000,
+
+          maxRunningJobs:
+            1,
         },
       );
 
@@ -391,6 +412,9 @@ test(
 
           leaseDurationMs:
             5_000,
+
+          maxRunningJobs:
+            1,
         },
       );
 
@@ -479,6 +503,108 @@ test(
         && "code" in error
         && error.code
           === "PROOF_JOB_IMMUTABLE_FIELD_CHANGED",
+    );
+  },
+);
+
+
+test(
+  "atomic claim respects the active running-job limit",
+  async () => {
+    const repository =
+      new TestProofJobRepository();
+
+    const firstJob =
+      createJob(
+        "008",
+        "e",
+        "f",
+      );
+
+    const secondJob =
+      createJob(
+        "009",
+        "0",
+        "1",
+      );
+
+    await createOrGetProofJob(
+      repository,
+      firstJob,
+    );
+
+    await createOrGetProofJob(
+      repository,
+      secondJob,
+    );
+
+    const first =
+      await claimNextProofJob(
+        repository,
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+
+          maxRunningJobs:
+            1,
+        },
+      );
+
+    const blocked =
+      await claimNextProofJob(
+        repository,
+        {
+          leaseOwnerHash:
+            OTHER_OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+
+          maxRunningJobs:
+            1,
+        },
+      );
+
+    assert.equal(
+      first?.state,
+      "running",
+    );
+
+    assert.equal(
+      blocked,
+      null,
+    );
+
+    const afterLeaseExpiry =
+      await claimNextProofJob(
+        repository,
+        {
+          leaseOwnerHash:
+            OTHER_OWNER,
+
+          nowMs:
+            7_000,
+
+          leaseDurationMs:
+            5_000,
+
+          maxRunningJobs:
+            1,
+        },
+      );
+
+    assert.equal(
+      afterLeaseExpiry?.jobId,
+      secondJob.jobId,
     );
   },
 );

@@ -62,6 +62,7 @@ export interface ProofWorkerDependencies {
 export interface RunProofWorkerInput {
   readonly leaseOwnerHash: string;
   readonly leaseDurationMs: number;
+  readonly maxRunningJobs: number;
   readonly signal?: AbortSignal;
 }
 
@@ -349,6 +350,9 @@ export async function runProofWorkerOnce(
 
         leaseDurationMs:
           input.leaseDurationMs,
+
+        maxRunningJobs:
+          input.maxRunningJobs,
 
         nowMs:
           requireWorkerTimestamp(

@@ -16,6 +16,8 @@ export interface ProofJobCompareAndSwapInput {
 
 export interface ProofJobAtomicClaimInput
   extends ClaimProofJobInput {
+  readonly maxRunningJobs: number;
+
   /*
    * The repository must choose one eligible job atomically using:
    * availableAtMs, createdAtMs, then jobId as the stable ordering.
@@ -175,6 +177,19 @@ export async function claimNextProofJob(
   repository: ProofJobRepository,
   input: ProofJobAtomicClaimInput,
 ): Promise<ProofJobRecord | null> {
+  if (
+    !Number.isSafeInteger(
+      input.maxRunningJobs,
+    )
+    || input.maxRunningJobs < 1
+    || input.maxRunningJobs > 32
+  ) {
+    throw repositoryError(
+      "PROOF_JOB_CONCURRENCY_LIMIT_INVALID",
+      "The proof worker concurrency limit is invalid.",
+    );
+  }
+
   const claimed =
     await repository
       .claimNextAvailable(input);

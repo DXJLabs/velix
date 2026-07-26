@@ -100,15 +100,40 @@ WHERE job_id = $1
 RETURNING *
 `;
 
+const CLAIM_CAPACITY_LOCK_SQL = `
+SELECT pg_advisory_xact_lock($1, $2)
+`;
+
+const CLAIM_CAPACITY_LOCK_NAMESPACE =
+  1_447_381_324;
+
+const CLAIM_CAPACITY_LOCK_KEY =
+  1;
+
 const CLAIM_NEXT_SQL = `
-WITH candidate AS (
-  SELECT job_id
+WITH capacity AS (
+  SELECT
+    COUNT(*)::integer
+      AS active_running_jobs
   FROM veil_proof_jobs
-  WHERE state = 'queued'
-    AND available_at_ms <= $1
-    AND attempts < max_attempts
-  ORDER BY available_at_ms, created_at_ms, job_id
-  FOR UPDATE SKIP LOCKED
+  WHERE state = 'running'
+    AND lease_expires_at_ms > $1
+),
+candidate AS (
+  SELECT queued.job_id
+  FROM veil_proof_jobs AS queued
+  CROSS JOIN capacity
+  WHERE queued.state = 'queued'
+    AND queued.available_at_ms <= $1
+    AND queued.attempts
+      < queued.max_attempts
+    AND capacity.active_running_jobs
+      < $4
+  ORDER BY
+    queued.available_at_ms,
+    queued.created_at_ms,
+    queued.job_id
+  FOR UPDATE OF queued SKIP LOCKED
   LIMIT 1
 )
 UPDATE veil_proof_jobs AS jobs
@@ -271,18 +296,47 @@ export class PostgresProofJobRepository implements ProofJobRepository {
       );
     }
 
-    const result = await this.#provider.query<DatabaseRow>(
-      CLAIM_NEXT_SQL,
-      [
-        input.nowMs,
-        input.leaseOwnerHash,
-        input.leaseDurationMs,
-      ],
+    if (
+      !Number.isSafeInteger(
+        input.maxRunningJobs,
+      )
+      || input.maxRunningJobs < 1
+      || input.maxRunningJobs > 32
+    ) {
+      throw new TypeError(
+        "maxRunningJobs is outside the allowed range.",
+      );
+    }
+
+    return this.#provider.transaction(
+      async (executor) => {
+        await executor.query<DatabaseRow>(
+          CLAIM_CAPACITY_LOCK_SQL,
+          [
+            CLAIM_CAPACITY_LOCK_NAMESPACE,
+            CLAIM_CAPACITY_LOCK_KEY,
+          ],
+        );
+
+        const result =
+          await executor.query<DatabaseRow>(
+            CLAIM_NEXT_SQL,
+            [
+              input.nowMs,
+              input.leaseOwnerHash,
+              input.leaseDurationMs,
+              input.maxRunningJobs,
+            ],
+          );
+
+        const row =
+          singleRow(result.rows);
+
+        return row === null
+          ? null
+          : mapRow(row);
+      },
     );
-
-    const row = singleRow(result.rows);
-
-    return row === null ? null : mapRow(row);
   }
 }
 

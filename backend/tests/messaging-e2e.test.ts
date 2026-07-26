@@ -1193,6 +1193,9 @@ test(
 
           leaseDurationMs:
             10_000,
+
+          maxRunningJobs:
+            1,
         },
       );
 

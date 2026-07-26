@@ -231,6 +231,7 @@ test(
 
     const provider =
       new ScriptedProvider([
+        result({}),
         result(databaseRow(running)),
       ]);
 
@@ -246,6 +247,7 @@ test(
           leaseOwnerHash: OWNER,
           nowMs: 1_000,
           leaseDurationMs: 5_000,
+          maxRunningJobs: 1,
         },
       );
 
@@ -254,22 +256,40 @@ test(
       "running",
     );
 
-    const sql =
+    const lockSql =
       provider.queries[0]?.text ?? "";
 
-    assert.match(
-      sql,
-      /FOR UPDATE SKIP LOCKED/u,
+    const claimSql =
+      provider.queries[1]?.text ?? "";
+
+    assert.equal(
+      provider.transactionCount,
+      1,
     );
 
     assert.match(
-      sql,
-      /available_at_ms/u,
+      lockSql,
+      /pg_advisory_xact_lock/u,
     );
 
     assert.match(
-      sql,
-      /created_at_ms/u,
+      claimSql,
+      /FOR UPDATE OF queued SKIP LOCKED/u,
+    );
+
+    assert.match(
+      claimSql,
+      /active_running_jobs/u,
+    );
+
+    assert.match(
+      claimSql,
+      /lease_expires_at_ms > \$1/u,
+    );
+
+    assert.equal(
+      provider.queries[1]?.values[3],
+      1,
     );
   },
 );

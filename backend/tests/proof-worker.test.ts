@@ -88,6 +88,9 @@ test(
 
           leaseDurationMs:
             10_000,
+
+          maxRunningJobs:
+            1,
         },
       );
 
@@ -241,6 +244,7 @@ test(
         {
           leaseOwnerHash,
           leaseDurationMs: 10_000,
+          maxRunningJobs: 1,
         },
       );
 
@@ -382,6 +386,7 @@ test(
         {
           leaseOwnerHash,
           leaseDurationMs: 10_000,
+          maxRunningJobs: 1,
         },
       );
 
