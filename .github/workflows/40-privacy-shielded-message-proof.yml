@@ -122,10 +122,12 @@ jobs:
           VEIL_POC_GENERATE_PROOF: "true"
           VEIL_POC_SUBMIT_ONCHAIN: "false"
           VEIL_POC_RESOURCE_ESTIMATE_ONLY: "true"
-          VEIL_POC_SHIELDED_MESSAGE_ERROR_PATH: ${{ runner.temp }}/veil-resource-estimate-error.json
+          VEIL_POC_SHIELDED_MESSAGE_ERROR_PATH: ${{ github.workspace }}/veil-shielded-message-error.json
         run: |
           set -euo pipefail
-          rm -f "$RUNNER_TEMP/veil-resource-estimate-error.json"
+          error_path="$GITHUB_WORKSPACE/veil-shielded-message-error.json"
+          rm -f "$error_path"
+          trap 'if [ -s "$error_path" ]; then echo "SAFE_RESOURCE_ESTIMATE_DIAGNOSTIC"; cat "$error_path"; fi' EXIT
           node --experimental-strip-types \
             tools/veil-official-shielded-message-runner.ts
 
