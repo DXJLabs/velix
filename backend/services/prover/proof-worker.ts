@@ -16,6 +16,8 @@ import {
 import {
   claimNextProofJob,
   persistProofJobTransition,
+  recoverExpiredProofJobs,
+  type ProofJobRecoveryRepository,
   type ProofJobRepository,
 } from "./proof-job-repository.js";
 
@@ -42,7 +44,8 @@ export interface ProofResultWriter {
 
 export interface ProofWorkerDependencies {
   readonly jobs:
-    ProofJobRepository;
+    ProofJobRepository
+    & ProofJobRecoveryRepository;
 
   readonly payloads:
     ProofPayloadRepository;
@@ -63,6 +66,7 @@ export interface RunProofWorkerInput {
   readonly leaseOwnerHash: string;
   readonly leaseDurationMs: number;
   readonly maxRunningJobs: number;
+  readonly recoveryBatchSize: number;
   readonly signal?: AbortSignal;
 }
 
@@ -341,6 +345,22 @@ export async function runProofWorkerOnce(
   dependencies: ProofWorkerDependencies,
   input: RunProofWorkerInput,
 ): Promise<ProofWorkerResult> {
+  const nowMs =
+    requireWorkerTimestamp(
+      dependencies.now?.()
+        ?? Date.now(),
+    );
+
+  await recoverExpiredProofJobs(
+    dependencies.jobs,
+    {
+      nowMs,
+
+      limit:
+        input.recoveryBatchSize,
+    },
+  );
+
   const claimed =
     await claimNextProofJob(
       dependencies.jobs,
@@ -354,11 +374,7 @@ export async function runProofWorkerOnce(
         maxRunningJobs:
           input.maxRunningJobs,
 
-        nowMs:
-          requireWorkerTimestamp(
-            dependencies.now?.()
-              ?? Date.now(),
-          ),
+        nowMs,
       },
     );
 

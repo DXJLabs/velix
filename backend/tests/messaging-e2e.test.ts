@@ -1095,6 +1095,13 @@ test(
               return null;
             },
 
+            async recoverExpired() {
+
+              return [];
+
+            },
+
+
             async claimNextAvailable() {
               return claimed;
             },
@@ -1196,6 +1203,10 @@ test(
 
           maxRunningJobs:
             1,
+
+
+          recoveryBatchSize:
+            50,
         },
       );
 

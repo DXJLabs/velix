@@ -15,6 +15,8 @@ import {
 test(
   "proof worker returns idle when no queued job is available",
   async () => {
+    const calls: string[] = [];
+
     const dependencies = {
       jobs: {
         async createOrGetByIdempotency() {
@@ -33,7 +35,22 @@ test(
           throw new Error("not used");
         },
 
+        async recoverExpired(input) {
+          calls.push("recover");
+
+          assert.deepEqual(
+            input,
+            {
+              nowMs: 1_000,
+              limit: 50,
+            },
+          );
+
+          return [];
+        },
+
         async claimNextAvailable() {
+          calls.push("claim");
           return null;
         },
       },
@@ -91,8 +108,20 @@ test(
 
           maxRunningJobs:
             1,
+
+
+          recoveryBatchSize:
+            50,
         },
       );
+
+    assert.deepEqual(
+      calls,
+      [
+        "recover",
+        "claim",
+      ],
+    );
 
     assert.deepEqual(
       result,
@@ -174,6 +203,13 @@ test(
           return null;
         },
 
+        async recoverExpired() {
+
+          return [];
+
+        },
+
+
         async claimNextAvailable() {
           return claimed;
         },
@@ -245,6 +281,8 @@ test(
           leaseOwnerHash,
           leaseDurationMs: 10_000,
           maxRunningJobs: 1,
+
+          recoveryBatchSize: 50,
         },
       );
 
@@ -332,6 +370,13 @@ test(
               return null;
             },
 
+            async recoverExpired() {
+
+              return [];
+
+            },
+
+
             async claimNextAvailable() {
               return cancelling;
             },
@@ -387,6 +432,8 @@ test(
           leaseOwnerHash,
           leaseDurationMs: 10_000,
           maxRunningJobs: 1,
+
+          recoveryBatchSize: 50,
         },
       );
 
