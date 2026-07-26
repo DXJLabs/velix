@@ -42,7 +42,9 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/veil
       STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
-      VEIL_REAL_MESSAGE_FIXTURE_B64: ${{ secrets.VEIL_REAL_MESSAGE_FIXTURE_B64 }}
+      VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+      VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+      VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
       PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
 
     steps:
@@ -63,15 +65,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${STARKNET_SEPOLIA_RPC_URL:-}" ]; then
-            echo "STARKNET_SEPOLIA_RPC_URL is required."
-            exit 1
-          fi
-
-          if [ -z "${VEIL_REAL_MESSAGE_FIXTURE_B64:-}" ]; then
-            echo "VEIL_REAL_MESSAGE_FIXTURE_B64 is required."
-            exit 1
-          fi
+          for name in \
+            STARKNET_SEPOLIA_RPC_URL \
+            VEIL_POC_ACCOUNT_ADDRESS \
+            VEIL_POC_ACCOUNT_PRIVATE_KEY \
+            VEIL_POC_VIEWING_KEY
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "A required durable message proof secret is unavailable."
+              exit 1
+            fi
+          done
 
           echo "Required secrets are present; values are not displayed."
 
@@ -106,42 +110,6 @@ jobs:
               WHERE table_schema = 'public'
                 AND table_name = 'veil_proof_results';
             "
-
-      - name: Decode and validate durable message fixture
-        id: fixture
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          fixture_path="$RUNNER_TEMP/veil-real-message-proof-fixture.json"
-
-          printf '%s' "$VEIL_REAL_MESSAGE_FIXTURE_B64" \
-            | base64 --decode \
-            > "$fixture_path"
-
-          chmod 600 "$fixture_path"
-
-          node --input-type=module - "$fixture_path" <<'NODE'
-          import { readFile } from "node:fs/promises";
-
-          const path = process.argv[2];
-          const value = JSON.parse(await readFile(path, "utf8"));
-
-          if (
-            typeof value !== "object"
-            || value === null
-            || Array.isArray(value)
-            || value.schemaVersion !== "veil-real-message-proof-fixture-v1"
-          ) {
-            throw new Error(
-              "The durable message proof fixture schema is invalid.",
-            );
-          }
-
-          console.log("DURABLE_MESSAGE_FIXTURE_SCHEMA_VALID");
-          NODE
-
-          echo "path=$fixture_path" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -225,6 +193,77 @@ jobs:
 
           echo "OFFICIAL_TRANSACTION_PROVER_READY"
 
+      - name: Generate ephemeral durable message fixture
+        id: fixture
+        shell: bash
+        env:
+          VEIL_POC_PROVER_URL: http://127.0.0.1:3000
+          VEIL_POC_GENERATE_PROOF: "true"
+          VEIL_POC_SUBMIT_ONCHAIN: "false"
+          VEIL_POC_RESOURCE_ESTIMATE_ONLY: "false"
+          VEIL_POC_SHIELDED_MESSAGE_SUMMARY_PATH: ${{ runner.temp }}/veil-shielded-message-summary.json
+          VEIL_POC_SHIELDED_MESSAGE_ERROR_PATH: ${{ runner.temp }}/veil-shielded-message-error.json
+          VEIL_POC_DURABLE_FIXTURE_PATH: ${{ runner.temp }}/veil-real-message-proof-fixture.json
+        run: |
+          set -euo pipefail
+
+          fixture="$RUNNER_TEMP/veil-real-message-proof-fixture.json"
+
+          rm -f \
+            "$fixture" \
+            "$RUNNER_TEMP/veil-shielded-message-summary.json" \
+            "$RUNNER_TEMP/veil-shielded-message-error.json"
+
+          timeout 300m node --experimental-strip-types \
+            tools/veil-official-shielded-message-runner.ts
+
+          if [ ! -s "$fixture" ]; then
+            echo "The ephemeral durable message fixture was not created."
+            exit 1
+          fi
+
+          node --input-type=module - "$fixture" <<'NODE'
+          import {
+            readFile,
+          } from "node:fs/promises";
+
+          const fixturePath =
+            process.argv[2];
+
+          const fixture =
+            JSON.parse(
+              await readFile(
+                fixturePath,
+                "utf8",
+              ),
+            );
+
+          if (
+            JSON.stringify(
+              Object.keys(fixture),
+            )
+            !== JSON.stringify([
+              "schemaVersion",
+              "idempotencyKey",
+              "authenticatedSubject",
+              "request",
+            ])
+            || fixture.schemaVersion
+              !== "veil-real-message-proof-fixture-v1"
+          ) {
+            throw new Error(
+              "The ephemeral durable message fixture schema is invalid.",
+            );
+          }
+
+          console.log(
+            "EPHEMERAL_DURABLE_MESSAGE_FIXTURE_VALID",
+          );
+          NODE
+
+          chmod 600 "$fixture"
+          echo "path=$fixture" >> "$GITHUB_OUTPUT"
+
       - name: Run durable message proof pipeline
         shell: bash
         env:
@@ -244,15 +283,12 @@ jobs:
 
           export STARKNET_CHAIN_ID="SN_SEPOLIA"
           export STARKNET_RPC_URL="$STARKNET_SEPOLIA_RPC_URL"
-
           export VEIL_PROVER_URL="http://127.0.0.1:3000"
           export VEIL_PROVER_MODE="local"
           export VEIL_EXPERIMENTAL_DIRECT_PROVER="true"
           export VEIL_DISCOVERY_URL="http://127.0.0.1:3000/api/indexer/messages"
-
           export VEIL_PRIVACY_POOL_ADDRESS="0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5"
           export VEIL_CHANNEL_HELPER_ADDRESS="0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23"
-
           export VEIL_PROVER_CONNECTION_TIMEOUT_MS="5000"
           export VEIL_PROVER_JOB_TIMEOUT_MS="3600000"
           export VEIL_PROVER_TOTAL_TIMEOUT_MS="7200000"
@@ -260,178 +296,36 @@ jobs:
           export VEIL_PROVER_JOB_RETRIES="0"
           export VEIL_PROVER_RETRY_BASE_MS="250"
           export VEIL_PROVER_RETRY_MAX_MS="5000"
-
           export VEIL_PROOF_PAYLOAD_ACTIVE_KEY_VERSION="v1"
           export VEIL_PROOF_PAYLOAD_KEYS="{\"v1\":\"$payload_key\"}"
-
           export VEIL_RATE_LIMIT_SECRET="$(random_base64)"
           export VEIL_PROOF_ACCESS_SECRET="$(random_base64)"
-
           export VEIL_PROOF_QUEUE_MAX_QUEUED_JOBS="10"
           export VEIL_PROOF_QUEUE_MAX_RUNNING_JOBS="1"
           export VEIL_PROOF_QUEUE_RECOVERY_BATCH_SIZE="10"
-
           export VEIL_PROOF_WORKER_NAME="github-e2e-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           export VEIL_PROOF_WORKER_SECRET="$(random_base64)"
           export VEIL_PROOF_WORKER_LEASE_MS="120000"
           export VEIL_PROOF_WORKER_HEARTBEAT_MS="30000"
           export VEIL_PROOF_WORKER_IDLE_MS="2000"
           export VEIL_PROOF_WORKER_ERROR_MS="5000"
-
           export VEIL_REAL_E2E_ACKNOWLEDGE="true"
 
-          rm -f \
-            "$GITHUB_WORKSPACE/veil-durable-message-proof-e2e-result.json" \
-            "$GITHUB_WORKSPACE/veil-durable-message-proof-e2e.log"
+          timeout 330m npm run test:real-message-proof
 
-          timeout 330m npm run test:real-message-proof \
-            | tee "$GITHUB_WORKSPACE/veil-durable-message-proof-e2e.log"
-
-      - name: Validate durable proof result
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          node --input-type=module - \
-            "$GITHUB_WORKSPACE/veil-durable-message-proof-e2e.log" \
-            "$GITHUB_WORKSPACE/veil-durable-message-proof-e2e-result.json" \
-            <<'NODE'
-          import {
-            readFile,
-            writeFile,
-          } from "node:fs/promises";
-
-          const [
-            logPath,
-            outputPath,
-          ] = process.argv.slice(2);
-
-          const lines = (
-            await readFile(
-              logPath,
-              "utf8",
-            )
-          )
-            .split(/\r?\n/u)
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .reverse();
-
-          let result;
-
-          for (const line of lines) {
-            try {
-              const value = JSON.parse(line);
-
-              if (
-                value?.schemaVersion
-                === "veil-real-message-proof-e2e-result-v1"
-              ) {
-                result = value;
-                break;
-              }
-            } catch {
-              // Ignore non-JSON command output.
-            }
-          }
-
-          if (!result) {
-            throw new Error(
-              "The durable message proof result JSON was not emitted.",
-            );
-          }
-
-          const expectedKeys = [
-            "schemaVersion",
-            "jobState",
-            "proverStatus",
-            "proofSizeBytes",
-            "retryCount",
-            "broadcastEnabled",
-            "canonicalPrepared",
-            "liveVerified",
-            "shieldEnabled",
-          ];
-
-          if (
-            JSON.stringify(
-              Object.keys(result),
-            )
-            !== JSON.stringify(
-              expectedKeys,
-            )
-          ) {
-            throw new Error(
-              "The durable message proof result contains unexpected fields.",
-            );
-          }
-
-          if (
-            result.jobState !== "succeeded"
-            || result.proverStatus
-              !== "LOCAL_PROVER_VERIFIED"
-            || !Number.isSafeInteger(
-              result.proofSizeBytes,
-            )
-            || result.proofSizeBytes < 1
-            || result.broadcastEnabled !== false
-            || result.canonicalPrepared !== false
-            || result.liveVerified !== false
-            || result.shieldEnabled !== false
-          ) {
-            throw new Error(
-              "The durable message proof verdict is invalid.",
-            );
-          }
-
-          await writeFile(
-            outputPath,
-            `${JSON.stringify(
-              result,
-              null,
-              2,
-            )}\n`,
-            {
-              encoding:
-                "utf8",
-
-              mode:
-                0o600,
-            },
-          );
-
-          console.log(
-            "VEIL_DURABLE_MESSAGE_PROOF_E2E_SUCCEEDED",
-          );
-          NODE
-
-      - name: Save redacted prover logs and stop container
+      - name: Remove ephemeral fixture and stop container
         if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
-
-          docker logs veil-durable-message-prover \
-            2>&1 \
-            | awk \
-              'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
-            > "$GITHUB_WORKSPACE/veil-durable-message-prover.log" \
-            || true
 
           docker rm -f veil-durable-message-prover \
             >/dev/null 2>&1 || true
 
           rm -f \
-            "$RUNNER_TEMP/veil-real-message-proof-fixture.json"
+            "$RUNNER_TEMP/veil-real-message-proof-fixture.json" \
+            "$RUNNER_TEMP/veil-shielded-message-summary.json" \
+            "$RUNNER_TEMP/veil-shielded-message-error.json" \
+            "$GITHUB_WORKSPACE/veil-account-preflight.json"
 
-      - name: Upload safe durable proof result
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: veil-durable-message-proof-e2e
-          if-no-files-found: warn
-          retention-days: 7
-          path: |
-            veil-durable-message-proof-e2e-result.json
-            veil-durable-message-proof-e2e.log
-            veil-durable-message-prover.log
+          echo "EPHEMERAL_DURABLE_MESSAGE_FIXTURE_REMOVED"
