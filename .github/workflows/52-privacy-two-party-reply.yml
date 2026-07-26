@@ -1,15 +1,15 @@
-name: Run Official SDK Two-Party Shielded Message PoC
+name: "52 | PRIVACY | Two-Party Reply"
 
 on:
   workflow_dispatch:
     inputs:
       generate_proof:
-        description: Generate a real A-to-B proof with the saved STWO prover
+        description: Generate a real B-to-A proof with the saved STWO prover
         required: true
         type: boolean
         default: false
       submit_onchain:
-        description: Submit A-to-B and verify recipient B decrypts on Sepolia
+        description: Submit B-to-A and verify recipient A decrypts on Sepolia
         required: true
         type: boolean
         default: false
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   two-party-shielded-message:
-    name: Prove or Submit A to B Shielded Message
+    name: Prove or Submit B to A Shielded Reply
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -42,11 +42,11 @@ jobs:
       - name: Validate sender and recipient secrets
         shell: bash
         env:
-          SENDER_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          SENDER_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
-          SENDER_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
-          RECIPIENT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
-          RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          SENDER_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          SENDER_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          SENDER_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          RECIPIENT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
         run: |
           set -euo pipefail
@@ -95,20 +95,20 @@ jobs:
         if: ${{ inputs.generate_proof }}
         shell: bash
         env:
-          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
-          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
-          VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
-          VEIL_POC_RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
           VEIL_POC_GENERATE_PROOF: "true"
           VEIL_POC_SUBMIT_ONCHAIN: "false"
           VEIL_POC_RESOURCE_ESTIMATE_ONLY: "true"
-          VEIL_POC_TWO_PARTY_ERROR_PATH: ${{ github.workspace }}/veil-two-party-shielded-message-error.json
+          VEIL_POC_TWO_PARTY_ERROR_PATH: ${{ github.workspace }}/veil-two-party-shielded-reply-error.json
         run: |
           set -euo pipefail
-          rm -f "$GITHUB_WORKSPACE/veil-two-party-shielded-message-error.json"
+          rm -f "$GITHUB_WORKSPACE/veil-two-party-shielded-reply-error.json"
           node --experimental-strip-types \
             tools/veil-official-two-party-shielded-message-runner.ts
 
@@ -136,9 +136,9 @@ jobs:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
         run: |
           set -euo pipefail
-          docker rm -f veil-two-party-prover 2>/dev/null || true
+          docker rm -f veil-two-party-reply-prover 2>/dev/null || true
           docker run -d \
-            --name veil-two-party-prover \
+            --name veil-two-party-reply-prover \
             -p 3000:3000 \
             -e RPC_URL="$RPC_URL" \
             -e CHAIN_ID="SN_SEPOLIA" \
@@ -154,7 +154,7 @@ jobs:
 
           ready=0
           for attempt in $(seq 1 60); do
-            if [ "$(docker inspect -f '{{.State.Running}}' veil-two-party-prover 2>/dev/null || true)" != "true" ]; then
+            if [ "$(docker inspect -f '{{.State.Running}}' veil-two-party-reply-prover 2>/dev/null || true)" != "true" ]; then
               echo "The prover container stopped before becoming ready."
               exit 1
             fi
@@ -176,25 +176,25 @@ jobs:
           fi
           echo "Self-hosted prover is ready."
 
-      - name: Run Official SDK A to B PoC
+      - name: Run Official SDK B to A PoC
         shell: bash
         env:
-          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
-          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
-          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
-          VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
-          VEIL_POC_RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          VEIL_POC_ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_PRIVATE_KEY }}
+          VEIL_POC_VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          VEIL_POC_RECIPIENT_VIEWING_KEY: ${{ secrets.VEIL_POC_VIEWING_KEY }}
           STARKNET_SEPOLIA_RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
           VEIL_POC_PROVER_URL: http://127.0.0.1:3000
           VEIL_POC_GENERATE_PROOF: ${{ inputs.generate_proof }}
           VEIL_POC_SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
-          VEIL_POC_TWO_PARTY_SUMMARY_PATH: ${{ github.workspace }}/veil-two-party-shielded-message-summary.json
-          VEIL_POC_TWO_PARTY_ERROR_PATH: ${{ github.workspace }}/veil-two-party-shielded-message-error.json
+          VEIL_POC_TWO_PARTY_SUMMARY_PATH: ${{ github.workspace }}/veil-two-party-shielded-reply-summary.json
+          VEIL_POC_TWO_PARTY_ERROR_PATH: ${{ github.workspace }}/veil-two-party-shielded-reply-error.json
         run: |
           set -euo pipefail
           rm -f \
-            "$GITHUB_WORKSPACE/veil-two-party-shielded-message-summary.json" \
-            "$GITHUB_WORKSPACE/veil-two-party-shielded-message-error.json"
+            "$GITHUB_WORKSPACE/veil-two-party-shielded-reply-summary.json" \
+            "$GITHUB_WORKSPACE/veil-two-party-shielded-reply-error.json"
           timeout 300m node --experimental-strip-types \
             tools/veil-official-two-party-shielded-message-runner.ts
 
@@ -205,7 +205,7 @@ jobs:
           SUBMIT_ONCHAIN: ${{ inputs.submit_onchain }}
         run: |
           set -euo pipefail
-          summary="$GITHUB_WORKSPACE/veil-two-party-shielded-message-summary.json"
+          summary="$GITHUB_WORKSPACE/veil-two-party-shielded-reply-summary.json"
           if [ ! -s "$summary" ]; then
             echo "Two-party summary is missing or empty."
             exit 1
@@ -271,7 +271,7 @@ jobs:
                 || summary.recipientChannelRecovered !== true
                 || summary.recipientDecryptVerified !== true
                 || summary.unrelatedViewingKeyRejected !== true) {
-              throw new Error("Real A-to-B verification failed.");
+              throw new Error("Real B-to-A verification failed.");
             }
           } else if (summary.result !== "OFFICIAL_SDK_TWO_PARTY_SHIELDED_MESSAGE_PROOF_GENERATED"
               || summary.transactionHash !== null
@@ -293,7 +293,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -e "$GITHUB_WORKSPACE/veil-two-party-shielded-message-summary.json" ]; then
+          if [ -e "$GITHUB_WORKSPACE/veil-two-party-shielded-reply-summary.json" ]; then
             echo "Proof summary was created while generate_proof=false."
             exit 1
           fi
@@ -304,13 +304,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if docker inspect veil-two-party-prover >/dev/null 2>&1; then
-            docker logs veil-two-party-prover 2>&1 \
+          if docker inspect veil-two-party-reply-prover >/dev/null 2>&1; then
+            docker logs veil-two-party-reply-prover 2>&1 \
               | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
-              > veil-two-party-prover.log || true
-            docker rm -f veil-two-party-prover || true
+              > veil-two-party-reply-prover.log || true
+            docker rm -f veil-two-party-reply-prover || true
           else
-            printf '%s\n' "Prover container was not started."               > veil-two-party-prover.log
+            printf '%s\n' "Prover container was not started."               > veil-two-party-reply-prover.log
           fi
 
       - name: Upload safe two-party artifacts
@@ -320,8 +320,8 @@ jobs:
           name: veil-official-two-party-shielded-message-results
           path: |
             veil-account-preflight.json
-            veil-two-party-shielded-message-summary.json
-            veil-two-party-shielded-message-error.json
-            veil-two-party-prover.log
+            veil-two-party-shielded-reply-summary.json
+            veil-two-party-shielded-reply-error.json
+            veil-two-party-reply-prover.log
           if-no-files-found: warn
           retention-days: 14

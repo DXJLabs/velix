@@ -1,4 +1,4 @@
-name: Run Official SDK Reusable Two-Party Shielded Message PoC
+name: "51 | PRIVACY | Repeat Two-Party Message"
 
 on:
   workflow_dispatch:

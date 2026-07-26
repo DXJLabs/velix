@@ -1,4 +1,4 @@
-name: Register VEIL Recipient B in Privacy Pool
+name: "30 | PRIVACY | Register Recipient Identity"
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Build Starknet Privacy Prover Image
+name: "12 | PROVER | Build Transaction Prover Image"
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: STWO Prover Hardware Test
+name: "10 | PROVER | Hardware Compatibility Test"
 
 on:
   workflow_dispatch:

@@ -1,7 +1,7 @@
 # Official Privacy SDK Shielded-Message PoC
 
 The manually dispatched workflow
-`.github/workflows/veil-official-shielded-message-poc.yml` uses the persistent
+`.github/workflows/40-privacy-shielded-message-proof.yml` uses the persistent
 CI account identity and the self-hosted STWO transaction prover on Starknet
 Sepolia.
 

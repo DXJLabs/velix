@@ -174,11 +174,11 @@ test("viewing-key generator function does not write files", async () => {
 
 test("workflows validate persistent viewing key before expensive or transactional stages", async () => {
   const registerWorkflow = await readFile(
-    ".github/workflows/prover-generic-build-test.yml",
+    ".github/workflows/11-prover-generic-build-test.yml",
     "utf8",
   );
   const messageWorkflow = await readFile(
-    ".github/workflows/veil-official-shielded-message-poc.yml",
+    ".github/workflows/40-privacy-shielded-message-proof.yml",
     "utf8",
   );
   const validationIndex = registerWorkflow.indexOf("Validate VEIL account inputs");
@@ -213,7 +213,7 @@ test("workflows validate persistent viewing key before expensive or transactiona
 
 test("shielded-message workflow accepts true/true after persistent identity validation", async () => {
   const workflow = await readFile(
-    ".github/workflows/veil-official-shielded-message-poc.yml",
+    ".github/workflows/40-privacy-shielded-message-proof.yml",
     "utf8",
   );
   const extractRunScript = (stepName) => {

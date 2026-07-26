@@ -1,4 +1,4 @@
-name: Run VEIL Durable Message Proof E2E
+name: "60 | BACKEND | Durable Message Proof E2E"
 
 on:
   workflow_dispatch:

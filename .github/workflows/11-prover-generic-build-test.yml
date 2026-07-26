@@ -1,4 +1,4 @@
-name: Build Generic STWO Prover and Run Official SDK VEIL Register Proof
+name: "11 | PROVER | Generic Build and Test"
 
 on:
   workflow_dispatch:

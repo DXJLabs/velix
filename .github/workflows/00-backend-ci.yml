@@ -1,4 +1,4 @@
-name: VEIL Backend E2E
+name: "00 | BACKEND | CI and Security Tests"
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       - "packages/veil-sdk/**"
       - "package.json"
       - "package-lock.json"
-      - ".github/workflows/backend-e2e.yml"
+      - ".github/workflows/00-backend-ci.yml"
 
   pull_request:
     paths:
@@ -24,7 +24,7 @@ on:
       - "packages/veil-sdk/**"
       - "package.json"
       - "package-lock.json"
-      - ".github/workflows/backend-e2e.yml"
+      - ".github/workflows/00-backend-ci.yml"
 
 permissions:
   contents: read
