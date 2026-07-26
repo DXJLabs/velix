@@ -14,6 +14,7 @@ import {
   createOrGetProofJob,
   persistProofJobTransition,
   recoverExpiredProofJobs,
+  renewOwnedProofJobLease,
   type ProofJobAtomicClaimInput,
   type ProofJobCompareAndSwapInput,
   type ProofJobCreateResult,
@@ -728,6 +729,90 @@ test(
     assert.equal(
       repositoryCalled,
       false,
+    );
+  },
+);
+
+
+test(
+  "owned proof job lease renewal is stored durably",
+  async () => {
+    const repository =
+      new TestProofJobRepository();
+
+    const queued =
+      createJob(
+        "011",
+        "4",
+        "5",
+      );
+
+    await createOrGetProofJob(
+      repository,
+      queued,
+    );
+
+    const claimed =
+      await claimNextProofJob(
+        repository,
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+
+          maxRunningJobs:
+            1,
+        },
+      );
+
+    assert.ok(claimed);
+
+    const renewed =
+      await renewOwnedProofJobLease(
+        repository,
+        claimed,
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            4_000,
+
+          leaseDurationMs:
+            5_000,
+        },
+      );
+
+    assert.equal(
+      renewed.revision,
+      claimed.revision + 1,
+    );
+
+    assert.equal(
+      renewed.updatedAtMs,
+      4_000,
+    );
+
+    assert.equal(
+      renewed.leaseExpiresAtMs,
+      9_000,
+    );
+
+    assert.equal(
+      renewed.leaseOwnerHash,
+      OWNER,
+    );
+
+    assert.deepEqual(
+      await repository.getById(
+        renewed.jobId,
+      ),
+      renewed,
     );
   },
 );

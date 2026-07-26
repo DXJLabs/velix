@@ -1,6 +1,7 @@
-import type {
-  ClaimProofJobInput,
-  ProofJobRecord,
+import {
+  renewProofJobLease,
+  type ClaimProofJobInput,
+  type ProofJobRecord,
 } from "./proof-job.js";
 
 export interface ProofJobCreateResult {
@@ -190,6 +191,25 @@ export async function persistProofJobTransition(
 
   return stored;
 }
+
+export async function renewOwnedProofJobLease(
+  repository: ProofJobRepository,
+  current: ProofJobRecord,
+  input: ClaimProofJobInput,
+): Promise<ProofJobRecord> {
+  const next =
+    renewProofJobLease(
+      current,
+      input,
+    );
+
+  return persistProofJobTransition(
+    repository,
+    current,
+    next,
+  );
+}
+
 
 export async function claimNextProofJob(
   repository: ProofJobRepository,
