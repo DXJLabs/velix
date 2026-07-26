@@ -60,6 +60,10 @@ jobs:
         shell: bash
         run: snforge test
 
+      - name: Build VEIL SDK
+        shell: bash
+        run: npm run build:sdk
+
       - name: Typecheck deployment script
         shell: bash
         run: npm run typecheck:poc
