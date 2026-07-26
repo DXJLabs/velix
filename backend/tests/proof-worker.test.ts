@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   runProofWorkerOnce,
+  startProofJobLeaseHeartbeat,
   type ProofWorkerDependencies,
 } from "../services/prover/proof-worker.js";
 import {
@@ -445,6 +446,194 @@ test(
     assert.equal(
       result.state,
       "cancelled",
+    );
+  },
+);
+
+
+test(
+  "proof worker heartbeat renews and returns the latest durable lease",
+  async () => {
+    const leaseOwnerHash =
+      "9".repeat(64);
+
+    const queued =
+      createQueuedProofJob({
+        jobId:
+          `job_${"8".repeat(64)}`,
+
+        requestFingerprint:
+          `veil-proof-intent-v1:${"7".repeat(64)}`,
+
+        idempotencyKeyHash:
+          "6".repeat(64),
+
+        payloadReference:
+          `payload_${"5".repeat(64)}`,
+
+        nowMs:
+          1_000,
+
+        maxAttempts:
+          3,
+      });
+
+    let stored =
+      claimProofJob(
+        queued,
+        {
+          leaseOwnerHash,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            1_000,
+        },
+      );
+
+    let nowMs =
+      1_000;
+
+    let renewalCount =
+      0;
+
+    let resolveFirstRenewal!:
+      () => void;
+
+    const firstRenewal =
+      new Promise<void>(
+        (resolve) => {
+          resolveFirstRenewal =
+            resolve;
+        },
+      );
+
+    const heartbeat =
+      startProofJobLeaseHeartbeat(
+        {
+          jobs: {
+            async createOrGetByIdempotency() {
+              throw new Error(
+                "not used",
+              );
+            },
+
+            async getById() {
+              return stored;
+            },
+
+            async getByIdempotencyKeyHash() {
+              return stored;
+            },
+
+            async compareAndSwap(input) {
+              assert.equal(
+                input.expectedRevision,
+                stored.revision,
+              );
+
+              stored =
+                input.next;
+
+              renewalCount +=
+                1;
+
+              resolveFirstRenewal();
+
+              return stored;
+            },
+
+            async claimNextAvailable() {
+              throw new Error(
+                "not used",
+              );
+            },
+          },
+
+          now() {
+            nowMs +=
+              100;
+
+            return nowMs;
+          },
+        },
+        stored,
+        {
+          leaseOwnerHash,
+
+          leaseDurationMs:
+            1_000,
+
+          heartbeatIntervalMs:
+            5,
+        },
+      );
+
+    let rejectTimeout!:
+      (reason?: unknown) => void;
+
+    const timeoutPromise =
+      new Promise<never>(
+        (_, reject) => {
+          rejectTimeout =
+            reject;
+        },
+      );
+
+    const timeout =
+      setTimeout(
+        () => {
+          rejectTimeout(
+            new Error(
+              "proof worker heartbeat did not renew the lease",
+            ),
+          );
+        },
+        1_000,
+      );
+
+    try {
+      await Promise.race([
+        firstRenewal,
+        timeoutPromise,
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const activeJob =
+      await heartbeat.stop();
+
+    assert.ok(
+      renewalCount >= 1,
+    );
+
+    assert.equal(
+      activeJob.revision,
+      stored.revision,
+    );
+
+    assert.equal(
+      activeJob.leaseExpiresAtMs,
+      nowMs + 1_000,
+    );
+
+    const stoppedRenewalCount =
+      renewalCount;
+
+    await new Promise<void>(
+      (resolve) => {
+        setTimeout(
+          resolve,
+          15,
+        );
+      },
+    );
+
+    assert.equal(
+      renewalCount,
+      stoppedRenewalCount,
     );
   },
 );

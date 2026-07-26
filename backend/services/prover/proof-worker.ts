@@ -17,6 +17,7 @@ import {
   claimNextProofJob,
   persistProofJobTransition,
   recoverExpiredProofJobs,
+  renewOwnedProofJobLease,
   type ProofJobRecoveryRepository,
   type ProofJobRepository,
 } from "./proof-job-repository.js";
@@ -62,12 +63,17 @@ export interface ProofWorkerDependencies {
   readonly now?: () => number;
 }
 
-export interface RunProofWorkerInput {
+export interface ProofLeaseHeartbeatInput {
   readonly leaseOwnerHash: string;
   readonly leaseDurationMs: number;
+  readonly heartbeatIntervalMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface RunProofWorkerInput
+extends ProofLeaseHeartbeatInput {
   readonly maxRunningJobs: number;
   readonly recoveryBatchSize: number;
-  readonly signal?: AbortSignal;
 }
 
 export type ProofWorkerOutcome =
@@ -233,26 +239,313 @@ function workerError(
 }
 
 
-export async function executeClaimedProofJob(
-  dependencies: ProofWorkerDependencies,
+export interface ProofJobLeaseHeartbeat {
+  readonly signal: AbortSignal;
+
+  current(): ProofJobRecord;
+
+  stop(): Promise<ProofJobRecord>;
+}
+
+export interface ProofLeaseHeartbeatDependencies {
+  readonly jobs: ProofJobRepository;
+  readonly now?: () => number;
+}
+
+export function startProofJobLeaseHeartbeat(
+  dependencies: ProofLeaseHeartbeatDependencies,
   job: ProofJobRecord,
-  input: RunProofWorkerInput,
-): Promise<ProofWorkerResult> {
+  input: ProofLeaseHeartbeatInput,
+): ProofJobLeaseHeartbeat {
+  assertOwnedRunningJob(
+    job,
+    input.leaseOwnerHash,
+  );
+
+  const heartbeatIntervalMs =
+    resolveHeartbeatIntervalMs(input);
+
+  const timerController =
+    new AbortController();
+
+  const operationController =
+    new AbortController();
+
+  let currentJob =
+    job;
+
+  let heartbeatFailure:
+    unknown | null = null;
+
+  let stopPromise:
+    Promise<ProofJobRecord> | null = null;
+
+  const forwardAbort = (): void => {
+    if (
+      !operationController.signal.aborted
+    ) {
+      operationController.abort();
+    }
+
+    if (
+      !timerController.signal.aborted
+    ) {
+      timerController.abort();
+    }
+  };
+
+  if (input.signal?.aborted) {
+    forwardAbort();
+  } else {
+    input.signal?.addEventListener(
+      "abort",
+      forwardAbort,
+      {
+        once:
+          true,
+      },
+    );
+  }
+
+  const heartbeatPromise =
+    (async (): Promise<void> => {
+      while (
+        !timerController.signal.aborted
+      ) {
+        const elapsed =
+          await waitForHeartbeat(
+            heartbeatIntervalMs,
+            timerController.signal,
+          );
+
+        if (!elapsed) {
+          return;
+        }
+
+        try {
+          currentJob =
+            await renewOwnedProofJobLease(
+              dependencies.jobs,
+              currentJob,
+              {
+                leaseOwnerHash:
+                  input.leaseOwnerHash,
+
+                leaseDurationMs:
+                  input.leaseDurationMs,
+
+                nowMs:
+                  requireWorkerTimestamp(
+                    dependencies.now?.()
+                      ?? Date.now(),
+                  ),
+              },
+            );
+        } catch (error) {
+          heartbeatFailure =
+            error;
+
+          if (
+            !operationController
+              .signal.aborted
+          ) {
+            operationController.abort();
+          }
+
+          if (
+            !timerController
+              .signal.aborted
+          ) {
+            timerController.abort();
+          }
+
+          return;
+        }
+      }
+    })();
+
+  return Object.freeze({
+    signal:
+      operationController.signal,
+
+    current():
+      ProofJobRecord {
+      return currentJob;
+    },
+
+    stop():
+      Promise<ProofJobRecord> {
+      if (stopPromise === null) {
+        stopPromise =
+          (async (): Promise<
+            ProofJobRecord
+          > => {
+            if (
+              !timerController
+                .signal.aborted
+            ) {
+              timerController.abort();
+            }
+
+            await heartbeatPromise;
+
+            input.signal
+              ?.removeEventListener(
+                "abort",
+                forwardAbort,
+              );
+
+            if (
+              heartbeatFailure !== null
+            ) {
+              throw heartbeatFailure;
+            }
+
+            return currentJob;
+          })();
+      }
+
+      return stopPromise;
+    },
+  });
+}
+
+function resolveHeartbeatIntervalMs(
+  input: ProofLeaseHeartbeatInput,
+): number {
+  if (
+    !Number.isSafeInteger(
+      input.leaseDurationMs,
+    )
+    || input.leaseDurationMs < 1_000
+    || input.leaseDurationMs
+      > 30 * 60_000
+  ) {
+    throw workerError(
+      "PROOF_WORKER_LEASE_DURATION_INVALID",
+      "The proof worker lease duration is invalid.",
+    );
+  }
+
+  const intervalMs =
+    input.heartbeatIntervalMs
+      ?? Math.max(
+        100,
+        Math.floor(
+          input.leaseDurationMs / 3,
+        ),
+      );
+
+  if (
+    !Number.isSafeInteger(intervalMs)
+    || intervalMs < 1
+    || intervalMs
+      >= input.leaseDurationMs
+  ) {
+    throw workerError(
+      "PROOF_WORKER_HEARTBEAT_INTERVAL_INVALID",
+      "The proof worker heartbeat interval is invalid.",
+    );
+  }
+
+  return intervalMs;
+}
+
+function waitForHeartbeat(
+  intervalMs: number,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (signal.aborted) {
+    return Promise.resolve(false);
+  }
+
+  return new Promise<boolean>(
+    (resolve) => {
+      let timer:
+        ReturnType<typeof setTimeout>;
+
+      let settled =
+        false;
+
+      const finish = (
+        elapsed: boolean,
+      ): void => {
+        if (settled) {
+          return;
+        }
+
+        settled =
+          true;
+
+        clearTimeout(timer);
+
+        signal.removeEventListener(
+          "abort",
+          onAbort,
+        );
+
+        resolve(elapsed);
+      };
+
+      const onAbort = (): void => {
+        finish(false);
+      };
+
+      timer =
+        setTimeout(
+          () => {
+            finish(true);
+          },
+          intervalMs,
+        );
+
+      signal.addEventListener(
+        "abort",
+        onAbort,
+        {
+          once:
+            true,
+        },
+      );
+    },
+  );
+}
+
+function assertOwnedRunningJob(
+  job: ProofJobRecord,
+  leaseOwnerHash: string,
+): void {
   if (
     job.state !== "running"
     || job.leaseOwnerHash
-      !== input.leaseOwnerHash
+      !== leaseOwnerHash
+    || job.leaseExpiresAtMs === null
   ) {
     throw workerError(
       "PROOF_WORKER_LEASE_INVALID",
       "The proof worker does not own the claimed job lease.",
     );
   }
+}
+
+
+export async function executeClaimedProofJob(
+  dependencies: ProofWorkerDependencies,
+  heartbeat: ProofJobLeaseHeartbeat,
+  input: RunProofWorkerInput,
+): Promise<ProofWorkerResult> {
+  const initialJob =
+    heartbeat.current();
+
+  assertOwnedRunningJob(
+    initialJob,
+    input.leaseOwnerHash,
+  );
 
   const request =
     await loadProofWorkItem(
       dependencies,
-      job,
+      initialJob,
       requireWorkerTimestamp(
         dependencies.now?.()
           ?? Date.now(),
@@ -262,8 +555,15 @@ export async function executeClaimedProofJob(
   const result =
     await dependencies.prover.prove(
       request,
-      input.signal,
+      heartbeat.signal,
     );
+
+  /*
+   * Stop and await heartbeat activity before creating the terminal
+   * transition. This provides the latest durable job revision.
+   */
+  const activeJob =
+    await heartbeat.stop();
 
   const completedAtMs =
     requireWorkerTimestamp(
@@ -277,15 +577,18 @@ export async function executeClaimedProofJob(
    */
   const persistedResult =
     await dependencies.results.persist({
-      job,
+      job:
+        activeJob,
+
       result,
+
       nowMs:
         completedAtMs,
     });
 
   const completed =
     completeProofJobSuccess(
-      job,
+      activeJob,
       {
         leaseOwnerHash:
           input.leaseOwnerHash,
@@ -302,7 +605,7 @@ export async function executeClaimedProofJob(
   const stored =
     await persistProofJobTransition(
       dependencies.jobs,
-      job,
+      activeJob,
       completed,
     );
 
@@ -397,15 +700,41 @@ export async function runProofWorkerOnce(
     });
   }
 
-  try {
-    return await executeClaimedProofJob(
+  const heartbeat =
+    startProofJobLeaseHeartbeat(
       dependencies,
       claimed,
       input,
     );
+
+  try {
+    return await executeClaimedProofJob(
+      dependencies,
+      heartbeat,
+      input,
+    );
   } catch (error) {
+    let failureSource:
+      unknown = error;
+
+    let activeJob =
+      heartbeat.current();
+
+    try {
+      activeJob =
+        await heartbeat.stop();
+    } catch (heartbeatError) {
+      failureSource =
+        heartbeatError;
+
+      activeJob =
+        heartbeat.current();
+    }
+
     const failure =
-      normalizeWorkerFailure(error);
+      normalizeWorkerFailure(
+        failureSource,
+      );
 
     const failedAtMs =
       requireWorkerTimestamp(
@@ -415,7 +744,7 @@ export async function runProofWorkerOnce(
 
     const next =
       completeProofJobFailure(
-        claimed,
+        activeJob,
         {
           leaseOwnerHash:
             input.leaseOwnerHash,
@@ -428,7 +757,7 @@ export async function runProofWorkerOnce(
 
           retryDelayMs:
             retryDelayMs(
-              claimed.attempts,
+              activeJob.attempts,
             ),
 
           nowMs:
@@ -439,7 +768,7 @@ export async function runProofWorkerOnce(
     const stored =
       await persistProofJobTransition(
         dependencies.jobs,
-        claimed,
+        activeJob,
         next,
       );
 
