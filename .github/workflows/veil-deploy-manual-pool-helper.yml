@@ -1,0 +1,274 @@
+name: Deploy VEIL Helper for Manual Privacy Pool
+
+run-name: Deploy Canonical VEIL Helper to Manual Sepolia Pool
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledge_testnet_deployment:
+        description: Deploy one canonical VEIL Helper instance on Starknet Sepolia
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: veil-deploy-manual-pool-helper
+  cancel-in-progress: false
+
+jobs:
+  deploy-helper:
+    name: Deploy and Verify Canonical Helper
+    if: ${{ inputs.acknowledge_testnet_deployment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout VEIL
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate deployment secrets
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          for name in \
+            RPC_URL \
+            ACCOUNT_ADDRESS \
+            ACCOUNT_PRIVATE_KEY
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "A required Sepolia deployment secret is unavailable."
+              exit 1
+            fi
+          done
+
+          echo "VEIL_MANUAL_POOL_HELPER_DEPLOYMENT_SECRETS_READY"
+          echo "Secret values are not displayed."
+
+      - name: Deploy Helper bound to manual Privacy Pool
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_ACCOUNT_ADDRESS }}
+          ACCOUNT_PRIVATE_KEY: ${{ secrets.VEIL_POC_ACCOUNT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          node --input-type=module <<'NODE'
+          import {
+            appendFile,
+            writeFile,
+          } from "node:fs/promises";
+
+          import {
+            Account,
+            RpcProvider,
+          } from "starknet-proof";
+
+          const HELPER_CLASS_HASH =
+            "0x2a7b116fd1e7954b019fe02d91fdfb67166a80597bd6f7699bf07374032ee37";
+
+          const MANUAL_PRIVACY_POOL =
+            "0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5";
+
+          const rpcUrl = process.env.RPC_URL;
+          const accountAddress = process.env.ACCOUNT_ADDRESS;
+          const privateKey = process.env.ACCOUNT_PRIVATE_KEY;
+
+          if (!rpcUrl || !accountAddress || !privateKey) {
+            throw new Error(
+              "Deployment configuration is incomplete.",
+            );
+          }
+
+          const provider = new RpcProvider({
+            nodeUrl: rpcUrl,
+          });
+
+          const account = new Account({
+            provider,
+            address: accountAddress,
+            signer: privateKey,
+          });
+
+          console.log(
+            "VEIL_MANUAL_POOL_HELPER_DEPLOYMENT_START",
+          );
+          console.log(
+            `class_hash=${HELPER_CLASS_HASH}`,
+          );
+          console.log(
+            `constructor_privacy_pool=${MANUAL_PRIVACY_POOL}`,
+          );
+
+          const deployment = await account.deployContract({
+            classHash: HELPER_CLASS_HASH,
+            constructorCalldata: [
+              MANUAL_PRIVACY_POOL,
+            ],
+          });
+
+          if (!deployment.transaction_hash) {
+            throw new Error(
+              "Deployment returned no transaction hash.",
+            );
+          }
+
+          if (!deployment.contract_address) {
+            throw new Error(
+              "Deployment returned no contract address.",
+            );
+          }
+
+          const receipt = await provider.waitForTransaction(
+            deployment.transaction_hash,
+          );
+
+          const finalityStatus =
+            receipt.finality_status ?? "UNKNOWN";
+
+          const executionStatus =
+            receipt.execution_status ?? "UNKNOWN";
+
+          const reverted =
+            executionStatus === "REVERTED"
+            || (
+              typeof receipt.isReverted === "function"
+              && receipt.isReverted()
+            );
+
+          if (reverted) {
+            throw new Error(
+              "Canonical VEIL Helper deployment reverted.",
+            );
+          }
+
+          const actualClassHash = await provider.getClassHashAt(
+            deployment.contract_address,
+            "latest",
+          );
+
+          const poolResponse = await provider.callContract(
+            {
+              contractAddress:
+                deployment.contract_address,
+              entrypoint:
+                "get_privacy_pool",
+              calldata: [],
+            },
+            "latest",
+          );
+
+          if (
+            BigInt(actualClassHash)
+            !== BigInt(HELPER_CLASS_HASH)
+          ) {
+            throw new Error(
+              "Deployed Helper class hash mismatch.",
+            );
+          }
+
+          if (
+            !Array.isArray(poolResponse)
+            || poolResponse.length !== 1
+            || BigInt(poolResponse[0])
+              !== BigInt(MANUAL_PRIVACY_POOL)
+          ) {
+            throw new Error(
+              "Deployed Helper Privacy Pool binding mismatch.",
+            );
+          }
+
+          const summary = {
+            result:
+              "VEIL_MANUAL_POOL_HELPER_DEPLOYED",
+            network:
+              "SN_SEPOLIA",
+            classHash:
+              HELPER_CLASS_HASH,
+            helperAddress:
+              deployment.contract_address,
+            privacyPoolAddress:
+              MANUAL_PRIVACY_POOL,
+            transactionHash:
+              deployment.transaction_hash,
+            finalityStatus,
+            executionStatus,
+            classHashVerified:
+              true,
+            privacyPoolVerified:
+              true,
+          };
+
+          await writeFile(
+            "veil-manual-pool-helper-deployment.json",
+            `${JSON.stringify(summary, null, 2)}\n`,
+            {
+              encoding: "utf8",
+              mode: 0o600,
+            },
+          );
+
+          const stepSummary =
+            process.env.GITHUB_STEP_SUMMARY;
+
+          if (stepSummary) {
+            await appendFile(
+              stepSummary,
+              [
+                "# VEIL Manual Pool Helper Deployment",
+                "",
+                `- Helper: \`${summary.helperAddress}\``,
+                `- Privacy Pool: \`${summary.privacyPoolAddress}\``,
+                `- Class hash: \`${summary.classHash}\``,
+                `- Transaction: \`${summary.transactionHash}\``,
+                `- Finality: \`${summary.finalityStatus}\``,
+                `- Execution: \`${summary.executionStatus}\``,
+                "",
+                "The deployment summary contains public chain data only.",
+                "",
+              ].join("\n"),
+              "utf8",
+            );
+          }
+
+          console.log(
+            "VEIL_MANUAL_POOL_HELPER_DEPLOYED",
+          );
+          console.log(
+            `helper_address=${summary.helperAddress}`,
+          );
+          console.log(
+            `deployment_transaction_hash=${summary.transactionHash}`,
+          );
+          console.log(
+            "VEIL_MANUAL_POOL_HELPER_CLASS_HASH_VERIFIED",
+          );
+          console.log(
+            "VEIL_MANUAL_POOL_HELPER_PRIVACY_POOL_VERIFIED",
+          );
+          NODE
+
+      - name: Upload safe public deployment summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-manual-pool-helper-deployment
+          path: veil-manual-pool-helper-deployment.json
+          if-no-files-found: error
+          retention-days: 30
