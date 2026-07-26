@@ -8,9 +8,12 @@ import {
 } from "../_lib/privy.js";
 import {
   assertJsonBodyWithinLimit,
-  enforceRateLimit,
   setPrivateResponseHeaders,
 } from "../_lib/security.js";
+
+import {
+  enforceDistributedRateLimit,
+} from "../_lib/distributed-rate-limit.js";
 import { createBackendProverClient } from "../../backend/dist/services/prover/prover-client.js";
 import { normalizeProofError } from "../../backend/dist/services/prover/proof-errors.js";
 import { requestMessageProof } from "../../backend/dist/services/prover/proof-request.js";
@@ -25,7 +28,21 @@ export default async function handler(request, response) {
     setPrivateResponseHeaders(response);
     requirePost(request, response, context);
     assertJsonBodyWithinLimit(request, context, MAX_PROOF_REQUEST_BYTES);
-    enforceRateLimit(request, response, context, { limit: 3, windowMs: 60_000 });
+    await enforceDistributedRateLimit(
+      request,
+      response,
+      context,
+      {
+        scope:
+          "api:messaging:prepare",
+
+        limit:
+          3,
+
+        windowMs:
+          60_000,
+      },
+    );
     await authenticatePrivyRequest(request, context);
 
     const client = createBackendProverClient({
