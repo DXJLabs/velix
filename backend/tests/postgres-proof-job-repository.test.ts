@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   claimProofJob,
   createQueuedProofJob,
+  recoverExpiredProofJob,
   type ProofJobRecord,
 } from "../services/prover/proof-job.js";
 import {
@@ -290,6 +291,90 @@ test(
     assert.equal(
       provider.queries[1]?.values[3],
       1,
+    );
+  },
+);
+
+
+test(
+  "PostgreSQL recovery atomically requeues expired leases",
+  async () => {
+    const running =
+      claimProofJob(
+        queuedJob(),
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+        },
+      );
+
+    const recovered =
+      recoverExpiredProofJob(
+        running,
+        6_000,
+      );
+
+    const provider =
+      new ScriptedProvider([
+        result(databaseRow(recovered)),
+      ]);
+
+    const repository =
+      new PostgresProofJobRepository(
+        provider,
+      );
+
+    const resultBatch =
+      await repository.recoverExpired({
+        nowMs:
+          6_000,
+
+        limit:
+          50,
+      });
+
+    assert.deepEqual(
+      resultBatch,
+      [
+        recovered,
+      ],
+    );
+
+    assert.equal(
+      Object.isFrozen(resultBatch),
+      true,
+    );
+
+    const query =
+      provider.queries[0];
+
+    assert.match(
+      query?.text ?? "",
+      /FOR UPDATE SKIP LOCKED/u,
+    );
+
+    assert.match(
+      query?.text ?? "",
+      /lease_expires_at_ms <= \$1/u,
+    );
+
+    assert.match(
+      query?.text ?? "",
+      /LIMIT \$2/u,
+    );
+
+    assert.deepEqual(
+      query?.values,
+      [
+        6_000,
+        50,
+      ],
     );
   },
 );

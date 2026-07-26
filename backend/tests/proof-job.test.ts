@@ -7,6 +7,7 @@ import {
   completeProofJobFailure,
   completeProofJobSuccess,
   createQueuedProofJob,
+  recoverExpiredProofJob,
   renewProofJobLease,
   requestProofJobCancellation,
 } from "../services/prover/proof-job.js";
@@ -388,6 +389,94 @@ test(
     assert.match(
       serialized,
       /payload_ref_001/u,
+    );
+  },
+);
+
+
+test(
+  "expired running proof job returns to the durable queue",
+  () => {
+    const running =
+      claimProofJob(
+        queuedJob(),
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+        },
+      );
+
+    const recovered =
+      recoverExpiredProofJob(
+        running,
+        6_000,
+      );
+
+    assert.equal(
+      recovered.state,
+      "queued",
+    );
+
+    assert.equal(
+      recovered.revision,
+      running.revision + 1,
+    );
+
+    assert.equal(
+      recovered.leaseOwnerHash,
+      null,
+    );
+
+    assert.equal(
+      recovered.leaseExpiresAtMs,
+      null,
+    );
+
+    assert.deepEqual(
+      recovered.failure,
+      {
+        code:
+          "PROOF_WORKER_LEASE_EXPIRED",
+
+        retryable:
+          true,
+      },
+    );
+  },
+);
+
+test(
+  "active proof job lease cannot be recovered",
+  () => {
+    const running =
+      claimProofJob(
+        queuedJob(),
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+        },
+      );
+
+    assert.throws(
+      () =>
+        recoverExpiredProofJob(
+          running,
+          5_999,
+        ),
+
+      /lease has not expired/u,
     );
   },
 );

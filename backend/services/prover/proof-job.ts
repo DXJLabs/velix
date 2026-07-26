@@ -543,6 +543,125 @@ export function completeProofJobFailure(
   });
 }
 
+export function recoverExpiredProofJob(
+  job: ProofJobRecord,
+  nowValue: number,
+): ProofJobRecord {
+  requireState(
+    job,
+    "running",
+  );
+
+  const nowMs =
+    requireTimestamp(
+      nowValue,
+      "nowMs",
+    );
+
+  if (
+    job.leaseExpiresAtMs === null
+    || nowMs < job.leaseExpiresAtMs
+  ) {
+    throw stateError(
+      "PROOF_JOB_LEASE_STILL_ACTIVE",
+      "The proof job lease has not expired.",
+    );
+  }
+
+  if (
+    job.cancellationRequestedAtMs
+      !== null
+  ) {
+    return freezeJob({
+      ...job,
+
+      state:
+        "cancelled",
+
+      revision:
+        job.revision + 1,
+
+      updatedAtMs:
+        nowMs,
+
+      completedAtMs:
+        nowMs,
+
+      leaseOwnerHash:
+        null,
+
+      leaseExpiresAtMs:
+        null,
+    });
+  }
+
+  if (
+    job.attempts < job.maxAttempts
+  ) {
+    return freezeJob({
+      ...job,
+
+      state:
+        "queued",
+
+      revision:
+        job.revision + 1,
+
+      updatedAtMs:
+        nowMs,
+
+      availableAtMs:
+        nowMs,
+
+      leaseOwnerHash:
+        null,
+
+      leaseExpiresAtMs:
+        null,
+
+      failure:
+        Object.freeze({
+          code:
+            "PROOF_WORKER_LEASE_EXPIRED",
+
+          retryable:
+            true,
+        }),
+    });
+  }
+
+  return freezeJob({
+    ...job,
+
+    state:
+      "failed",
+
+    revision:
+      job.revision + 1,
+
+    updatedAtMs:
+      nowMs,
+
+    completedAtMs:
+      nowMs,
+
+    leaseOwnerHash:
+      null,
+
+    leaseExpiresAtMs:
+      null,
+
+    failure:
+      Object.freeze({
+        code:
+          "PROOF_WORKER_LEASE_EXPIRED",
+
+        retryable:
+          false,
+      }),
+  });
+}
+
 export function isTerminalProofJobState(
   state: ProofJobState,
 ): boolean {

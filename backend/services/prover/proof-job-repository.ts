@@ -24,6 +24,38 @@ export interface ProofJobAtomicClaimInput
    */
 }
 
+
+export interface ProofJobRecoveryInput {
+  readonly nowMs: number;
+  readonly limit: number;
+}
+
+export interface ProofJobRecoveryRepository {
+  /*
+   * Expired running jobs must be selected and transitioned atomically.
+   * Concurrent recovery workers must not recover the same job.
+   */
+  recoverExpired(
+    input: ProofJobRecoveryInput,
+  ): Promise<readonly ProofJobRecord[]>;
+}
+
+
+export interface ProofJobRecoveryInput {
+  readonly nowMs: number;
+  readonly limit: number;
+}
+
+export interface ProofJobRecoveryRepository {
+  /*
+   * Expired running jobs must be selected and transitioned atomically.
+   * Concurrent recovery workers must not recover the same job.
+   */
+  recoverExpired(
+    input: ProofJobRecoveryInput,
+  ): Promise<readonly ProofJobRecord[]>;
+}
+
 export interface ProofJobRepository {
   /*
    * The durable implementation must enforce unique constraints on
@@ -217,6 +249,117 @@ export async function claimNextProofJob(
   }
 
   return claimed;
+}
+
+export async function recoverExpiredProofJobs(
+  repository: ProofJobRecoveryRepository,
+  input: ProofJobRecoveryInput,
+): Promise<readonly ProofJobRecord[]> {
+  if (
+    !Number.isSafeInteger(input.nowMs)
+    || input.nowMs < 0
+  ) {
+    throw repositoryError(
+      "PROOF_JOB_RECOVERY_TIME_INVALID",
+      "The proof job recovery timestamp is invalid.",
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(input.limit)
+    || input.limit < 1
+    || input.limit > 1_000
+  ) {
+    throw repositoryError(
+      "PROOF_JOB_RECOVERY_LIMIT_INVALID",
+      "The proof job recovery batch limit is invalid.",
+    );
+  }
+
+  const recovered =
+    await repository.recoverExpired(input);
+
+  if (
+    !Array.isArray(recovered)
+    || recovered.length > input.limit
+  ) {
+    throw repositoryError(
+      "PROOF_JOB_RECOVERY_RESULT_INVALID",
+      "The repository returned an invalid recovery batch.",
+    );
+  }
+
+  const seenJobIds =
+    new Set<string>();
+
+  for (const job of recovered) {
+    assertRepositoryJob(job);
+
+    if (
+      seenJobIds.has(job.jobId)
+      || job.state === "running"
+      || job.leaseOwnerHash !== null
+      || job.leaseExpiresAtMs !== null
+      || job.updatedAtMs !== input.nowMs
+    ) {
+      throw repositoryError(
+        "PROOF_JOB_RECOVERY_RESULT_INVALID",
+        "The repository returned an invalid recovered proof job.",
+      );
+    }
+
+    seenJobIds.add(job.jobId);
+
+    if (
+      job.state === "queued"
+      && (
+        job.availableAtMs !== input.nowMs
+        || job.completedAtMs !== null
+        || job.failure?.code
+          !== "PROOF_WORKER_LEASE_EXPIRED"
+        || job.failure.retryable !== true
+      )
+    ) {
+      throw repositoryError(
+        "PROOF_JOB_RECOVERY_RESULT_INVALID",
+        "The repository returned an invalid requeued proof job.",
+      );
+    }
+
+    if (
+      job.state === "failed"
+      && (
+        job.completedAtMs !== input.nowMs
+        || job.failure?.code
+          !== "PROOF_WORKER_LEASE_EXPIRED"
+        || job.failure.retryable !== false
+      )
+    ) {
+      throw repositoryError(
+        "PROOF_JOB_RECOVERY_RESULT_INVALID",
+        "The repository returned an invalid failed proof job.",
+      );
+    }
+
+    if (
+      job.state === "cancelled"
+      && (
+        job.completedAtMs !== input.nowMs
+        || job.cancellationRequestedAtMs
+          === null
+        || job.failure !== null
+      )
+    ) {
+      throw repositoryError(
+        "PROOF_JOB_RECOVERY_RESULT_INVALID",
+        "The repository returned an invalid cancelled proof job.",
+      );
+    }
+  }
+
+  return Object.freeze([
+    ...recovered,
+  ]);
 }
 
 function assertInitialQueuedJob(

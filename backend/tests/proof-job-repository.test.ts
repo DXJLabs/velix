@@ -5,6 +5,7 @@ import {
   claimProofJob,
   completeProofJobSuccess,
   createQueuedProofJob,
+  recoverExpiredProofJob,
   type ClaimProofJobInput,
   type ProofJobRecord,
 } from "../services/prover/proof-job.js";
@@ -12,9 +13,11 @@ import {
   claimNextProofJob,
   createOrGetProofJob,
   persistProofJobTransition,
+  recoverExpiredProofJobs,
   type ProofJobAtomicClaimInput,
   type ProofJobCompareAndSwapInput,
   type ProofJobCreateResult,
+  type ProofJobRecoveryRepository,
   type ProofJobRepository,
 } from "../services/prover/proof-job-repository.js";
 
@@ -605,6 +608,126 @@ test(
     assert.equal(
       afterLeaseExpiry?.jobId,
       secondJob.jobId,
+    );
+  },
+);
+
+
+test(
+  "recovery repository returns a bounded validated batch",
+  async () => {
+    const running =
+      claimProofJob(
+        createJob(
+          "010",
+          "2",
+          "3",
+        ),
+        {
+          leaseOwnerHash:
+            OWNER,
+
+          nowMs:
+            1_000,
+
+          leaseDurationMs:
+            5_000,
+        },
+      );
+
+    const recovered =
+      recoverExpiredProofJob(
+        running,
+        6_000,
+      );
+
+    const repository:
+      ProofJobRecoveryRepository = {
+        async recoverExpired(input) {
+          assert.deepEqual(
+            input,
+            {
+              nowMs:
+                6_000,
+
+              limit:
+                50,
+            },
+          );
+
+          return [
+            recovered,
+          ];
+        },
+      };
+
+    const result =
+      await recoverExpiredProofJobs(
+        repository,
+        {
+          nowMs:
+            6_000,
+
+          limit:
+            50,
+        },
+      );
+
+    assert.deepEqual(
+      result,
+      [
+        recovered,
+      ],
+    );
+
+    assert.equal(
+      Object.isFrozen(result),
+      true,
+    );
+  },
+);
+
+test(
+  "recovery repository rejects an unsafe batch limit",
+  async () => {
+    let repositoryCalled =
+      false;
+
+    const repository:
+      ProofJobRecoveryRepository = {
+        async recoverExpired() {
+          repositoryCalled =
+            true;
+
+          return [];
+        },
+      };
+
+    await assert.rejects(
+      () =>
+        recoverExpiredProofJobs(
+          repository,
+          {
+            nowMs:
+              6_000,
+
+            limit:
+              1_001,
+          },
+        ),
+
+      (
+        error: unknown,
+      ) =>
+        error instanceof Error
+        && "code" in error
+        && error.code
+          === "PROOF_JOB_RECOVERY_LIMIT_INVALID",
+    );
+
+    assert.equal(
+      repositoryCalled,
+      false,
     );
   },
 );

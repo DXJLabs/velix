@@ -9,6 +9,8 @@ import {
   type ProofJobAtomicClaimInput,
   type ProofJobCompareAndSwapInput,
   type ProofJobCreateResult,
+  type ProofJobRecoveryInput,
+  type ProofJobRecoveryRepository,
   type ProofJobRepository,
 } from "./proof-job-repository.js";
 
@@ -151,7 +153,76 @@ WHERE jobs.job_id = candidate.job_id
 RETURNING jobs.*
 `;
 
-export class PostgresProofJobRepository implements ProofJobRepository {
+const RECOVER_EXPIRED_SQL = `
+WITH candidates AS (
+  SELECT job_id
+  FROM veil_proof_jobs
+  WHERE state = 'running'
+    AND lease_expires_at_ms IS NOT NULL
+    AND lease_expires_at_ms <= $1
+  ORDER BY
+    lease_expires_at_ms,
+    updated_at_ms,
+    job_id
+  FOR UPDATE SKIP LOCKED
+  LIMIT $2
+)
+UPDATE veil_proof_jobs AS jobs
+SET
+  state = CASE
+    WHEN jobs.cancellation_requested_at_ms
+      IS NOT NULL
+      THEN 'cancelled'
+    WHEN jobs.attempts
+      < jobs.max_attempts
+      THEN 'queued'
+    ELSE 'failed'
+  END,
+  revision = jobs.revision + 1,
+  updated_at_ms = $1,
+  available_at_ms = CASE
+    WHEN jobs.cancellation_requested_at_ms
+      IS NULL
+      AND jobs.attempts
+        < jobs.max_attempts
+      THEN $1
+    ELSE jobs.available_at_ms
+  END,
+  lease_owner_hash = NULL,
+  lease_expires_at_ms = NULL,
+  completed_at_ms = CASE
+    WHEN jobs.cancellation_requested_at_ms
+      IS NOT NULL
+      OR jobs.attempts
+        >= jobs.max_attempts
+      THEN $1
+    ELSE NULL
+  END,
+  result_reference = NULL,
+  failure_code = CASE
+    WHEN jobs.cancellation_requested_at_ms
+      IS NOT NULL
+      THEN NULL
+    ELSE 'PROOF_WORKER_LEASE_EXPIRED'
+  END,
+  failure_retryable = CASE
+    WHEN jobs.cancellation_requested_at_ms
+      IS NOT NULL
+      THEN NULL
+    WHEN jobs.attempts
+      < jobs.max_attempts
+      THEN TRUE
+    ELSE FALSE
+  END
+FROM candidates
+WHERE jobs.job_id = candidates.job_id
+RETURNING jobs.*
+`;
+
+export class PostgresProofJobRepository
+implements
+  ProofJobRepository,
+  ProofJobRecoveryRepository {
   readonly #provider: PostgresTransactionProvider;
 
   constructor(provider: PostgresTransactionProvider) {
@@ -336,6 +407,38 @@ export class PostgresProofJobRepository implements ProofJobRepository {
           ? null
           : mapRow(row);
       },
+    );
+  }
+
+  async recoverExpired(
+    input: ProofJobRecoveryInput,
+  ): Promise<readonly ProofJobRecord[]> {
+    requireInteger(
+      input.nowMs,
+      "nowMs",
+    );
+
+    if (
+      !Number.isSafeInteger(input.limit)
+      || input.limit < 1
+      || input.limit > 1_000
+    ) {
+      throw new TypeError(
+        "limit is outside the allowed range.",
+      );
+    }
+
+    const result =
+      await this.#provider.query<DatabaseRow>(
+        RECOVER_EXPIRED_SQL,
+        [
+          input.nowMs,
+          input.limit,
+        ],
+      );
+
+    return Object.freeze(
+      result.rows.map(mapRow),
     );
   }
 }
