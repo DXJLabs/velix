@@ -41,20 +41,6 @@ export interface ProofJobRecoveryRepository {
 }
 
 
-export interface ProofJobRecoveryInput {
-  readonly nowMs: number;
-  readonly limit: number;
-}
-
-export interface ProofJobRecoveryRepository {
-  /*
-   * Expired running jobs must be selected and transitioned atomically.
-   * Concurrent recovery workers must not recover the same job.
-   */
-  recoverExpired(
-    input: ProofJobRecoveryInput,
-  ): Promise<readonly ProofJobRecord[]>;
-}
 
 export interface ProofJobRepository {
   /*
