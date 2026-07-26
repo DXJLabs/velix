@@ -408,11 +408,12 @@ test("official prover serializes the finalized number as block_number", async ()
   }
 });
 
-test("official SDK compiles OpenChannel before InvokeExternal for the first self message", async () => {
+test("official SDK compiles InvokeExternal without reopening the self channel", async () => {
   const { config, prepared } = await preparedFixture();
   let provedBlock;
   let invocation;
   let invalidations = 0;
+  let channelDiscoveryCalls = 0;
   const lifecycle = [];
   const { value: execution, lines: diagnostics } = await captureConsoleLog(
     () => officialShieldedMessageProofExecutor.execute({
@@ -423,13 +424,9 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
     provider: {
       async getClassHashAt() { return SEPOLIA_HELPER_CLASS_HASH; },
       async getTransactionReceipt() { return {}; },
-      async callContract(call, blockId) {
-        assert.equal(blockId, PROVING_BLOCK);
-        if (call.entrypoint === "get_num_of_channels") return ["0x0"];
-        if (call.entrypoint === "get_public_key") {
-          return [ec.starkCurve.getStarkKey(VIEWING_KEY)];
-        }
-        throw new Error(`unexpected discovery call ${call.entrypoint}`);
+      async callContract(call) {
+        channelDiscoveryCalls += 1;
+        throw new Error(`unexpected channel discovery ${call.entrypoint}`);
       },
     },
     provingProvider: {
@@ -471,6 +468,7 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
   );
   const { result } = execution;
   assert.equal(invalidations, 1);
+  assert.equal(channelDiscoveryCalls, 0);
   assert.equal(lifecycle[0], "invalidate");
   assert.equal(lifecycle.indexOf("estimate") < lifecycle.indexOf("prove"), true);
   assert.deepEqual(
