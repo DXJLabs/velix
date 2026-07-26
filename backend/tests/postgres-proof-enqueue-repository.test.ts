@@ -272,13 +272,18 @@ test(
 
     const provider =
       new ScriptedProvider([
+        result({}),
         result(jobRow(job)),
+        result({
+          queued_jobs: 1,
+        }),
         result(payloadRow(payload)),
       ]);
 
     const repository =
       new PostgresProofEnqueueRepository(
         provider,
+        100,
       );
 
     const created =
@@ -309,16 +314,26 @@ test(
 
     assert.equal(
       provider.queries.length,
-      2,
+      4,
     );
 
     assert.match(
       provider.queries[0]?.text ?? "",
-      /veil_proof_jobs/u,
+      /pg_advisory_xact_lock/u,
     );
 
     assert.match(
       provider.queries[1]?.text ?? "",
+      /veil_proof_jobs/u,
+    );
+
+    assert.match(
+      provider.queries[2]?.text ?? "",
+      /COUNT\(\*\)/u,
+    );
+
+    assert.match(
+      provider.queries[3]?.text ?? "",
       /veil_proof_payloads/u,
     );
   },
@@ -335,6 +350,7 @@ test(
 
     const provider =
       new ScriptedProvider([
+        result({}),
         result(),
         result(jobRow(job)),
         result(payloadRow(payload)),
@@ -343,6 +359,7 @@ test(
     const repository =
       new PostgresProofEnqueueRepository(
         provider,
+        100,
       );
 
     const repeated =
@@ -384,6 +401,7 @@ test(
 
     const provider =
       new ScriptedProvider([
+        result({}),
         result(),
         result(jobRow(job)),
         result(),
@@ -392,6 +410,7 @@ test(
     const repository =
       new PostgresProofEnqueueRepository(
         provider,
+        100,
       );
 
     await assert.rejects(
@@ -422,7 +441,11 @@ test(
 
     const provider =
       new ScriptedProvider([
+        result({}),
         result(jobRow(job)),
+        result({
+          queued_jobs: 1,
+        }),
         result(),
         result(payloadRow(payload)),
       ]);
@@ -430,6 +453,7 @@ test(
     const repository =
       new PostgresProofEnqueueRepository(
         provider,
+        100,
       );
 
     await assert.rejects(
@@ -445,6 +469,54 @@ test(
     assert.equal(
       provider.transactionCount,
       1,
+    );
+  },
+);
+
+test(
+  "PostgreSQL enqueue rejects a new job when the durable queue is full",
+  async () => {
+    const job =
+      queuedJob();
+
+    const payload =
+      encryptedPayload();
+
+    const provider =
+      new ScriptedProvider([
+        result({}),
+        result(jobRow(job)),
+        result({
+          queued_jobs: 2,
+        }),
+      ]);
+
+    const repository =
+      new PostgresProofEnqueueRepository(
+        provider,
+        1,
+      );
+
+    await assert.rejects(
+      () =>
+        repository.createOrGet({
+          job,
+          payload,
+        }),
+
+      hasCode(
+        "PROOF_ENQUEUE_QUEUE_FULL",
+      ),
+    );
+
+    assert.match(
+      provider.queries[0]?.text ?? "",
+      /pg_advisory_xact_lock/u,
+    );
+
+    assert.match(
+      provider.queries[2]?.text ?? "",
+      /state = 'queued'/u,
     );
   },
 );

@@ -21,15 +21,47 @@ import {
   PostgresProofPayloadRepository,
 } from "./postgres-proof-payload-repository.js";
 
+const QUEUE_ADMISSION_LOCK_SQL = `
+SELECT pg_advisory_xact_lock($1, $2)
+`;
+
+const QUEUED_JOB_COUNT_SQL = `
+SELECT COUNT(*)::integer AS queued_jobs
+FROM veil_proof_jobs
+WHERE state = 'queued'
+`;
+
+const QUEUE_LOCK_NAMESPACE =
+  1_447_381_324;
+
+const QUEUE_LOCK_KEY =
+  2;
+
 export class PostgresProofEnqueueRepository
 implements ProofEnqueueRepository {
   readonly #provider:
     PostgresTransactionProvider;
 
+  readonly #maxQueuedJobs:
+    number;
+
   constructor(
     provider: PostgresTransactionProvider,
+    maxQueuedJobs: number,
   ) {
+    if (
+      !Number.isSafeInteger(maxQueuedJobs)
+      || maxQueuedJobs < 1
+      || maxQueuedJobs > 10_000
+    ) {
+      throw new TypeError(
+        "maxQueuedJobs is outside the allowed range.",
+      );
+    }
+
     this.#provider = provider;
+    this.#maxQueuedJobs =
+      maxQueuedJobs;
   }
 
   async createOrGet(
@@ -39,6 +71,14 @@ implements ProofEnqueueRepository {
 
     return this.#provider.transaction(
       async (executor) => {
+        await executor.query(
+          QUEUE_ADMISSION_LOCK_SQL,
+          [
+            QUEUE_LOCK_NAMESPACE,
+            QUEUE_LOCK_KEY,
+          ],
+        );
+
         const scopedProvider =
           new ScopedTransactionProvider(
             executor,
@@ -61,6 +101,26 @@ implements ProofEnqueueRepository {
           );
 
         if (jobResult.created) {
+          const capacity =
+            await executor.query(
+              QUEUED_JOB_COUNT_SQL,
+            );
+
+          const queuedJobs =
+            readQueuedJobCount(
+              capacity.rows,
+            );
+
+          if (
+            queuedJobs
+            > this.#maxQueuedJobs
+          ) {
+            throw new ProofEnqueueRepositoryError(
+              "PROOF_ENQUEUE_QUEUE_FULL",
+              "The durable proof queue is full.",
+            );
+          }
+
           const payloadResult =
             await payloadRepository.createOrGet(
               input.payload,
@@ -110,6 +170,43 @@ implements ProofEnqueueRepository {
       },
     );
   }
+}
+
+function readQueuedJobCount(
+  rows: readonly Record<
+    string,
+    unknown
+  >[],
+): number {
+  if (rows.length !== 1) {
+    throw new ProofEnqueueRepositoryError(
+      "PROOF_ENQUEUE_CAPACITY_INVALID",
+      "The database returned an invalid queue capacity result.",
+    );
+  }
+
+  const raw =
+    rows[0]?.queued_jobs;
+
+  const value =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        && /^[0-9]+$/u.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+
+  if (
+    !Number.isSafeInteger(value)
+    || value < 0
+  ) {
+    throw new ProofEnqueueRepositoryError(
+      "PROOF_ENQUEUE_CAPACITY_INVALID",
+      "The database returned an invalid queue capacity result.",
+    );
+  }
+
+  return value;
 }
 
 class ScopedTransactionProvider
