@@ -560,11 +560,9 @@ function createOfficialShieldedMessageTransfers(
     poolContractAddress: input.config.poolAddress,
     poolMode: "compatibility",
   });
-  // InvokeExternal does not require opening a channel. The SDK's setup()
-  // action is only for initial recipient-channel setup; replaying it for the
-  // already initialized self identity causes the Pool to reject the batch.
   const builder = transfers
     .build()
+    .setup(context.accountAddress)
     .invoke(() => ({
       contractAddress: feltHex(input.config.helperAddress),
       // InvokeExternal carries raw entrypoint calldata. privacy_invoke accepts
