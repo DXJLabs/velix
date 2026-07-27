@@ -9,6 +9,7 @@ import {
 import {
   TWO_PARTY_PROOF_RESULT,
   assertTwoPartyShieldedMessageSummarySafe,
+  discoverTwoPartyShieldedMessageReplayState,
   loadVeilTwoPartyShieldedMessagePocConfig,
   prepareTwoPartyShieldedMessage,
   verifyRecipientShieldedMessageDecrypt,
@@ -85,6 +86,65 @@ test("prepared payload binds sender, recipient, room, and ciphertext only", asyn
   );
   assert.equal(prepared.helperCalldata[1], prepared.messageLocator);
   assert.equal(prepared.helperCalldata[2], prepared.payloadCommitment);
+});
+
+
+
+test("two-party replay state reuses an existing direction channel", async () => {
+  const config = loadVeilTwoPartyShieldedMessagePocConfig(pocEnv());
+  const recipientPublicKey = BigInt(ec.starkCurve.getStarkKey(
+    RECIPIENT_VIEWING_KEY,
+  ));
+  const prepared = await prepareTwoPartyShieldedMessage({
+    config,
+    recipientPublicKey,
+    recipientChannelIndex: 0,
+  });
+  const encChannelInfo = encryptChannelInfo({
+    ephemeralSecret: "77777777",
+    recipientPublicKey,
+    channelKey: prepared.channelKey,
+    senderAddress: config.identity.accountAddress,
+  });
+  let channelExistsCalls = 0;
+  const provider = {
+    async callContract(call) {
+      if (call.entrypoint === "channel_exists") {
+        channelExistsCalls += 1;
+        return ["0x1"];
+      }
+      if (call.entrypoint === "get_num_of_channels") return ["0x1"];
+      if (call.entrypoint === "get_channel_info") {
+        return [
+          encChannelInfo.ephemeralPubkey,
+          encChannelInfo.encChannelKey,
+          encChannelInfo.encSenderAddr,
+        ];
+      }
+      if (call.entrypoint === "subchannel_exists") return ["0x0"];
+      if (call.entrypoint === "get_outgoing_channel_info") {
+        return ["0x0", "0x0"];
+      }
+      throw new Error(`unexpected entrypoint ${call.entrypoint}`);
+    },
+  };
+
+  const state = await discoverTwoPartyShieldedMessageReplayState({
+    config,
+    provider,
+    provingBlockId: 123,
+    recipientPublicKey,
+  });
+
+  assert.equal(channelExistsCalls, 2);
+  assert.equal(state.direction.exists, true);
+  assert.equal(state.direction.recipientChannelIndex, 0);
+  assert.equal(
+    state.registry.channels.get(BigInt(RECIPIENT_ADDRESS))?.key,
+    prepared.channelKey,
+  );
+  assert.equal(state.anchor.selfChannelExists, true);
+  assert.equal(state.anchor.tokenSubchannelExists, false);
 });
 
 test("recipient registration must match the configured private viewing key", async () => {
