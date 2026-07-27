@@ -2,14 +2,13 @@ import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import {
-  AddressMap,
   ProvingServiceError,
   createPrivateTransfers,
 } from "@starkware-libs/starknet-privacy-sdk";
 import type {
-  Channel,
-  DiscoveryProviderInterface,
   ExecuteResult,
+  PrivateRegistry,
+  PrivateTransfersBuilder,
   ProofInvocation,
   ProofInvocationFactoryDetails,
   ProofProviderInterface,
@@ -69,6 +68,18 @@ import {
   loadVeilPocIdentityConfig,
 } from "./veil-poc-identity.ts";
 import type { VeilPocIdentityConfig } from "./veil-poc-identity.ts";
+import {
+  VEIL_REPLAY_ANCHOR_AMOUNT,
+  VEIL_REPLAY_TOKEN_ADDRESS,
+  VeilReplaySnapshotDiscoveryProvider,
+  createReplayRegistry,
+  discoverReplayAnchor,
+  readOutgoingChannelCount,
+} from "./veil-replay-anchor.ts";
+import type {
+  VeilDirectionChannelState,
+  VeilReplayAnchorState,
+} from "./veil-replay-anchor.ts";
 import {
   createDurableMessageProofFixture,
   writeDurableMessageProofFixture,
@@ -141,6 +152,14 @@ export interface PreparedShieldedMessage {
   sharedSecret: Uint8Array;
 }
 
+export interface ShieldedMessageReplayState {
+  anchor: VeilReplayAnchorState;
+  direction: VeilDirectionChannelState;
+  registry: PrivateRegistry;
+  outgoingChannelCount: number;
+  senderPublicKey: bigint;
+}
+
 export interface ShieldedMessageProofExecutorInput {
   config: VeilShieldedMessagePocConfig;
   signer: SignerInterface;
@@ -149,6 +168,7 @@ export interface ShieldedMessageProofExecutorInput {
   provingBlockId: number;
   prepared: PreparedShieldedMessage;
   provider: ShieldedMessageChainProvider;
+  replayState?: ShieldedMessageReplayState;
 }
 
 export interface ShieldedMessageProofExecution {
@@ -453,100 +473,69 @@ export async function prepareShieldedMessage(input: {
   });
 }
 
-class SelfChannelDiscoveryProvider implements DiscoveryProviderInterface {
-  readonly #provider: ShieldedMessageChainProvider;
-  readonly #poolAddress: string;
-  readonly #accountAddress: bigint;
-  readonly #viewingKey: bigint;
-  readonly #provingBlockId: number;
-
-  constructor(input: {
-    provider: ShieldedMessageChainProvider;
-    poolAddress: bigint;
-    accountAddress: bigint;
-    viewingKey: bigint;
-    provingBlockId: number;
-  }) {
-    this.#provider = input.provider;
-    this.#poolAddress = feltHex(input.poolAddress);
-    this.#accountAddress = input.accountAddress;
-    this.#viewingKey = input.viewingKey;
-    this.#provingBlockId = input.provingBlockId;
-  }
-
-  async discoverNotes(
-    ..._args: Parameters<DiscoveryProviderInterface["discoverNotes"]>
-  ): ReturnType<DiscoveryProviderInterface["discoverNotes"]> {
-    throw new Error("Shielded-message PoC must not discover notes.");
-  }
-
-  async discoverRequirement(
-    ..._args: Parameters<DiscoveryProviderInterface["discoverRequirement"]>
-  ): ReturnType<DiscoveryProviderInterface["discoverRequirement"]> {
-    throw new Error("Shielded-message PoC must not discover setup requirements.");
-  }
-
-  async discoverChannels(
-    address: bigint,
-    viewingKey: bigint,
-    recipients: Parameters<DiscoveryProviderInterface["discoverChannels"]>[2],
-    params?: Parameters<DiscoveryProviderInterface["discoverChannels"]>[3],
-  ): ReturnType<DiscoveryProviderInterface["discoverChannels"]> {
-    if (address !== this.#accountAddress || viewingKey !== this.#viewingKey) {
-      throw new Error("Shielded-message discovery identity mismatch.");
-    }
-    if (params?.blockIdentifier !== undefined
-        && Number(params.blockIdentifier) !== this.#provingBlockId) {
-      throw new Error("Shielded-message discovery block mismatch.");
-    }
-    const countResponse = await this.#provider.callContract({
-      contractAddress: this.#poolAddress,
-      entrypoint: "get_num_of_channels",
-      calldata: [feltHex(this.#accountAddress)],
-    }, this.#provingBlockId);
-    if (countResponse.length !== 1) {
-      throw new Error("Privacy Pool returned an invalid channel count.");
-    }
-    const total = Number(BigInt(countResponse[0]!));
-    if (!Number.isSafeInteger(total) || total < 0) {
-      throw new Error("Privacy Pool returned an unsafe channel count.");
-    }
-    if (recipients === "total-only") {
-      return { timestamp: this.#provingBlockId, total };
-    }
-    if (recipients === "all" || recipients.length !== 1
-        || recipients[0] !== this.#accountAddress) {
-      throw new Error("Shielded-message PoC supports only self-recipient discovery.");
-    }
-    const keyResponse = await this.#provider.callContract({
-      contractAddress: this.#poolAddress,
-      entrypoint: "get_public_key",
-      calldata: [feltHex(this.#accountAddress)],
-    }, this.#provingBlockId);
-    if (keyResponse.length !== 1 || BigInt(keyResponse[0]!) === 0n) {
-      throw new Error("Privacy Pool returned no self-recipient public key.");
-    }
-    const channels = new AddressMap<Channel>();
-    channels.set(this.#accountAddress, {
-      publicKey: BigInt(keyResponse[0]!),
-      key: undefined,
-      tokens: new AddressMap(),
-    } as unknown as Channel);
-    return { timestamp: this.#provingBlockId, channels, total };
-  }
+export async function discoverShieldedMessageReplayState(
+  input: ShieldedMessageProofExecutorInput,
+): Promise<ShieldedMessageReplayState> {
+  const context = createShieldedMessageIdentityContext(input.config);
+  const senderPublicKey = BigInt(ec.starkCurve.getStarkKey(
+    feltHex(context.viewingKey),
+  ));
+  const anchor = await discoverReplayAnchor({
+    provider: input.provider,
+    poolAddress: input.config.poolAddress,
+    accountAddress: context.accountAddress,
+    viewingKey: context.viewingKey,
+    publicKey: senderPublicKey,
+    blockIdentifier: input.provingBlockId,
+  });
+  const outgoingChannelCount = await readOutgoingChannelCount({
+    provider: input.provider,
+    poolAddress: input.config.poolAddress,
+    senderAddress: context.accountAddress,
+    senderViewingKey: context.viewingKey,
+    blockIdentifier: input.provingBlockId,
+  });
+  const direction: VeilDirectionChannelState = {
+    exists: false,
+    recipientChannelIndex: outgoingChannelCount,
+    channelKey: anchor.selfChannelKey,
+    channelMarker: anchor.selfChannelMarker,
+  };
+  const registry = createReplayRegistry({
+    senderAddress: context.accountAddress,
+    senderViewingKey: context.viewingKey,
+    senderPublicKey,
+    recipientAddress: context.accountAddress,
+    recipientPublicKey: senderPublicKey,
+    direction,
+    anchor,
+  });
+  return {
+    anchor,
+    direction,
+    registry,
+    outgoingChannelCount,
+    senderPublicKey,
+  };
 }
 
 function createOfficialShieldedMessageTransfers(
   input: ShieldedMessageProofExecutorInput,
   provingProvider: ProofProviderInterface,
+  replayState: ShieldedMessageReplayState,
 ) {
   const context = createShieldedMessageIdentityContext(input.config);
-  const discoveryProvider = new SelfChannelDiscoveryProvider({
-    provider: input.provider,
-    poolAddress: input.config.poolAddress,
-    accountAddress: context.accountAddress,
-    viewingKey: context.viewingKey,
-    provingBlockId: input.provingBlockId,
+  const discoveryProvider = new VeilReplaySnapshotDiscoveryProvider({
+    senderAddress: context.accountAddress,
+    senderViewingKey: context.viewingKey,
+    senderPublicKey: replayState.senderPublicKey,
+    recipientAddress: context.accountAddress,
+    recipientPublicKey: replayState.senderPublicKey,
+    direction: replayState.direction,
+    anchor: replayState.anchor,
+    registry: replayState.registry,
+    outgoingChannelCount: replayState.outgoingChannelCount,
+    blockIdentifier: input.provingBlockId,
   });
   const transfers = createPrivateTransfers({
     account: { address: context.accountAddress, signer: input.signer },
@@ -560,18 +549,41 @@ function createOfficialShieldedMessageTransfers(
     poolContractAddress: input.config.poolAddress,
     poolMode: "compatibility",
   });
-  const builder = transfers
-    .build()
-    .setup(context.accountAddress)
-    .invoke(() => ({
-      contractAddress: feltHex(input.config.helperAddress),
-      // InvokeExternal carries raw entrypoint calldata. privacy_invoke accepts
-      // one Span<felt252>, so its ABI length prefix must be included here.
-      calldata: [
-        String(input.prepared.helperCalldata.length),
-        ...input.prepared.helperCalldata,
-      ],
-    }));
+  let builder: PrivateTransfersBuilder = transfers.build({
+    registry: replayState.registry,
+    registryConst: true,
+  });
+  if (replayState.anchor.anchorNote) {
+    builder = builder
+      .with(VEIL_REPLAY_TOKEN_ADDRESS)
+      .inputs(replayState.anchor.anchorNote)
+      .transfer({
+        recipient: context.accountAddress,
+        amount: replayState.anchor.anchorNote.amount,
+      })
+      .done();
+  } else {
+    if (!replayState.anchor.selfChannelExists) {
+      builder = builder.setup(context.accountAddress);
+    }
+    const tokenBuilder = builder.with(VEIL_REPLAY_TOKEN_ADDRESS);
+    if (!replayState.anchor.tokenSubchannelExists) {
+      tokenBuilder.setup(context.accountAddress);
+    }
+    builder = tokenBuilder
+      .deposit({ amount: VEIL_REPLAY_ANCHOR_AMOUNT })
+      .surplusTo(context.accountAddress, false)
+      .done();
+  }
+  builder = builder.invoke(() => ({
+    contractAddress: feltHex(input.config.helperAddress),
+    // InvokeExternal carries raw entrypoint calldata. privacy_invoke accepts
+    // one Span<felt252>, so its ABI length prefix must be included here.
+    calldata: [
+      String(input.prepared.helperCalldata.length),
+      ...input.prepared.helperCalldata,
+    ],
+  }));
   return { transfers, builder };
 }
 
@@ -909,6 +921,8 @@ async function prepareOfficialShieldedMessageProof(
   // A reverted submission may leave the provider's pool nonce cache stale.
   // Clear it before constructing any new virtual transaction or signature.
   input.provingProvider.invalidateNonceCache?.();
+  const replayState = input.replayState
+    ?? await discoverShieldedMessageReplayState(input);
   const baseDetails = await input.provingProvider.getDefaultDetails();
   if (baseDetails.nonce === undefined) {
     throw new Error("Official proving provider returned no current pool nonce.");
@@ -920,6 +934,7 @@ async function prepareOfficialShieldedMessageProof(
   const preliminary = createOfficialShieldedMessageTransfers(
     input,
     preliminaryProvider,
+    replayState,
   );
   const preliminaryInvocation = await preliminary.builder
     .createProofInvocation();
@@ -946,11 +961,17 @@ async function prepareOfficialShieldedMessageProof(
   const finalTransfer = createOfficialShieldedMessageTransfers(
     input,
     finalProvider,
+    replayState,
   );
   const finalInvocation = await finalTransfer.builder.createProofInvocation();
   assertInvocationResourceBounds(
     finalInvocation.invocation,
     provingResourceBounds,
+  );
+  console.log(
+    replayState.anchor.anchorNote
+      ? "SHIELDED_MESSAGE_REPLAY_ANCHOR_ROTATION_READY"
+      : "SHIELDED_MESSAGE_REPLAY_ANCHOR_BOOTSTRAP_READY",
   );
   console.log("SHIELDED_MESSAGE_RESOURCE_ESTIMATE_VALID");
   console.log(

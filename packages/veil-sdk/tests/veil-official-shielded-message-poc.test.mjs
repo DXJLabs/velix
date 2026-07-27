@@ -408,7 +408,7 @@ test("official prover serializes the finalized number as block_number", async ()
   }
 });
 
-test("official SDK compiles OpenChannel before InvokeExternal for the first self message", async () => {
+test("official SDK compiles a replay anchor before InvokeExternal for a self message", async () => {
   const { config, prepared } = await preparedFixture();
   let provedBlock;
   let invocation;
@@ -425,11 +425,12 @@ test("official SDK compiles OpenChannel before InvokeExternal for the first self
       async getTransactionReceipt() { return {}; },
       async callContract(call, blockId) {
         assert.equal(blockId, PROVING_BLOCK);
-        if (call.entrypoint === "get_num_of_channels") return ["0x0"];
-        if (call.entrypoint === "get_public_key") {
-          return [ec.starkCurve.getStarkKey(VIEWING_KEY)];
+        if (call.entrypoint === "channel_exists") return ["0x1"];
+        if (call.entrypoint === "subchannel_exists") return ["0x0"];
+        if (call.entrypoint === "get_outgoing_channel_info") {
+          return ["0x0", "0x0"];
         }
-        throw new Error(`unexpected discovery call ${call.entrypoint}`);
+        throw new Error(`unexpected replay-state call ${call.entrypoint}`);
       },
     },
     provingProvider: {
@@ -736,11 +737,11 @@ test("estimation failure stops before proof generation", async () => {
         async getClassHashAt() { return SEPOLIA_HELPER_CLASS_HASH; },
         async getTransactionReceipt() { return {}; },
         async callContract(call) {
-          if (call.entrypoint === "get_num_of_channels") return ["0x0"];
-          if (call.entrypoint === "get_public_key") {
-            return [ec.starkCurve.getStarkKey(VIEWING_KEY)];
+          if (call.entrypoint === "channel_exists") return ["0x0"];
+          if (call.entrypoint === "get_outgoing_channel_info") {
+            return ["0x0", "0x0"];
           }
-          throw new Error(`unexpected discovery call ${call.entrypoint}`);
+          throw new Error(`unexpected replay-state call ${call.entrypoint}`);
         },
       },
       provingProvider: {
