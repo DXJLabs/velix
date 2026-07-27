@@ -107,7 +107,16 @@ function toHex(value: string | number | bigint): string {
 function validTransaction(canonical = validCanonical()) {
   const payload = buildCanonicalHelperPayload(canonical);
   const helperCalldata = payload.calldata.map(toHex);
-  const action = ["0x8", HELPER, toHex(helperCalldata.length), ...helperCalldata];
+  const privacyInvokeCalldata = [
+    toHex(helperCalldata.length),
+    ...helperCalldata,
+  ];
+  const action = [
+    "0x8",
+    HELPER,
+    toHex(privacyInvokeCalldata.length),
+    ...privacyInvokeCalldata,
+  ];
   const inner = ["0x123", "0x456", "0x1", ...action];
   return {
     type: "INVOKE",

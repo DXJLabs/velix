@@ -76,8 +76,17 @@ function validCanonical(overrides = {}) {
 
 function invokeExternalAction(canonical = validCanonical(), contractAddress = HELPER, calldata) {
   const payload = buildCanonicalHelperPayload(canonical);
-  const values = (calldata ?? payload.calldata).map(toHex);
-  return ["0x8", contractAddress, toHex(values.length), ...values];
+  const payloadValues = (calldata ?? payload.calldata).map(toHex);
+  const privacyInvokeCalldata = [
+    toHex(payloadValues.length),
+    ...payloadValues,
+  ];
+  return [
+    "0x8",
+    contractAddress,
+    toHex(privacyInvokeCalldata.length),
+    ...privacyInvokeCalldata,
+  ];
 }
 
 function validTransaction(canonical = validCanonical(), overrides = {}) {
@@ -349,6 +358,57 @@ describe("Phase 4 proof request validation", () => {
         (error) => error.code === code,
       );
     }
+  });
+
+  it("rejects privacy_invoke calldata without the required Span length prefix", async () => {
+    const canonical =
+      validCanonical();
+
+    const payload =
+      buildCanonicalHelperPayload(
+        canonical,
+      );
+
+    const rawPayload =
+      payload.calldata.map(
+        toHex,
+      );
+
+    const action = [
+      "0x8",
+      HELPER,
+      toHex(
+        rawPayload.length,
+      ),
+      ...rawPayload,
+    ];
+
+    const transaction =
+      validTransaction(
+        canonical,
+        {
+          actions:
+            action,
+        },
+      );
+
+    const {
+      client,
+    } = createClient();
+
+    await assert.rejects(
+      () =>
+        client.prove(
+          validProofInput(
+            canonical,
+            transaction,
+          ),
+        ),
+
+      (error) =>
+        error.code
+          === "PROVER_REQUEST_INVALID",
+    );
   });
 
   it("rejects an InvokeExternal target or payload that differs from the validated canonical intent", async () => {

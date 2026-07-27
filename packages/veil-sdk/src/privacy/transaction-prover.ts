@@ -1153,9 +1153,40 @@ function validateCanonicalTransactionIntent(
       if (invokeCalldata.length !== invokeCalldataLength) {
         throw requestError("InvokeExternal calldata ended unexpectedly.");
       }
-      if (!sameFeltArray(invokeCalldata, canonical.payload.calldata)) {
-        throw requestError("InvokeExternal calldata does not match the validated VEIL payload commitment.");
+
+      /*
+       * PrivateTransfersBuilder.invoke receives raw entrypoint calldata.
+       * VeilChannelHelper.privacy_invoke accepts one Span<felt252>, so the
+       * official SDK invocation contains Cairo ABI calldata:
+       * [span_length, ...validated_helper_payload].
+       */
+      if (invokeCalldata.length < 1) {
+        throw requestError("InvokeExternal privacy_invoke Span calldata is missing.");
       }
+
+      const privacyInvokeSpanLength =
+        feltToBoundedCount(
+          invokeCalldata[0],
+          "privacy_invoke Span length",
+          4_096,
+        );
+
+      const privacyInvokePayload =
+        invokeCalldata.slice(1);
+
+      if (
+        privacyInvokeSpanLength
+          !== privacyInvokePayload.length
+        || !sameFeltArray(
+          privacyInvokePayload,
+          canonical.payload.calldata,
+        )
+      ) {
+        throw requestError(
+          "InvokeExternal calldata does not match the ABI-encoded validated VEIL payload commitment.",
+        );
+      }
+
       cursor += invokeCalldataLength;
       continue;
     }
