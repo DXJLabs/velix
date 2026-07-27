@@ -51,6 +51,9 @@ const POOL =
 
 const HELPER =
   "0x52390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23";
+
+const DURABLE_MESSAGE_HELPER =
+  "0x12987b19281814166518b965ea432cf9458ae4a86d5cdf6dc9ce490d950cdd0";
 const COMPILE_ACTIONS_SELECTOR = hash.getSelectorFromName("compile_actions");
 const PROOF_PROGRAM = "0x5649525455414c5f534e4f53";
 const PROOF_OUTPUT = "0x5649525455414c5f534e4f5330";
@@ -178,6 +181,46 @@ function jsonResponse(value: unknown): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+test(
+  "backend environment accepts the reviewed durable message helper",
+  () => {
+    const environment =
+      loadProverEnvironment({
+        ...backendEnv(),
+
+        VEIL_CHANNEL_HELPER_ADDRESS:
+          DURABLE_MESSAGE_HELPER,
+      });
+
+    assert.equal(
+      environment.helperAddress,
+      DURABLE_MESSAGE_HELPER,
+    );
+  },
+);
+
+test(
+  "backend environment still rejects an unknown helper",
+  () => {
+    assert.throws(
+      () =>
+        loadProverEnvironment({
+          ...backendEnv(),
+
+          VEIL_CHANNEL_HELPER_ADDRESS:
+            "0x123456789abcdef",
+        }),
+
+      (error: unknown) =>
+        typeof error === "object"
+        && error !== null
+        && "code" in error
+        && error.code
+          === "VEIL_HELPER_NOT_REVIEWED",
+    );
+  },
+);
 
 test(
   "backend environment fails closed when the experimental direct prover is not acknowledged",

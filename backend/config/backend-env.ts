@@ -20,6 +20,9 @@ const REVIEWED_SEPOLIA_POOL =
 const REVIEWED_SEPOLIA_HELPER =
   "0x052390845931a0c8d4735246d853a1a514c3cbf88cb1714937284814c5e57b23";
 
+const REVIEWED_SEPOLIA_DURABLE_MESSAGE_HELPER =
+  "0x12987b19281814166518b965ea432cf9458ae4a86d5cdf6dc9ce490d950cdd0";
+
 export const BACKEND_REVIEWED_POOL_ADDRESSES =
   Object.freeze([
     normalizeNonzeroFelt(
@@ -33,6 +36,11 @@ export const BACKEND_REVIEWED_HELPER_ADDRESSES =
     normalizeNonzeroFelt(
       REVIEWED_SEPOLIA_HELPER,
       "reviewedHelperAddress",
+    ),
+
+    normalizeNonzeroFelt(
+      REVIEWED_SEPOLIA_DURABLE_MESSAGE_HELPER,
+      "reviewedDurableMessageHelperAddress",
     ),
   ]);
 
