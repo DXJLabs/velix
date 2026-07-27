@@ -127,6 +127,48 @@ jobs:
           docker image inspect "$PROVER_IMAGE" >/dev/null
           echo "SAVED_PROVER_IMAGE_READY"
 
+      - name: Prepare memory for recursive STWO proof
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== MEMORY BEFORE SWAP ==="
+          free -h
+
+          echo "=== DISK BEFORE SWAP ==="
+          df -h /
+
+          available_kb="$(df -Pk / | awk 'NR == 2 { print $4 }')"
+          reserve_kb="$((3 * 1024 * 1024))"
+          maximum_swap_kb="$((10 * 1024 * 1024))"
+          swap_kb="$((available_kb - reserve_kb))"
+
+          if [ "$swap_kb" -gt "$maximum_swap_kb" ]; then
+            swap_kb="$maximum_swap_kb"
+          fi
+
+          if [ "$swap_kb" -lt "$((4 * 1024 * 1024))" ]; then
+            echo "Insufficient runner disk for the minimum 4 GiB prover swap."
+            exit 1
+          fi
+
+          swap_path="/veil-prover.swap"
+
+          if swapon --show --noheadings --raw             | awk '{ print $1 }'             | grep -Fxq "$swap_path"; then
+            sudo swapoff "$swap_path"
+          fi
+
+          sudo rm -f "$swap_path"
+          sudo fallocate -l "${swap_kb}K" "$swap_path"
+          sudo chmod 600 "$swap_path"
+          sudo mkswap "$swap_path"
+          sudo swapon "$swap_path"
+
+          echo "=== MEMORY AFTER SWAP ==="
+          free -h
+          swapon --show
+          df -h /
+
       - name: Start official transaction prover
         shell: bash
         run: |
@@ -146,6 +188,8 @@ jobs:
             -e MAX_QUEUED_REQUESTS="1" \
             -e MAX_CONNECTIONS="2" \
             -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e RAYON_NUM_THREADS="2" \
+            -e MALLOC_ARENA_MAX="2" \
             -e PREFETCH_STATE="false" \
             -e RUST_LOG="info" \
             "$PROVER_IMAGE"
@@ -314,14 +358,38 @@ jobs:
 
           timeout 330m npm run test:real-message-proof
 
-      - name: Remove ephemeral fixture and stop container
+      - name: Save prover diagnostics and remove ephemeral fixture
         if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
 
+          if docker inspect veil-durable-message-prover >/dev/null 2>&1; then
+            docker inspect veil-durable-message-prover \
+              --format '{"status":{{json .State.Status}},"running":{{json .State.Running}},"oomKilled":{{json .State.OOMKilled}},"exitCode":{{json .State.ExitCode}},"error":{{json .State.Error}},"startedAt":{{json .State.StartedAt}},"finishedAt":{{json .State.FinishedAt}}}' \
+              > veil-durable-message-prover-state.json || true
+
+            docker logs veil-durable-message-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-durable-message-prover.log || true
+          else
+            printf '%s\n' \
+              '{"status":"missing","running":false,"oomKilled":null,"exitCode":null,"error":null}' \
+              > veil-durable-message-prover-state.json
+            : > veil-durable-message-prover.log
+          fi
+
+          echo "SAFE_DURABLE_PROVER_CONTAINER_STATE"
+          cat veil-durable-message-prover-state.json
+
           docker rm -f veil-durable-message-prover \
             >/dev/null 2>&1 || true
+
+          swap_path="/veil-prover.swap"
+          if swapon --show --noheadings --raw             | awk '{ print $1 }'             | grep -Fxq "$swap_path"; then
+            sudo swapoff "$swap_path"
+          fi
+          sudo rm -f "$swap_path"
 
           rm -f \
             "$RUNNER_TEMP/veil-real-message-proof-fixture.json" \
@@ -330,3 +398,14 @@ jobs:
             "$GITHUB_WORKSPACE/veil-account-preflight.json"
 
           echo "EPHEMERAL_DURABLE_MESSAGE_FIXTURE_REMOVED"
+
+      - name: Upload safe durable prover diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-durable-message-prover-diagnostics
+          path: |
+            veil-durable-message-prover-state.json
+            veil-durable-message-prover.log
+          if-no-files-found: warn
+          retention-days: 14
