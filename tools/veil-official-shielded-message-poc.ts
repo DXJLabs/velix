@@ -1386,6 +1386,22 @@ export async function runVeilOfficialShieldedMessagePoc(
     env.VEIL_POC_DURABLE_FIXTURE_PATH
       ?.trim();
 
+  const allowedDurableViewingMaterial =
+    [
+      env.VEIL_POC_VIEWING_KEY
+        ?.trim(),
+      config.identity
+        .viewingKey
+        .toString(),
+      feltHex(
+        config.identity
+          .viewingKey,
+      ),
+    ].filter(
+      (value): value is string =>
+        Boolean(value),
+    );
+
   if (durableFixturePath) {
     if (!proofExecution.proofInvocation) {
       throw new Error(
@@ -1408,6 +1424,9 @@ export async function runVeilOfficialShieldedMessagePoc(
             .proofInvocation,
 
         sensitiveValues,
+
+        allowedViewingMaterial:
+          allowedDurableViewingMaterial,
       });
 
     await writeDurableMessageProofFixture({
@@ -1416,6 +1435,9 @@ export async function runVeilOfficialShieldedMessagePoc(
 
       fixture,
       sensitiveValues,
+
+      allowedViewingMaterial:
+        allowedDurableViewingMaterial,
     });
 
     console.log(

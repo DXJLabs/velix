@@ -18,6 +18,9 @@ const NUMERIC_SENSITIVE_VALUE =
 const MIN_DISTINCTIVE_SENSITIVE_LENGTH =
   16;
 
+const OFFICIAL_VIEWING_MATERIAL_PATH =
+  "$.request.transaction.calldata[5]";
+
 export interface DurableMessagePreparedInput {
   readonly messageLocator: string;
   readonly payloadCommitment: string;
@@ -117,6 +120,9 @@ export function createDurableMessageProofFixture(
       string;
 
     readonly sensitiveValues?:
+      readonly string[];
+
+    readonly allowedViewingMaterial?:
       readonly string[];
   },
 ): DurableMessageProofFixture {
@@ -237,6 +243,7 @@ export function createDurableMessageProofFixture(
   assertDurableMessageProofFixtureSafe(
     fixture,
     input.sensitiveValues,
+    input.allowedViewingMaterial,
   );
 
   return deepFreeze(
@@ -254,11 +261,15 @@ export async function writeDurableMessageProofFixture(
 
     readonly sensitiveValues?:
       readonly string[];
+
+    readonly allowedViewingMaterial?:
+      readonly string[];
   },
 ): Promise<void> {
   assertDurableMessageProofFixtureSafe(
     input.fixture,
     input.sensitiveValues,
+    input.allowedViewingMaterial,
   );
 
   await writeFile(
@@ -283,6 +294,9 @@ export function assertDurableMessageProofFixtureSafe(
     DurableMessageProofFixture,
 
   sensitiveValues:
+    readonly string[] = [],
+
+  allowedViewingMaterial:
     readonly string[] = [],
 ): void {
   const topLevelKeys =
@@ -318,6 +332,38 @@ export function assertDurableMessageProofFixtureSafe(
     fixture,
   );
 
+  const allowedViewingValues =
+    new Set(
+      allowedViewingMaterial
+        .map(
+          (value) =>
+            value.trim(),
+        )
+        .filter(
+          (value) =>
+            isDistinctiveSensitiveValue(
+              value,
+            ),
+        ),
+    );
+
+  for (
+    const allowedViewingValue
+    of allowedViewingValues
+  ) {
+    if (
+      !sensitiveValues.some(
+        (sensitive) =>
+          sensitive.trim()
+            === allowedViewingValue,
+      )
+    ) {
+      throw new Error(
+        "Allowed viewing material must also be classified as sensitive.",
+      );
+    }
+  }
+
   for (
     const [
       sensitiveIndex,
@@ -336,17 +382,31 @@ export function assertDurableMessageProofFixtureSafe(
       continue;
     }
 
-    const sensitivePath =
-      findSensitiveValuePath(
+    const sensitiveMatches =
+      findSensitiveValueMatches(
         fixture,
         normalized,
       );
 
+    const disallowedMatch =
+      sensitiveMatches.find(
+        (match) =>
+          !(
+            allowedViewingValues
+              .has(
+                normalized,
+              )
+            && match.path
+              === OFFICIAL_VIEWING_MATERIAL_PATH
+            && match.exact
+          ),
+      );
+
     if (
-      sensitivePath !== null
+      disallowedMatch !== undefined
     ) {
       throw new Error(
-        `The durable message proof fixture contains sensitive material at ${sensitivePath} (sensitive value #${sensitiveIndex + 1}).`,
+        `The durable message proof fixture contains sensitive material at ${disallowedMatch.path} (sensitive value #${sensitiveIndex + 1}).`,
       );
     }
   }
@@ -439,12 +499,20 @@ function isDistinctiveSensitiveValue(
     >= MIN_DISTINCTIVE_SENSITIVE_LENGTH;
 }
 
-function findSensitiveValuePath(
+interface SensitiveValueMatch {
+  readonly path:
+    string;
+
+  readonly exact:
+    boolean;
+}
+
+function findSensitiveValueMatches(
   value: unknown,
   sensitive: string,
   path = "$",
   depth = 0,
-): string | null {
+): SensitiveValueMatch[] {
   if (depth > 24) {
     throw new Error(
       "The durable message proof fixture exceeds the JSON depth limit.",
@@ -452,12 +520,27 @@ function findSensitiveValuePath(
   }
 
   if (typeof value === "string") {
-    return value === sensitive
-      || value.includes(
-        sensitive,
-      )
-      ? path
-      : null;
+    if (value === sensitive) {
+      return [
+        {
+          path,
+          exact:
+            true,
+        },
+      ];
+    }
+
+    return value.includes(
+      sensitive,
+    )
+      ? [
+          {
+            path,
+            exact:
+              false,
+          },
+        ]
+      : [];
   }
 
   if (
@@ -465,8 +548,11 @@ function findSensitiveValuePath(
     || typeof value
       !== "object"
   ) {
-    return null;
+    return [];
   }
+
+  const matches:
+    SensitiveValueMatch[] = [];
 
   if (Array.isArray(value)) {
     for (
@@ -474,20 +560,17 @@ function findSensitiveValuePath(
       index < value.length;
       index += 1
     ) {
-      const nestedPath =
-        findSensitiveValuePath(
+      matches.push(
+        ...findSensitiveValueMatches(
           value[index],
           sensitive,
           `${path}[${index}]`,
           depth + 1,
-        );
-
-      if (nestedPath !== null) {
-        return nestedPath;
-      }
+        ),
+      );
     }
 
-    return null;
+    return matches;
   }
 
   for (
@@ -499,20 +582,17 @@ function findSensitiveValuePath(
       value,
     )
   ) {
-    const nestedPath =
-      findSensitiveValuePath(
+    matches.push(
+      ...findSensitiveValueMatches(
         entry,
         sensitive,
         `${path}.${key}`,
         depth + 1,
-      );
-
-    if (nestedPath !== null) {
-      return nestedPath;
-    }
+      ),
+    );
   }
 
-  return null;
+  return matches;
 }
 
 function normalizeFelt(

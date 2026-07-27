@@ -176,6 +176,216 @@ test(
 );
 
 test(
+  "durable message fixture allows official viewing material only at calldata slot five",
+  () => {
+    const viewingMaterial =
+      "0x1234567890abcdef1234567890abcdef";
+
+    const invocation = {
+      ...INVOCATION,
+
+      calldata: [
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0x5",
+        viewingMaterial,
+      ],
+    };
+
+    const fixture =
+      createDurableMessageProofFixture({
+        prepared: {
+          messageLocator:
+            "0x77",
+
+          payloadCommitment:
+            "0x88",
+
+          applicationEnvelope: {
+            version:
+              1,
+
+            salt:
+              "safe-salt",
+
+            nonce:
+              "safe-nonce",
+
+            ciphertext:
+              "safe-ciphertext",
+          },
+        },
+
+        provingBlockId:
+          123,
+
+        helperAddress:
+          "0x99",
+
+        invocation,
+
+        sensitiveValues: [
+          viewingMaterial,
+        ],
+
+        allowedViewingMaterial: [
+          viewingMaterial,
+        ],
+      });
+
+    assert.equal(
+      fixture.request
+        .transaction
+        .calldata[5],
+      viewingMaterial,
+    );
+
+    assert.doesNotThrow(
+      () =>
+        assertDurableMessageProofFixtureSafe(
+          fixture,
+          [
+            viewingMaterial,
+          ],
+          [
+            viewingMaterial,
+          ],
+        ),
+    );
+  },
+);
+
+test(
+  "durable message fixture rejects viewing material outside calldata slot five",
+  () => {
+    const viewingMaterial =
+      "0x1234567890abcdef1234567890abcdef";
+
+    assert.throws(
+      () =>
+        createDurableMessageProofFixture({
+          prepared: {
+            messageLocator:
+              "0x77",
+
+            payloadCommitment:
+              "0x88",
+
+            applicationEnvelope: {
+              version:
+                1,
+
+              salt:
+                "safe-salt",
+
+              nonce:
+                "safe-nonce",
+
+              ciphertext:
+                "safe-ciphertext",
+            },
+          },
+
+          provingBlockId:
+            123,
+
+          helperAddress:
+            "0x99",
+
+          invocation: {
+            ...INVOCATION,
+
+            calldata: [
+              "0x1",
+              "0x2",
+              "0x3",
+              "0x4",
+              viewingMaterial,
+              "0x6",
+            ],
+          },
+
+          sensitiveValues: [
+            viewingMaterial,
+          ],
+
+          allowedViewingMaterial: [
+            viewingMaterial,
+          ],
+        }),
+
+      /at \$\.request\.transaction\.calldata\[4\]/u,
+    );
+  },
+);
+
+test(
+  "durable message fixture rejects embedded viewing material at the allowed slot",
+  () => {
+    const viewingMaterial =
+      "0x1234567890abcdef1234567890abcdef";
+
+    assert.throws(
+      () =>
+        createDurableMessageProofFixture({
+          prepared: {
+            messageLocator:
+              "0x77",
+
+            payloadCommitment:
+              "0x88",
+
+            applicationEnvelope: {
+              version:
+                1,
+
+              salt:
+                "safe-salt",
+
+              nonce:
+                "safe-nonce",
+
+              ciphertext:
+                "safe-ciphertext",
+            },
+          },
+
+          provingBlockId:
+            123,
+
+          helperAddress:
+            "0x99",
+
+          invocation: {
+            ...INVOCATION,
+
+            calldata: [
+              "0x1",
+              "0x2",
+              "0x3",
+              "0x4",
+              "0x5",
+              `prefix-${viewingMaterial}-suffix`,
+            ],
+          },
+
+          sensitiveValues: [
+            viewingMaterial,
+          ],
+
+          allowedViewingMaterial: [
+            viewingMaterial,
+          ],
+        }),
+
+      /at \$\.request\.transaction\.calldata\[5\]/u,
+    );
+  },
+);
+
+test(
   "durable message fixture rejects exact sensitive material",
   () => {
     assert.throws(
