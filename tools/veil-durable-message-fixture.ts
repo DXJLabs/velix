@@ -160,6 +160,16 @@ export function createDurableMessageProofFixture(
   const locatorToken =
     locator.slice(2);
 
+  /*
+   * The backend and OfficialPrivacyTransport cap requestId at 64
+   * characters. A Starknet felt may contain 63 hexadecimal digits, so
+   * `request-${locatorToken}` can exceed that boundary. Keep a
+   * deterministic 224-bit suffix for correlation while preserving the
+   * full locator separately in canonical.messageLocator.
+   */
+  const requestToken =
+    locatorToken.slice(-56);
+
   const fixture:
     DurableMessageProofFixture = {
       schemaVersion:
@@ -178,7 +188,7 @@ export function createDurableMessageProofFixture(
             `message-${locatorToken}`,
 
           requestId:
-            `request-${locatorToken}`,
+            `request-${requestToken}`,
 
           operation:
             "message",

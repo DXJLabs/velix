@@ -161,6 +161,73 @@ test(
 );
 
 test(
+  "durable message fixture bounds requestId for a full-width Starknet locator",
+  () => {
+    const fullWidthLocator =
+      `0x${(
+        (1n << 251n)
+        - 1n
+      ).toString(16)}`;
+
+    const fixture =
+      createDurableMessageProofFixture({
+        prepared: {
+          messageLocator:
+            fullWidthLocator,
+
+          payloadCommitment:
+            "0x88",
+
+          applicationEnvelope: {
+            version:
+              1,
+
+            salt:
+              "safe-salt",
+
+            nonce:
+              "safe-nonce",
+
+            ciphertext:
+              "safe-ciphertext",
+          },
+        },
+
+        provingBlockId:
+          123,
+
+        helperAddress:
+          "0x99",
+
+        invocation:
+          INVOCATION,
+      });
+
+    assert.equal(
+      fixture.request
+        .canonical
+        .messageLocator,
+      fullWidthLocator,
+    );
+
+    assert.equal(
+      fixture.request
+        .canonical
+        .requestId
+        .length,
+      64,
+    );
+
+    assert.match(
+      fixture.request
+        .canonical
+        .requestId,
+      /^request-[0-9a-f]{56}$/u,
+    );
+  },
+);
+
+test(
   "short numeric secrets do not collide with public Invoke V3 constants",
   () => {
     assert.doesNotThrow(
