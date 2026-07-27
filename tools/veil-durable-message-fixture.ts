@@ -12,6 +12,12 @@ export const DURABLE_MESSAGE_FIXTURE_SCHEMA =
 const PRIVATE_FIELD =
   /(accountprivatekey|channelkey|channelsecret|decrypted|mnemonic|plaintext|privatekey|seedphrase|sharedsecret|viewingkey|viewingmaterial)/iu;
 
+const NUMERIC_SENSITIVE_VALUE =
+  /^(?:0x[0-9a-f]+|[0-9]+)$/iu;
+
+const MIN_DISTINCTIVE_SENSITIVE_LENGTH =
+  16;
+
 export interface DurableMessagePreparedInput {
   readonly messageLocator: string;
   readonly payloadCommitment: string;
@@ -312,17 +318,25 @@ export function assertDurableMessageProofFixtureSafe(
     fixture,
   );
 
-  const serialized =
-    JSON.stringify(fixture);
-
   for (
     const sensitive
     of sensitiveValues
   ) {
+    const normalized =
+      sensitive.trim();
+
     if (
-      sensitive
-      && serialized.includes(
-        sensitive,
+      !isDistinctiveSensitiveValue(
+        normalized,
+      )
+    ) {
+      continue;
+    }
+
+    if (
+      containsSensitiveValue(
+        fixture,
+        normalized,
       )
     ) {
       throw new Error(
@@ -391,6 +405,80 @@ function rejectPrivateFieldNames(
       depth + 1,
     );
   }
+}
+
+function isDistinctiveSensitiveValue(
+  value: string,
+): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const significant =
+    NUMERIC_SENSITIVE_VALUE.test(
+      value,
+    )
+      ? value
+        .replace(
+          /^0x/iu,
+          "",
+        )
+        .replace(
+          /^0+/u,
+          "",
+        )
+      : value;
+
+  return significant.length
+    >= MIN_DISTINCTIVE_SENSITIVE_LENGTH;
+}
+
+function containsSensitiveValue(
+  value: unknown,
+  sensitive: string,
+  depth = 0,
+): boolean {
+  if (depth > 24) {
+    throw new Error(
+      "The durable message proof fixture exceeds the JSON depth limit.",
+    );
+  }
+
+  if (typeof value === "string") {
+    return value === sensitive
+      || value.includes(
+        sensitive,
+      );
+  }
+
+  if (
+    value === null
+    || typeof value
+      !== "object"
+  ) {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(
+      (entry) =>
+        containsSensitiveValue(
+          entry,
+          sensitive,
+          depth + 1,
+        ),
+    );
+  }
+
+  return Object.values(value)
+    .some(
+      (entry) =>
+        containsSensitiveValue(
+          entry,
+          sensitive,
+          depth + 1,
+        ),
+    );
 }
 
 function normalizeFelt(

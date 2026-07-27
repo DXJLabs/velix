@@ -161,6 +161,21 @@ test(
 );
 
 test(
+  "short numeric secrets do not collide with public Invoke V3 constants",
+  () => {
+    assert.doesNotThrow(
+      () =>
+        createFixture([
+          "0x1",
+          "1",
+          "0x3",
+          "3",
+        ]),
+    );
+  },
+);
+
+test(
   "durable message fixture rejects exact sensitive material",
   () => {
     assert.throws(
@@ -199,6 +214,56 @@ test(
 
           sensitiveValues: [
             "private-material",
+          ],
+        }),
+
+      /contains sensitive material/u,
+    );
+  },
+);
+
+test(
+  "durable message fixture still rejects distinctive embedded secrets",
+  () => {
+    const distinctiveSecret =
+      "distinctive-private-material-1234567890";
+
+    assert.throws(
+      () =>
+        createDurableMessageProofFixture({
+          prepared: {
+            messageLocator:
+              "0x77",
+
+            payloadCommitment:
+              "0x88",
+
+            applicationEnvelope: {
+              version:
+                1,
+
+              salt:
+                "safe-salt",
+
+              nonce:
+                "safe-nonce",
+
+              ciphertext:
+                `prefix-${distinctiveSecret}-suffix`,
+            },
+          },
+
+          provingBlockId:
+            123,
+
+          helperAddress:
+            "0x99",
+
+          invocation:
+            INVOCATION,
+
+          sensitiveValues: [
+            distinctiveSecret,
           ],
         }),
 
