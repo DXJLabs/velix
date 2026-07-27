@@ -273,6 +273,75 @@ test(
 );
 
 test(
+  "durable message fixture reports a redacted sensitive path",
+  () => {
+    const secret =
+      "distinctive-private-material-1234567890";
+
+    assert.throws(
+      () =>
+        createDurableMessageProofFixture({
+          prepared: {
+            messageLocator:
+              "0x77",
+
+            payloadCommitment:
+              "0x88",
+
+            applicationEnvelope: {
+              version:
+                1,
+
+              salt:
+                "safe-salt",
+
+              nonce:
+                "safe-nonce",
+
+              ciphertext:
+                `prefix-${secret}-suffix`,
+            },
+          },
+
+          provingBlockId:
+            123,
+
+          helperAddress:
+            "0x99",
+
+          invocation:
+            INVOCATION,
+
+          sensitiveValues: [
+            secret,
+          ],
+        }),
+
+      (error) => {
+        assert.equal(
+          error instanceof Error,
+          true,
+        );
+
+        assert.match(
+          error.message,
+          /at \$\.request\.canonical\.envelope\.ciphertext \(sensitive value #1\)/u,
+        );
+
+        assert.equal(
+          error.message.includes(
+            secret,
+          ),
+          false,
+        );
+
+        return true;
+      },
+    );
+  },
+);
+
+test(
   "durable message fixture is written with the exact schema",
   async () => {
     const directory =

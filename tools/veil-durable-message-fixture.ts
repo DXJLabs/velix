@@ -319,8 +319,11 @@ export function assertDurableMessageProofFixtureSafe(
   );
 
   for (
-    const sensitive
-    of sensitiveValues
+    const [
+      sensitiveIndex,
+      sensitive,
+    ]
+    of sensitiveValues.entries()
   ) {
     const normalized =
       sensitive.trim();
@@ -333,14 +336,17 @@ export function assertDurableMessageProofFixtureSafe(
       continue;
     }
 
-    if (
-      containsSensitiveValue(
+    const sensitivePath =
+      findSensitiveValuePath(
         fixture,
         normalized,
-      )
+      );
+
+    if (
+      sensitivePath !== null
     ) {
       throw new Error(
-        "The durable message proof fixture contains sensitive material.",
+        `The durable message proof fixture contains sensitive material at ${sensitivePath} (sensitive value #${sensitiveIndex + 1}).`,
       );
     }
   }
@@ -433,11 +439,12 @@ function isDistinctiveSensitiveValue(
     >= MIN_DISTINCTIVE_SENSITIVE_LENGTH;
 }
 
-function containsSensitiveValue(
+function findSensitiveValuePath(
   value: unknown,
   sensitive: string,
+  path = "$",
   depth = 0,
-): boolean {
+): string | null {
   if (depth > 24) {
     throw new Error(
       "The durable message proof fixture exceeds the JSON depth limit.",
@@ -448,7 +455,9 @@ function containsSensitiveValue(
     return value === sensitive
       || value.includes(
         sensitive,
-      );
+      )
+      ? path
+      : null;
   }
 
   if (
@@ -456,29 +465,54 @@ function containsSensitiveValue(
     || typeof value
       !== "object"
   ) {
-    return false;
+    return null;
   }
 
   if (Array.isArray(value)) {
-    return value.some(
-      (entry) =>
-        containsSensitiveValue(
-          entry,
+    for (
+      let index = 0;
+      index < value.length;
+      index += 1
+    ) {
+      const nestedPath =
+        findSensitiveValuePath(
+          value[index],
           sensitive,
+          `${path}[${index}]`,
           depth + 1,
-        ),
-    );
+        );
+
+      if (nestedPath !== null) {
+        return nestedPath;
+      }
+    }
+
+    return null;
   }
 
-  return Object.values(value)
-    .some(
-      (entry) =>
-        containsSensitiveValue(
-          entry,
-          sensitive,
-          depth + 1,
-        ),
-    );
+  for (
+    const [
+      key,
+      entry,
+    ]
+    of Object.entries(
+      value,
+    )
+  ) {
+    const nestedPath =
+      findSensitiveValuePath(
+        entry,
+        sensitive,
+        `${path}.${key}`,
+        depth + 1,
+      );
+
+    if (nestedPath !== null) {
+      return nestedPath;
+    }
+  }
+
+  return null;
 }
 
 function normalizeFelt(
