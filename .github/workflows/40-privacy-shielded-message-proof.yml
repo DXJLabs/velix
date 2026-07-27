@@ -314,35 +314,11 @@ jobs:
 
           if docker inspect veil-shielded-prover >/dev/null 2>&1; then
             docker inspect veil-shielded-prover \
-              --format '{{json .State}}' \
+              --format '{"status":{{json .State.Status}},"running":{{json .State.Running}},"oomKilled":{{json .State.OOMKilled}},"exitCode":{{json .State.ExitCode}},"error":{{json .State.Error}},"startedAt":{{json .State.StartedAt}},"finishedAt":{{json .State.FinishedAt}}}' \
               > veil-shielded-prover-state.json || true
 
             echo "SAFE_PROVER_CONTAINER_STATE"
-            node --input-type=module - <<'NODE'
-            import { readFile } from "node:fs/promises";
-
-            const path = "veil-shielded-prover-state.json";
-            try {
-              const state = JSON.parse(await readFile(path, "utf8"));
-              console.log(JSON.stringify({
-                status: state.Status ?? null,
-                running: state.Running ?? null,
-                oomKilled: state.OOMKilled ?? null,
-                exitCode: state.ExitCode ?? null,
-                error: state.Error || null,
-                startedAt: state.StartedAt ?? null,
-                finishedAt: state.FinishedAt ?? null,
-              }, null, 2));
-            } catch {
-              console.log(JSON.stringify({
-                status: "unavailable",
-                running: null,
-                oomKilled: null,
-                exitCode: null,
-                error: null,
-              }, null, 2));
-            }
-            NODE
+            cat veil-shielded-prover-state.json
 
             docker logs veil-shielded-prover 2>&1 \
               | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
