@@ -306,14 +306,54 @@ jobs:
 
           echo "OFFICIAL_SDK_SHIELDED_MESSAGE_DRY_RUN_VALID"
 
-      - name: Save redacted prover logs and stop container
+      - name: Save prover exit state and redacted logs
         if: ${{ always() && inputs.generate_proof }}
         shell: bash
         run: |
           set -euo pipefail
-          docker logs veil-shielded-prover 2>&1 \
-            | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
-            > veil-shielded-prover.log || true
+
+          if docker inspect veil-shielded-prover >/dev/null 2>&1; then
+            docker inspect veil-shielded-prover \
+              --format '{{json .State}}' \
+              > veil-shielded-prover-state.json || true
+
+            echo "SAFE_PROVER_CONTAINER_STATE"
+            node --input-type=module - <<'NODE'
+            import { readFile } from "node:fs/promises";
+
+            const path = "veil-shielded-prover-state.json";
+            try {
+              const state = JSON.parse(await readFile(path, "utf8"));
+              console.log(JSON.stringify({
+                status: state.Status ?? null,
+                running: state.Running ?? null,
+                oomKilled: state.OOMKilled ?? null,
+                exitCode: state.ExitCode ?? null,
+                error: state.Error || null,
+                startedAt: state.StartedAt ?? null,
+                finishedAt: state.FinishedAt ?? null,
+              }, null, 2));
+            } catch {
+              console.log(JSON.stringify({
+                status: "unavailable",
+                running: null,
+                oomKilled: null,
+                exitCode: null,
+                error: null,
+              }, null, 2));
+            }
+            NODE
+
+            docker logs veil-shielded-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-shielded-prover.log || true
+          else
+            printf '%s\n' \
+              '{"status":"missing","running":false,"oomKilled":null,"exitCode":null,"error":null}' \
+              > veil-shielded-prover-state.json
+            : > veil-shielded-prover.log
+          fi
+
           docker rm -f veil-shielded-prover || true
 
       - name: Upload safe shielded-message artifact
@@ -325,6 +365,7 @@ jobs:
             veil-account-preflight.json
             veil-shielded-message-summary.json
             veil-shielded-message-error.json
+            veil-shielded-prover-state.json
             veil-shielded-prover.log
           if-no-files-found: ignore
           retention-days: 7
