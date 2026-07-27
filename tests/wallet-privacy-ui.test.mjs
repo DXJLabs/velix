@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createRuntimeConfig } from "../src/app/runtime-config.js";
-import { createAppStore } from "../src/state/app-store.js";
-import { walletScreenMarkup } from "../src/ui/wallet/wallet-screen-template.js";
+import { createRuntimeConfig } from "../frontend/src/app/runtime-config.js";
+import { createAppStore } from "../frontend/src/state/app-store.js";
+import { walletScreenMarkup } from "../frontend/src/ui/wallet/wallet-screen-template.js";
 
 test("wallet page exposes honest private balance, Pool, capability, and identity states", () => {
   const markup = walletScreenMarkup();

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDealRoomController } from "../src/features/deals/deal-room-controller.js";
+import { createDealRoomController } from "../frontend/src/features/deals/deal-room-controller.js";
 
 function controllerFixture({ client, messages = {} }) {
   const state = { channelId: "private-room-id", screen: "inbox" };

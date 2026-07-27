@@ -19,7 +19,7 @@
     "verbatimModuleSyntax": true
   },
   "include": [
-    "src/integrations/**/*.ts",
+    "frontend/src/integrations/**/*.ts",
     "examples/**/*.ts"
   ]
 }

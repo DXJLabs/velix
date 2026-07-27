@@ -5,7 +5,7 @@ import {
   createVeilLogger,
   readResponsePayload,
   sanitizeForLog,
-} from "../src/services/logging/log-service.js";
+} from "../frontend/src/services/logging/log-service.js";
 
 test("frontend structured logs recursively redact private material", () => {
   const marker = "must-never-reach-console";

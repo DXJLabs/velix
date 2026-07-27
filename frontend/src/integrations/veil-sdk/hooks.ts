@@ -14,4 +14,4 @@ export {
   type UseChannelTimelineOptions,
   type UseVeilSessionOptions,
   type VeilSessionKey,
-} from "../../../packages/veil-sdk/src/hooks";
+} from "../../../../packages/veil-sdk/src/hooks";

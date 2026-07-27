@@ -7,7 +7,7 @@ import {
   VeilClient,
   detectStrk20WalletCapabilities,
   Strk20WalletApiClient,
-} from "../../packages/veil-sdk/src/index.ts";
+} from "../../../packages/veil-sdk/src/index.ts";
 
 export {
   BrowserEncryptionIdentityStore,

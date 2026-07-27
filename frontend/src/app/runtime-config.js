@@ -3,7 +3,7 @@ import {
   isStarknetAddress,
   normalizeStarknetChainId,
   requireVeilSepoliaConfig,
-} from "../../config/veil-sepolia.js";
+} from "../../../config/veil-sepolia.js";
 import {
   VEIL_PHASE1_FEATURE_STATUS,
   VEIL_PHASE3_PRIVACY_TRANSPORT_STATE,

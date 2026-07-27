@@ -3,19 +3,19 @@ import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { bindClickEvents } from "../src/app/events/click-events.js";
-import { estimateVeilFee } from "../src/domain/fees.js";
-import { hasRealTransactionHash } from "../src/features/escrow/escrow-feature.js";
-import { buildEscrowController } from "../src/features/escrow/escrow-controller.js";
-import { createOfferController } from "../src/features/offer/offer-controller.js";
-import { createPaymentController } from "../src/features/payment/payment-controller.js";
-import { createBootstrapData } from "../src/state/bootstrap-data.js";
-import { createDealStorage } from "../src/services/storage/deal-storage.js";
-import { createAppStore } from "../src/state/app-store.js";
-import { settingsScreenMarkup } from "../src/ui/settings/settings-screen-template.js";
-import { createChainMetaUi } from "../src/ui/timeline/chain-meta-ui.js";
-import { demoTxHash } from "../src/utils/hash.js";
-import { isTransactionHash, transactionExplorerUrl } from "../src/utils/transactions.js";
+import { bindClickEvents } from "../frontend/src/app/events/click-events.js";
+import { estimateVeilFee } from "../frontend/src/domain/fees.js";
+import { hasRealTransactionHash } from "../frontend/src/features/escrow/escrow-feature.js";
+import { buildEscrowController } from "../frontend/src/features/escrow/escrow-controller.js";
+import { createOfferController } from "../frontend/src/features/offer/offer-controller.js";
+import { createPaymentController } from "../frontend/src/features/payment/payment-controller.js";
+import { createBootstrapData } from "../frontend/src/state/bootstrap-data.js";
+import { createDealStorage } from "../frontend/src/services/storage/deal-storage.js";
+import { createAppStore } from "../frontend/src/state/app-store.js";
+import { settingsScreenMarkup } from "../frontend/src/ui/settings/settings-screen-template.js";
+import { createChainMetaUi } from "../frontend/src/ui/timeline/chain-meta-ui.js";
+import { demoTxHash } from "../frontend/src/utils/hash.js";
+import { isTransactionHash, transactionExplorerUrl } from "../frontend/src/utils/transactions.js";
 
 test("production bootstrap data never invokes the demo factory", () => {
   let demoFactoryCalls = 0;
@@ -321,7 +321,7 @@ async function sourceFiles(directory) {
 }
 
 test("user-visible source uses the exact Direct encrypted label", async () => {
-  const src = fileURLToPath(new URL("../src", import.meta.url)).replaceAll("\\", "/");
+  const src = fileURLToPath(new URL("../frontend/src", import.meta.url)).replaceAll("\\", "/");
   const files = await sourceFiles(src);
   const violations = [];
   for (const file of files) {
