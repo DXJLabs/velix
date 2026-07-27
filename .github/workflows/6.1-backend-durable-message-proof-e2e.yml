@@ -1,4 +1,5 @@
-name: "60 | BACKEND | Durable Message Proof E2E"
+name: "6.1 | BACKEND | Durable Message Proof E2E"
+run-name: "6.1 | BACKEND | Durable Message Proof E2E"
 
 on:
   workflow_dispatch:

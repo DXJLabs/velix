@@ -1,4 +1,4 @@
-name: "00 | BACKEND | CI and Security Tests"
+name: "1.1 | BACKEND | CI"
 
 on:
   workflow_dispatch:

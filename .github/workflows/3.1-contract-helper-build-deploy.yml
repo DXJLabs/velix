@@ -1,4 +1,4 @@
-name: "20 | CONTRACT | Build Test and Deploy VeilChannelHelper"
+name: "3.1 | CONTRACT | Build Test and Deploy Helper"
 
 on:
   workflow_dispatch:

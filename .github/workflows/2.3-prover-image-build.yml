@@ -1,4 +1,4 @@
-name: "12 | PROVER | Build Transaction Prover Image"
+name: "2.3 | PROVER | Build Image"
 
 on:
   workflow_dispatch:

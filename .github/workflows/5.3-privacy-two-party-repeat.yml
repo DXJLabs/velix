@@ -1,4 +1,5 @@
-name: "51 | PRIVACY | Repeat Two-Party Message"
+name: "5.3 | PRIVACY | Reusable Two-Party Message"
+run-name: "5.3 | PRIVACY | Reusable Two-Party Message | ${{ inputs.direction }}"
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: "30 | PRIVACY | Register Recipient Identity"
+name: "4.1 | PRIVACY | Register Recipient Identity"
 
 on:
   workflow_dispatch:
@@ -67,7 +67,83 @@ jobs:
       - name: Typecheck PoC tools
         run: npm run typecheck:poc
 
+      - name: Check recipient B Privacy Pool registration
+        id: recipient_state
+        shell: bash
+        env:
+          ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
+          VIEWING_KEY: ${{ secrets.VEIL_POC_RECIPIENT_VIEWING_KEY }}
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          rm -f "$GITHUB_WORKSPACE/veil-recipient-register-existing-summary.json"
+
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import { appendFileSync, writeFileSync } from "node:fs";
+          import { RpcProvider, ec } from "starknet";
+          import {
+            DEFAULT_POOL_ADDRESS,
+          } from "./tools/veil-official-register-poc.ts";
+
+          const required = (name) => {
+            const value = process.env[name]?.trim();
+            if (!value) throw new Error(`Missing ${name}.`);
+            return value;
+          };
+          const felt = (value) => `0x${BigInt(value).toString(16)}`;
+
+          const accountAddress = required("ACCOUNT_ADDRESS");
+          const viewingKey = required("VIEWING_KEY");
+          const rpcUrl = required("RPC_URL");
+          const poolAddress = felt(DEFAULT_POOL_ADDRESS);
+          const expectedPublicKey = BigInt(
+            ec.starkCurve.getStarkKey(felt(viewingKey)),
+          );
+
+          const provider = new RpcProvider({ nodeUrl: rpcUrl });
+          const response = await provider.callContract({
+            contractAddress: poolAddress,
+            entrypoint: "get_public_key",
+            calldata: [felt(accountAddress)],
+          }, "latest");
+
+          if (response.length !== 1) {
+            throw new Error("Privacy Pool returned invalid recipient registration data.");
+          }
+
+          const registeredPublicKey = BigInt(response[0]);
+          if (registeredPublicKey === 0n) {
+            appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              "needs_registration=true\nregistration_state=missing\n",
+            );
+            console.log("RECIPIENT_REGISTRATION_REQUIRED");
+          } else if (registeredPublicKey === expectedPublicKey) {
+            appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              "needs_registration=false\nregistration_state=already_registered\n",
+            );
+            writeFileSync(
+              "veil-recipient-register-existing-summary.json",
+              `${JSON.stringify({
+                result: "OFFICIAL_SDK_REGISTER_ALREADY_PRESENT",
+                network: "SN_SEPOLIA",
+                privacyPoolAddress: poolAddress,
+                accountAddress: felt(accountAddress),
+                viewingKeyMatched: true,
+              }, null, 2)}\n`,
+              { encoding: "utf8", mode: 0o600 },
+            );
+            console.log("OFFICIAL_SDK_REGISTER_ALREADY_PRESENT");
+          } else {
+            throw new Error(
+              "Recipient B is registered with a different viewing key.",
+            );
+          }
+          NODE
+
       - name: Log in to GitHub Container Registry
+        if: ${{ steps.recipient_state.outputs.needs_registration == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -75,6 +151,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull saved transaction prover
+        if: ${{ steps.recipient_state.outputs.needs_registration == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -83,6 +160,7 @@ jobs:
           echo "SAVED_PROVER_IMAGE_READY"
 
       - name: Start self-hosted prover
+        if: ${{ steps.recipient_state.outputs.needs_registration == 'true' }}
         shell: bash
         env:
           RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
@@ -150,6 +228,7 @@ jobs:
           echo "Recipient register prover is ready."
 
       - name: Register recipient B through official SDK
+        if: ${{ steps.recipient_state.outputs.needs_registration == 'true' }}
         shell: bash
         env:
           VEIL_POC_ACCOUNT_ADDRESS: ${{ secrets.VEIL_POC_RECIPIENT_ACCOUNT_ADDRESS }}
@@ -175,6 +254,7 @@ jobs:
             | tee veil-recipient-register.log
 
       - name: Validate recipient B registration result
+        if: ${{ steps.recipient_state.outputs.needs_registration == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -208,6 +288,33 @@ jobs:
           console.log(summary.executionStatus);
           NODE
 
+      - name: Validate existing recipient B registration
+        if: ${{ steps.recipient_state.outputs.needs_registration == 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary="$GITHUB_WORKSPACE/veil-recipient-register-existing-summary.json"
+          if [ ! -s "$summary" ]; then
+            echo "Existing recipient registration summary is missing."
+            exit 1
+          fi
+
+          node --input-type=module - "$summary" <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const [summaryPath] = process.argv.slice(2);
+          const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+          if (
+            summary.result !== "OFFICIAL_SDK_REGISTER_ALREADY_PRESENT"
+            || summary.network !== "SN_SEPOLIA"
+            || summary.viewingKeyMatched !== true
+          ) {
+            throw new Error("Existing recipient registration verification failed.");
+          }
+          console.log(summary.result);
+          console.log("RECIPIENT_VIEWING_KEY_MATCHED");
+          NODE
+
       - name: Save redacted prover logs and stop container
         if: ${{ always() }}
         shell: bash
@@ -235,6 +342,7 @@ jobs:
             veil-account-preflight.json
             veil-recipient-register-proof-summary.json
             veil-recipient-register-submission-summary.json
+            veil-recipient-register-existing-summary.json
             veil-recipient-register-error.json
             veil-recipient-register.log
             veil-recipient-register-prover.log

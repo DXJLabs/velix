@@ -1,4 +1,4 @@
-name: "10 | PROVER | Hardware Compatibility Test"
+name: "2.1 | PROVER | Hardware Test"
 
 on:
   workflow_dispatch:

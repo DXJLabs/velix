@@ -1,40 +1,60 @@
 # VEIL GitHub Actions Order
 
-Workflow aktif harus tetap langsung berada di `.github/workflows/`.
-Nomor pada nama file dan judul workflow menunjukkan urutan penggunaan.
+Workflow aktif tetap langsung berada di `.github/workflows/`.
 
-## Otomatis
+Nomor memakai format `kelompok.urutan` supaya fungsi setiap workflow mudah dibaca.
+Teks `#1`, `#2`, dan seterusnya yang muncul setelah judul di halaman GitHub
+adalah nomor run otomatis dari GitHub Actions, bukan workflow duplikat.
 
-- `00-backend-ci.yml` — backend, API security, dan repository typecheck.
+## 1 — Pemeriksaan repository
 
-## Infrastruktur prover
+- `1.1-backend-ci.yml` — backend, API security, dan repository typecheck.
 
-1. `10-prover-hardware-test.yml`
-2. `11-prover-generic-build-test.yml`
-3. `12-prover-image-build.yml`
+## 2 — Infrastruktur prover
+
+1. `2.1-prover-hardware-test.yml`
+2. `2.2-prover-generic-build-test.yml`
+3. `2.3-prover-image-build.yml`
 
 Image prover yang sudah valid tidak perlu dibangun ulang untuk setiap pengujian.
 
-## Jalur utama VEIL
+## 3 — Kontrak messaging
 
-1. `20-contract-helper-build-deploy.yml`
-2. `30-privacy-recipient-register.yml`
-3. `40-privacy-shielded-message-proof.yml`
-4. `50-privacy-two-party-message.yml`
-5. `51-privacy-two-party-repeat.yml`
-6. `52-privacy-two-party-reply.yml`
-7. `60-backend-durable-message-proof-e2e.yml`
+1. `3.1-contract-helper-build-deploy.yml`
 
-Setelah jalur utama ini lulus, pekerjaan dapat dilanjutkan ke integrasi frontend dan UX Deal Room.
+## 4 — Identitas Privacy Pool
 
-## Integrasi AVNU
+1. `4.1-privacy-recipient-register.yml`
 
-AVNU tetap dipertahankan dan bukan legacy. Jalur ini dikerjakan setelah jalur utama VEIL stabil.
+Registrasi bersifat idempotent:
+- identitas belum ada → buat proof dan daftarkan;
+- public key sudah cocok → selesai tanpa menjalankan prover;
+- public key berbeda → gagal tertutup.
 
-1. `90-avnu-identity-preflight.yml`
-2. `91-avnu-paymaster-preflight.yml`
-3. `92-avnu-pool-compatibility.yml`
-4. `93-avnu-deposit-screening-proof.yml`
-5. `94-avnu-register-identities.yml`
-6. `95-avnu-helper-deploy.yml`
-7. `96-avnu-private-message.yml`
+## 5 — Shielded messaging
+
+1. `5.1-privacy-shielded-message-proof.yml` — self-message proof.
+2. `5.2-privacy-two-party-message.yml` — pesan pertama Wallet A ke Wallet B.
+3. `5.3-privacy-two-party-repeat.yml` — pesan lanjutan dua arah `a-to-b` atau `b-to-a`.
+
+Workflow reply B ke A yang terpisah dihapus karena fungsi tersebut sudah dicakup oleh
+`5.3-privacy-two-party-repeat.yml`.
+
+## 6 — Backend proving orchestration
+
+1. `6.1-backend-durable-message-proof-e2e.yml`
+
+Setelah jalur utama ini lulus, pekerjaan dapat dilanjutkan ke integrasi frontend
+dan UX Deal Room.
+
+## 9 — Integrasi AVNU
+
+AVNU tetap dipertahankan dan bukan legacy.
+
+1. `9.1-avnu-identity-preflight.yml`
+2. `9.2-avnu-paymaster-preflight.yml`
+3. `9.3-avnu-pool-compatibility.yml`
+4. `9.4-avnu-deposit-screening-proof.yml`
+5. `9.5-avnu-register-identities.yml`
+6. `9.6-avnu-helper-deploy.yml`
+7. `9.7-avnu-private-message.yml`

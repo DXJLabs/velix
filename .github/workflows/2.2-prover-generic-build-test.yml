@@ -1,4 +1,4 @@
-name: "11 | PROVER | Generic Build and Test"
+name: "2.2 | PROVER | Build and Test"
 
 on:
   workflow_dispatch:
