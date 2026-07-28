@@ -77,6 +77,31 @@ test("explicit Ready connection bypasses Privy and returns the injected wallet",
   assert.match(updates[0][2].title, /Ready Wallet/);
 });
 
+
+test("explicit Ready audit is routed before Privy and legacy direct-helper initialization", async () => {
+  const service = await readFile(
+    new URL("../frontend/src/services/wallet/wallet-service.js", import.meta.url),
+    "utf8",
+  );
+
+  const readyRoute = service.indexOf("if (preferPrivacyWallet) {");
+  const privyRoute = service.indexOf(
+    'if (config.timelineMode !== "encrypted-direct") {',
+    readyRoute + 1,
+  );
+
+  assert.ok(readyRoute >= 0, "Ready audit route must exist.");
+  assert.ok(privyRoute > readyRoute, "Ready audit must run before the generic Privy privacy bootstrap.");
+
+  const readyBlock = service.slice(readyRoute, privyRoute);
+  assert.match(readyBlock, /preferredInjectedWallet:\s*"ready"/);
+  assert.match(readyBlock, /privacyWalletAudit:\s*true/);
+  assert.match(readyBlock, /directHelper:\s*false/);
+  assert.match(readyBlock, /refreshPrivacyCapabilities\(wallet,\s*account,\s*readProvider\)/);
+  assert.doesNotMatch(readyBlock, /createEncryptionAdapter\(/);
+  assert.doesNotMatch(readyBlock, /createDirectHelperTransport\(/);
+});
+
 test("wallet screen exposes a fail-closed Ready and STRK20 capability audit", async () => {
   const screen = await readFile(
     new URL("../frontend/src/ui/wallet/wallet-screen-template.js", import.meta.url),

@@ -146,6 +146,84 @@ export function createWalletService({
     beginWalletInitialization(traceId);
 
     try {
+    if (preferPrivacyWallet) {
+      const {
+        injectedWalletEntry,
+        injectedWallet,
+      } = await resolveWalletLogin({
+        config,
+        traceId,
+        logger,
+        ensurePrivyMounted,
+        ensurePrivyAuthenticated,
+        createPrivyStarknetAccount,
+        waitForInjectedWallet,
+        updateWalletInitialization,
+        windowRef,
+        preferredInjectedWallet: "ready",
+      });
+
+      const wallet = injectedWallet;
+      if (!wallet) {
+        return failWalletInitialization(new Error("Ready Wallet extension was not detected."), traceId, {
+          where: "connectWallet",
+          howToFix: "Install or unlock Ready Wallet, select Starknet Sepolia, and retry.",
+        });
+      }
+
+      if (!wallet.account && typeof wallet.enable === "function") await wallet.enable();
+      const account = wallet.account || wallet;
+      const walletProvider = wallet.provider || wallet.account?.provider;
+      const readProvider = await getStarknetReadProvider().catch((error) => {
+        logger.veilError("wallet.rpc.provider.failed", error, {
+          where: "connectWallet",
+          howToFix: "Set VITE_PRIVY_STARKNET_RPC_URL or VITE_STARKNET_RPC_URL to a reachable Starknet Sepolia RPC.",
+        });
+        return walletProvider;
+      });
+
+      if (!account?.execute) {
+        return failWalletInitialization(new Error("Ready Wallet account does not expose execute()."), traceId, {
+          where: "connectWallet",
+          howToFix: "Unlock Ready Wallet, approve the connection, and select a Starknet account.",
+        });
+      }
+      if (!walletProvider) {
+        return failWalletInitialization(new Error("Ready Wallet did not expose a Starknet provider."), traceId, {
+          where: "connectWallet",
+          howToFix: "Unlock Ready Wallet, switch to Starknet Sepolia, and reconnect.",
+        });
+      }
+
+      const isExpectedNetwork = await ensureExpectedNetwork(wallet, walletProvider);
+      if (!isExpectedNetwork) {
+        return failWalletInitialization(new Error(`Ready Wallet is not connected to ${networkLabel(config.expectedChainId)}.`), traceId, {
+          where: "connectWallet",
+          howToFix: `Switch Ready Wallet to ${networkLabel(config.expectedChainId)} and retry.`,
+        });
+      }
+
+      state.privyAccount = null;
+      state.privyProvider = null;
+      state.privyWallet = null;
+      state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
+      await refreshPrivacyCapabilities(wallet, account, readProvider);
+
+      state.walletConnected = true;
+      state.walletAddress = account.address || wallet.selectedAddress || "";
+      state.walletNetwork = config.expectedChainId;
+      completeWalletInitialization(traceId);
+      logger.tracePrivyStarkZap(traceId, "connect.success", {
+        where: "connectWallet",
+        walletSource: state.walletSource,
+        walletAddress: state.walletAddress,
+        directHelper: false,
+        privacyWalletAudit: true,
+        network: state.walletNetwork,
+      });
+      return true;
+    }
+
     if (config.timelineMode !== "encrypted-direct") {
       if (config.privyAppId) {
         try {
