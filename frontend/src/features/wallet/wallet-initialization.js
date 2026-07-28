@@ -82,6 +82,7 @@ export function createWalletInitialization({
         message: "Unable to connect wallet.",
         errorMessage: `Wallet initialization exceeded ${WALLET_INIT_TIMEOUT_MS / 1000} seconds.`,
       });
+      clearAppLoading("wallet");
       failWalletModal({
         title: "Wallet Connection Failed",
         subtitle: "Unable to connect wallet.",

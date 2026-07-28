@@ -76,7 +76,6 @@
         <button class="secondary-action w-full" type="button" data-escrow-review-close>Cancel</button>
       </section>
     </div>
-    <div id="privy-auth-root" hidden></div>
 `;
 }
 

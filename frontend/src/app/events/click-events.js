@@ -7,6 +7,26 @@ export function encryptionRegistrationErrorMessage(error) {
   return "Encryption key registration failed. Check the wallet and Sepolia balance.";
 }
 
+export function startWalletConnection(api, options) {
+  try {
+    return Promise.resolve(api.connectWallet(options)).catch((error) => {
+      api.logger?.veilError?.("wallet.connect.click.failed", error, {
+        where: "startWalletConnection",
+        howToFix: "Review the visible wallet error and retry the connection.",
+      });
+      api.showToast(error?.message || "Unable to start wallet connection.");
+      return false;
+    });
+  } catch (error) {
+    api.logger?.veilError?.("wallet.connect.click.failed", error, {
+      where: "startWalletConnection",
+      howToFix: "Review the visible wallet error and retry the connection.",
+    });
+    api.showToast(error?.message || "Unable to start wallet connection.");
+    return Promise.resolve(false);
+  }
+}
+
 export function bindClickEvents({ documentRef = document, state, dom, api }) {
   documentRef.addEventListener("click", (event) => {
     if (event.target.closest("[data-transaction-loading-close]")) {
@@ -246,7 +266,7 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     }
 
     if (event.target.closest("[data-connect-wallet]")) {
-      api.connectWallet({ goToInbox: state.screen === "unlock" });
+      void startWalletConnection(api, { goToInbox: state.screen === "unlock" });
       return;
     }
 

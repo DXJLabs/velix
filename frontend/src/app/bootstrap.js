@@ -1,4 +1,9 @@
-import { createRuntimeConfig, WALLET_INIT_TIMEOUT_MS } from "./runtime-config.js";
+import {
+  createRuntimeConfig,
+  PRIVY_AUTH_TIMEOUT_MS,
+  PRIVY_READY_TIMEOUT_MS,
+  WALLET_INIT_TIMEOUT_MS,
+} from "./runtime-config.js";
 import { getAppDom, setElementText, setLucideIcon } from "./dom.js";
 import { createRouter } from "./router.js";
 import { createFeatureRegistry } from "./feature-registry.js";
@@ -36,7 +41,14 @@ import { mountPrivyBridge } from "../ui/wallet/privy-auth-root.js";
 import { demoTxHash } from "../utils/hash.js";
 import { transactionExplorerUrl } from "../utils/transactions.js";
 
-export function bootstrapVeilApp({ env = import.meta.env, documentRef = document, windowRef = window } = {}) {
+export function bootstrapVeilApp({
+  env = {
+    ...import.meta.env,
+    VITE_PRIVY_APP_ID: import.meta.env.VITE_PRIVY_APP_ID,
+  },
+  documentRef = document,
+  windowRef = window,
+} = {}) {
   const config = createRuntimeConfig(env, windowRef.location.search);
   const logger = createVeilLogger({ debugLogsEnabled: config.debugLogsEnabled, dev: env.DEV });
   const channelKeyConfig = resolveChannelKeyConfig(config, logger);
@@ -135,8 +147,33 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
     config,
     logger,
     walletInitTimeoutMs: WALLET_INIT_TIMEOUT_MS,
+    privyReadyTimeoutMs: PRIVY_READY_TIMEOUT_MS,
+    privyAuthTimeoutMs: PRIVY_AUTH_TIMEOUT_MS,
+    updateWalletInitialization: walletInitialization.updateWalletInitialization,
+    windowRef,
   });
-  const mountPrivy = () => mountPrivyBridge({ config, privyAuthRoot: dom.privyAuthRoot, logger });
+  let privyMountPromise;
+  const mountPrivy = () => {
+    if (!config.privyAppId) return Promise.resolve({ configured: false });
+    if (!privyMountPromise) {
+      privyMountPromise = mountPrivyBridge({
+        config,
+        privyAuthRoot: dom.privyAuthRoot,
+        logger,
+        windowRef,
+        onStateChange: (bridgeState) => {
+          store.state.privyReady = Boolean(bridgeState.ready);
+          store.state.privyAuthenticated = Boolean(bridgeState.authenticated);
+          api.refreshConnectLabels?.();
+          api.renderHomeStatus?.();
+        },
+      }).catch((error) => {
+        privyMountPromise = undefined;
+        throw error;
+      });
+    }
+    return privyMountPromise;
+  };
   const privyWalletApi = createPrivyWalletApi({ state: store.state, logger });
   const starkZapAdapter = createStarkZapAdapter({
     config,
@@ -230,6 +267,7 @@ export function bootstrapVeilApp({ env = import.meta.env, documentRef = document
       directTransport = nextTransport;
     },
     currentChannelId: () => store.state.channelId,
+    ensurePrivyMounted: mountPrivy,
     ensurePrivyAuthenticated: privyBridgeAdapter.ensurePrivyAuthenticated,
     fetchPrivyStarknetWallet: privyWalletApi.fetchPrivyStarknetWallet,
     createPrivyStarknetAccount: starkZapAdapter.createPrivyStarknetAccount,

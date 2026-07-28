@@ -7,6 +7,7 @@ import { networkLabel } from "../../app/runtime-config.js";
 import { createWalletPrivacyCapabilityModel } from "../../domain/privacy-capabilities.js";
 import { getInjectedStarknetWallet, getWalletSourceLabel, waitForInjectedStarknetWallet } from "./injected-wallet.js";
 import { formatAssetBalance } from "./wallet-format.js";
+import { resolveWalletLogin, userFacingWalletError } from "./wallet-login-strategy.js";
 
 export function createWalletService({
   config,
@@ -19,6 +20,7 @@ export function createWalletService({
   getDirectTransport,
   setDirectTransport,
   currentChannelId,
+  ensurePrivyMounted = async () => {},
   ensurePrivyAuthenticated,
   fetchPrivyStarknetWallet,
   createPrivyStarknetAccount,
@@ -30,12 +32,17 @@ export function createWalletService({
   completeWalletInitialization,
   failWalletInitialization,
   handleTransactionSubmitted,
+  getInjectedWallet = getInjectedStarknetWallet,
+  waitForInjectedWallet = waitForInjectedStarknetWallet,
+  detectWalletCapabilities = detectStrk20WalletCapabilities,
+  createDirectHelperTransport = (options) => new DirectHelperTransport(options),
+  windowRef = window,
 }) {
   let encryptionKeyRegistry;
   let encryptionRegistrationAccount;
 
   async function refreshPrivacyCapabilities(wallet, account) {
-    const detected = await detectStrk20WalletCapabilities(wallet);
+    const detected = await detectWalletCapabilities(wallet);
     state.privacyWalletApiVersion = detected.apiVersion || "";
     state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel({
       accountConnected: true,
@@ -90,8 +97,8 @@ export function createWalletService({
   }
   function getWallet() {
     return state.privyAccount
-      || window.veilDemoWallet
-      || getInjectedStarknetWallet()
+      || windowRef.veilDemoWallet
+      || getInjectedWallet(windowRef)
       || null;
   }
 
@@ -107,9 +114,11 @@ export function createWalletService({
     });
     beginWalletInitialization(traceId);
 
+    try {
     if (config.timelineMode !== "encrypted-direct") {
       if (config.privyAppId) {
         try {
+          await ensurePrivyMounted();
           const bridge = await ensurePrivyAuthenticated(traceId);
           if (!bridge) {
             return failWalletInitialization(new Error("Privy authentication did not complete."), traceId, {
@@ -146,55 +155,29 @@ export function createWalletService({
       });
     }
 
-    let injectedWalletEntry = null;
-    let injectedWallet = null;
-    let privyAccountContext = null;
-    if (config.privyAppId) {
-      try {
-        const bridge = await ensurePrivyAuthenticated(traceId);
-        if (!bridge) {
-          return failWalletInitialization(new Error("Privy authentication did not complete."), traceId, {
-            where: "connectWallet",
-            howToFix: "Check earlier trace steps for privy_ready.timeout or authenticated.timeout.",
-          });
-        }
-        updateWalletInitialization("creating_account", traceId, {
-          message: "Creating Starknet Account",
-        });
-        privyAccountContext = await createPrivyStarknetAccount(bridge, traceId);
-      } catch (error) {
-        logger.veilError("starkzap.privy.onboard.failed", error, {
-          traceId,
-          where: "connectWallet",
-          howToFix: "Fund the counterfactual account if user-pays deployment is required, verify /api/wallet/sign, and confirm the RPC matches VITE_STARKNET_CHAIN_ID.",
-        });
-        injectedWalletEntry = await waitForInjectedStarknetWallet();
-        injectedWallet = injectedWalletEntry?.wallet || null;
-        if (!injectedWallet) {
-          return failWalletInitialization(error, traceId, {
-            where: "connectWallet",
-            howToFix: "Check StarkZap/Privy logs for sdk.onboard(), AVNU Paymaster sponsorship, /api/wallet/sign, and RPC errors.",
-          });
-        }
-        logger.veilLog("warn", "wallet.init.injected_fallback.used", {
-          traceId,
-          where: "connectWallet",
-          source: getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key),
-          why: "Privy StarkZap onboarding failed, but an injected Starknet wallet was available.",
-        });
-      }
-    }
-
-    if (!privyAccountContext && !injectedWallet) {
-      injectedWalletEntry = await waitForInjectedStarknetWallet();
-      injectedWallet = injectedWalletEntry?.wallet || null;
-    }
+    const {
+      injectedWalletEntry,
+      injectedWallet,
+      privyAccountContext,
+    } = await resolveWalletLogin({
+      config,
+      traceId,
+      logger,
+      ensurePrivyMounted,
+      ensurePrivyAuthenticated,
+      createPrivyStarknetAccount,
+      waitForInjectedWallet,
+      updateWalletInitialization,
+      windowRef,
+    });
 
     const wallet = privyAccountContext?.account || injectedWallet || getWallet();
     if (!wallet) {
-      return failWalletInitialization(new Error("No Privy Starknet account or injected Starknet wallet was available."), traceId, {
+      return failWalletInitialization(new Error("No supported wallet login is configured."), traceId, {
         where: "connectWallet",
-        howToFix: "Check prior Privy trace steps, or install/connect an injected Starknet wallet as fallback.",
+        howToFix: config.privyAppId
+          ? "Check the Privy App ID, allowed origin, OAuth settings, or connect Argent/Braavos on desktop."
+          : "Set the public Privy App ID or install/connect Argent or Braavos on desktop.",
       });
     }
 
@@ -236,7 +219,7 @@ export function createWalletService({
       accountAddress: account.address,
       provider: readProvider,
     });
-    const directTransport = new DirectHelperTransport({
+    const directTransport = createDirectHelperTransport({
       helperAddress: config.helperAddress,
       account,
       ...(readProvider ? { provider: readProvider } : {}),
@@ -275,6 +258,12 @@ export function createWalletService({
       network: state.walletNetwork,
     });
     return true;
+    } catch (error) {
+      return failWalletInitialization(userFacingWalletError(error), traceId, {
+        where: "connectWallet",
+        howToFix: "Check the displayed wallet error, Privy allowed origin/OAuth settings, Starknet network, and browser wallet approval.",
+      });
+    }
   }
 
   return {

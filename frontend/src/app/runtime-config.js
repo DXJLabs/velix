@@ -22,6 +22,8 @@ export const BOB_WALLET_SHORT = "0x04...8fa2";
 export const LOCAL_CHANNELS_KEY = "veil:local:channels:v1";
 export const STARKNET_SEPOLIA_EXPLORER_URL = VEIL_SEPOLIA_CONFIG.explorerUrl;
 export const WALLET_INIT_TIMEOUT_MS = 30_000;
+export const PRIVY_READY_TIMEOUT_MS = 8_000;
+export const PRIVY_AUTH_TIMEOUT_MS = 18_000;
 export const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "deploying", "connecting_paymaster"]);
 
 export function normalizeChainId(value) {
@@ -267,13 +269,15 @@ export function createRuntimeConfig(
   const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") === "demo";
   const expectedChainId = normalizeChainId(env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
   const networkConfig = requireVeilSepoliaConfig(expectedChainId);
-  const configuredPrivyLoginMethods = (env.VITE_PRIVY_LOGIN_METHODS || "google,wallet")
+  const configuredPrivyLoginMethods = (env.VITE_PRIVY_LOGIN_METHODS || "email,google")
     .split(",")
     .map((method) => method.trim())
     .filter(Boolean);
   const privyAppId = demoRuntimeMode ? "" : env.VITE_PRIVY_APP_ID || "";
-  const privyLoginMethods = [...configuredPrivyLoginMethods];
-  if (!privyLoginMethods.length && privyAppId) privyLoginMethods.push("google");
+  const privyLoginMethods = [...new Set([
+    ...(privyAppId ? ["email", "google"] : []),
+    ...configuredPrivyLoginMethods,
+  ])];
 
   const privacyPoolAddress = readLockedAddress(
     env.VITE_PRIVACY_POOL_ADDRESS,

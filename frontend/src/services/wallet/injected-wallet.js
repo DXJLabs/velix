@@ -7,25 +7,42 @@ export function getWalletSourceLabel(wallet, key = "") {
   return name || "Starknet wallet";
 }
 
-export function getInjectedStarknetWallet() {
-  return getInjectedStarknetWalletEntry()?.wallet || null;
+export function getInjectedStarknetWallet(windowRef = window) {
+  return getInjectedStarknetWalletEntry(windowRef)?.wallet || null;
 }
 
-export async function waitForInjectedStarknetWallet(timeout = 2_000) {
-  const existing = getInjectedStarknetWalletEntry();
+export function isMobileBrowser(windowRef = window) {
+  if (typeof windowRef.navigator?.userAgentData?.mobile === "boolean") {
+    return windowRef.navigator.userAgentData.mobile;
+  }
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(windowRef.navigator?.userAgent || "");
+}
+
+export function shouldWaitForInjectedStarknetWallet(windowRef = window) {
+  return Boolean(getInjectedStarknetWalletEntry(windowRef)) || !isMobileBrowser(windowRef);
+}
+
+export async function waitForInjectedStarknetWallet(options = {}) {
+  const normalizedOptions = typeof options === "number" ? { timeout: options } : options;
+  const {
+    timeout = 2_000,
+    windowRef = window,
+  } = normalizedOptions;
+  const existing = getInjectedStarknetWalletEntry(windowRef);
   if (existing) return existing;
+  if (!shouldWaitForInjectedStarknetWallet(windowRef)) return null;
 
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeout) {
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const entry = getInjectedStarknetWalletEntry();
+    const entry = getInjectedStarknetWalletEntry(windowRef);
     if (entry) return entry;
   }
 
   return null;
 }
 
-function getInjectedStarknetWalletEntry() {
+export function getInjectedStarknetWalletEntry(windowRef = window) {
   const keys = [
     "starknet_argentX",
     "starknet_ready",
@@ -35,18 +52,18 @@ function getInjectedStarknetWalletEntry() {
     "starknet_braavos",
   ];
 
-  const discoveredKeys = Object.getOwnPropertyNames(window)
+  const discoveredKeys = Object.getOwnPropertyNames(windowRef)
     .filter((key) => /^starknet/i.test(key) && !keys.includes(key));
 
   return [...keys, ...discoveredKeys]
-    .map((key) => ({ key, wallet: getWindowValue(key) }))
+    .map((key) => ({ key, wallet: getWindowValue(windowRef, key) }))
     .filter((entry) => isInjectedStarknetWallet(entry.wallet))
     .sort((first, second) => walletPriority(first) - walletPriority(second))[0] || null;
 }
 
-function getWindowValue(key) {
+function getWindowValue(windowRef, key) {
   try {
-    return window[key];
+    return windowRef[key];
   } catch {
     return null;
   }

@@ -47,8 +47,8 @@ export function createTransactionModalController({
       stage: "wallet",
       actionLabel: "Connecting Wallet",
       title: "Connecting Wallet",
-      subtitle: "Please approve the request in your wallet.",
-      detail: "Waiting for signature...",
+      subtitle: "Preparing a supported wallet login.",
+      detail: "Loading wallet options...",
       successTitle: "Wallet Connected",
       successSubtitle: "Opening encrypted channel...",
       txHash: "",
@@ -111,7 +111,7 @@ export function createTransactionModalController({
     });
   }
 
-  function updateWalletModalStage(step) {
+  function updateWalletModalStage(step, details = {}) {
     const stageCopy = {
       connecting: {
         title: "Connecting Wallet",
@@ -135,11 +135,17 @@ export function createTransactionModalController({
       },
     };
     const copy = stageCopy[step] || stageCopy.connecting;
+    const detailOverrides = Object.fromEntries(
+      ["title", "subtitle", "detail"]
+        .filter((key) => details[key] !== undefined)
+        .map((key) => [key, details[key]]),
+    );
     setTransactionModal({
       visible: true,
       stage: "wallet",
       actionLabel: "Connecting Wallet",
       ...copy,
+      ...detailOverrides,
     });
   }
 

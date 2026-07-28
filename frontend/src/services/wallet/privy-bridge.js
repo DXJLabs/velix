@@ -1,9 +1,11 @@
-export function getPrivyBridge() {
-  return window.__veilPrivy || null;
+import { PRIVY_READY_TIMEOUT_MS } from "../../app/runtime-config.js";
+
+export function getPrivyBridge(windowRef = window) {
+  return windowRef.__veilPrivy || null;
 }
 
-export function currentOrigin() {
-  return window.location.origin;
+export function currentOrigin(windowRef = window) {
+  return windowRef.location.origin;
 }
 
 export function isGoogleLinkedAccount(account) {
@@ -36,33 +38,34 @@ export function summarizePrivyBridge(bridge) {
   return {
     ready: Boolean(bridge?.ready),
     authenticated: Boolean(bridge?.authenticated),
+    loginError: bridge?.loginError || undefined,
     walletCount: Array.isArray(bridge?.wallets) ? bridge.wallets.length : 0,
     ...summarizePrivyUser(bridge?.user),
   };
 }
 
-export function waitForPrivyState(predicate, timeout) {
+export function waitForPrivyState(predicate, timeout, windowRef = window) {
   return new Promise((resolve) => {
-    const current = getPrivyBridge();
+    const current = getPrivyBridge(windowRef);
     if (current && predicate(current)) {
       resolve(current);
       return;
     }
 
     const timer = setTimeout(() => {
-      window.removeEventListener("veil:privy-state", onState);
-      resolve(getPrivyBridge());
+      windowRef.removeEventListener("veil:privy-state", onState);
+      resolve(getPrivyBridge(windowRef));
     }, timeout);
 
     function onState() {
-      const bridge = getPrivyBridge();
+      const bridge = getPrivyBridge(windowRef);
       if (!bridge || !predicate(bridge)) return;
       clearTimeout(timer);
-      window.removeEventListener("veil:privy-state", onState);
+      windowRef.removeEventListener("veil:privy-state", onState);
       resolve(bridge);
     }
 
-    window.addEventListener("veil:privy-state", onState);
+    windowRef.addEventListener("veil:privy-state", onState);
   });
 }
 
@@ -70,21 +73,35 @@ export function createPrivyBridgeAdapter({
   config,
   logger,
   walletInitTimeoutMs,
+  privyReadyTimeoutMs = Math.min(walletInitTimeoutMs, PRIVY_READY_TIMEOUT_MS),
+  privyAuthTimeoutMs = walletInitTimeoutMs,
+  updateWalletInitialization = () => {},
+  windowRef = window,
 }) {
   async function ensurePrivyAuthenticated(traceId = logger.createTraceId("privy-auth")) {
     if (!config.privyAppId) return null;
 
+    updateWalletInitialization("connecting", traceId, {
+      message: "Loading Privy",
+      title: "Loading Privy",
+      subtitle: "Preparing email and Google login.",
+      detail: `Waiting up to ${Math.ceil(privyReadyTimeoutMs / 1000)} seconds for the login service.`,
+    });
     logger.tracePrivyStarkZap(traceId, "privy_ready.wait", {
       where: "ensurePrivyAuthenticated",
-      currentOrigin: currentOrigin(),
+      currentOrigin: currentOrigin(windowRef),
       loginMethods: config.privyLoginMethods,
     });
     logger.veilLog("info", "auth.privy.ready.wait", {
       traceId,
       where: "ensurePrivyAuthenticated",
-      currentOrigin: currentOrigin(),
+      currentOrigin: currentOrigin(windowRef),
     });
-    const readyBridge = await waitForPrivyState((bridge) => bridge.ready, walletInitTimeoutMs);
+    const readyBridge = await waitForPrivyState(
+      (bridge) => bridge.ready,
+      privyReadyTimeoutMs,
+      windowRef,
+    );
     if (!readyBridge?.ready) {
       logger.tracePrivyStarkZap(traceId, "privy_ready.timeout", {
         where: "ensurePrivyAuthenticated",
@@ -98,7 +115,10 @@ export function createPrivyBridgeAdapter({
         why: "Privy did not become ready before the login timeout.",
         howToFix: "Confirm VITE_PRIVY_APP_ID is set and the current origin is allowed in the Privy dashboard.",
       });
-      return null;
+      throw Object.assign(
+        new Error("Privy login could not start. Check the Privy App ID and allowed origin."),
+        { code: "PRIVY_READY_TIMEOUT" },
+      );
     }
 
     logger.tracePrivyStarkZap(traceId, "privy_ready.success", {
@@ -107,11 +127,23 @@ export function createPrivyBridgeAdapter({
     });
 
     if (!readyBridge.authenticated) {
+      if (typeof readyBridge.login !== "function") {
+        throw Object.assign(
+          new Error("Privy login is unavailable. Reload the page and try again."),
+          { code: "PRIVY_LOGIN_UNAVAILABLE" },
+        );
+      }
+      updateWalletInitialization("connecting", traceId, {
+        message: "Complete Privy Login",
+        title: "Sign in to VEIL",
+        subtitle: "Choose email or Google in the Privy window.",
+        detail: "Complete authentication to create or restore your Starknet account.",
+      });
       logger.tracePrivyStarkZap(traceId, "google_login.start", {
         where: "ensurePrivyAuthenticated",
         authenticated: false,
         loginMethods: config.privyLoginMethods,
-        currentOrigin: currentOrigin(),
+        currentOrigin: currentOrigin(windowRef),
         howToFix: "If Google opens but returns redirect_uri_mismatch, add the current Privy redirect URL/origin in Google OAuth and Privy dashboard settings.",
       });
       try {
@@ -130,9 +162,16 @@ export function createPrivyBridgeAdapter({
     }
 
     const authenticatedBridge = await waitForPrivyState(
-      (bridge) => bridge.ready && bridge.authenticated,
-      walletInitTimeoutMs,
+      (bridge) => bridge.ready && (bridge.authenticated || bridge.loginError),
+      privyAuthTimeoutMs,
+      windowRef,
     );
+    if (authenticatedBridge?.loginError) {
+      throw Object.assign(
+        new Error(`Privy login failed: ${authenticatedBridge.loginError}`),
+        { code: authenticatedBridge.loginError },
+      );
+    }
     if (!authenticatedBridge?.authenticated) {
       logger.tracePrivyStarkZap(traceId, "authenticated.timeout", {
         where: "ensurePrivyAuthenticated",
@@ -146,7 +185,10 @@ export function createPrivyBridgeAdapter({
         why: "Privy login did not complete.",
         howToFix: "Complete the Privy login modal, or fix OAuth provider settings if Google returned redirect_uri_mismatch.",
       });
-      return null;
+      throw Object.assign(
+        new Error("Privy login did not finish. Complete the login window or check the OAuth configuration."),
+        { code: "PRIVY_AUTH_TIMEOUT" },
+      );
     }
 
     logger.tracePrivyStarkZap(traceId, "authenticated.true", {

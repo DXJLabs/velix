@@ -79,7 +79,7 @@ export function createPrivyWalletApi({ state, logger }) {
         apiWhere: payload.where,
         apiWhy: payload.why,
         apiHowToFix: payload.howToFix,
-        howToFix: payload.howToFix || "Open Vercel function logs for this requestId and verify PRIVY_APP_ID, PRIVY_APP_SECRET, and PRIVY_VERIFICATION_KEY.",
+        howToFix: payload.howToFix || "Open Vercel function logs for this requestId and verify the server-side Privy credentials.",
       });
       throw error;
     }
