@@ -61,6 +61,8 @@ export function createAppStore({
     walletAssetSyncStatus: "idle",
     walletPrivacyCapabilities: createWalletPrivacyCapabilityModel(),
     privacyWalletApiVersion: "",
+    privacyWalletTransport: "none",
+    officialPrivacySignerStatus: "not-integrated",
     privacyRegistrationStatus: "unknown",
     privateBalanceStatus: "unavailable",
     privateBalances: {},

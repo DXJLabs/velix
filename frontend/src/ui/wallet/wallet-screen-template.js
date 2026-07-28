@@ -41,6 +41,22 @@
               </div>
             </section>
 
+            <section class="wallet-section" aria-labelledby="wallet-privacy-readiness-heading">
+              <h2 id="wallet-privacy-readiness-heading">Privacy wallet readiness</h2>
+              <div class="plain-list wallet-readiness">
+                <div><span>Standard transaction signing</span><strong id="wallet-standard-signing">Connect wallet</strong></div>
+                <div><span>STRK20 Wallet API</span><strong id="wallet-strk20-api">Connect wallet</strong></div>
+                <div><span>Wallet-side proof handling</span><strong id="wallet-proof-management">Connect wallet</strong></div>
+                <div><span>Official SDK signer</span><strong id="wallet-official-sdk-signer">Connect wallet</strong></div>
+              </div>
+              <button class="wallet-action-row" type="button" data-connect-privacy-wallet aria-disabled="false">
+                <span><i data-lucide="shield-check" class="size-5"></i></span>
+                <strong>Connect Ready for Privacy</strong>
+                <i data-lucide="chevron-right" class="size-5"></i>
+              </button>
+              <p class="wallet-reward-note">Ready Wallet, previously Argent X, is checked directly for the STRK20 Wallet API. Connecting does not enable private actions until Sepolia E2E tests pass.</p>
+            </section>
+
             <section class="wallet-section" aria-labelledby="wallet-private-heading">
               <h2 id="wallet-private-heading">Private funds</h2>
               <div class="plain-list wallet-readiness">

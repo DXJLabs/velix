@@ -28,15 +28,61 @@ async function enableInjectedWallet(entry) {
   return wallet;
 }
 
-function updateInjectedStatus(updateWalletInitialization, traceId, privyFailed) {
+function updateInjectedStatus(
+  updateWalletInitialization,
+  traceId,
+  privyFailed,
+  preferredWallet = "",
+) {
+  const readyOnly = preferredWallet === "ready";
   updateWalletInitialization("connecting", traceId, {
-    message: "Checking Browser Wallet",
-    title: privyFailed ? "Checking Browser Wallet" : "Connect Argent or Braavos",
-    subtitle: privyFailed
-      ? "Privy could not finish, so VEIL is checking Argent or Braavos."
-      : "VEIL is checking for an injected Starknet wallet.",
+    message: readyOnly ? "Checking Ready Wallet" : "Checking Browser Wallet",
+    title: readyOnly
+      ? "Connect Ready Wallet"
+      : privyFailed
+        ? "Checking Browser Wallet"
+        : "Connect Starknet Wallet",
+    subtitle: readyOnly
+      ? "VEIL is checking Ready Wallet for STRK20 Wallet API support."
+      : privyFailed
+        ? "Privy could not finish, so VEIL is checking a browser wallet."
+        : "VEIL is checking for an injected Starknet wallet.",
     detail: "Approve the connection in your Starknet wallet if prompted.",
   });
+}
+
+async function connectInjected({
+  traceId,
+  logger,
+  waitForInjectedWallet,
+  updateWalletInitialization,
+  windowRef,
+  preferredWallet = "",
+}) {
+  updateInjectedStatus(updateWalletInitialization, traceId, false, preferredWallet);
+  const injectedWalletEntry = await waitForInjectedWallet({
+    windowRef,
+    preferredWallet,
+  });
+  const injectedWallet = await enableInjectedWallet(injectedWalletEntry);
+  if (!injectedWallet) {
+    if (preferredWallet === "ready") {
+      throw new Error("Ready Wallet extension was not detected. Install or unlock Ready Wallet, select Starknet Sepolia, and retry.");
+    }
+    throw new Error("No supported wallet login is configured.");
+  }
+
+  logger.veilLog("info", "wallet.init.injected.selected", {
+    traceId,
+    where: "resolveWalletLogin",
+    source: getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key),
+    preferredWallet: preferredWallet || "any",
+  });
+  return {
+    injectedWallet,
+    injectedWalletEntry,
+    privyAccountContext: null,
+  };
 }
 
 export async function resolveWalletLogin({
@@ -49,7 +95,19 @@ export async function resolveWalletLogin({
   waitForInjectedWallet,
   updateWalletInitialization,
   windowRef,
+  preferredInjectedWallet = "",
 }) {
+  if (preferredInjectedWallet) {
+    return connectInjected({
+      traceId,
+      logger,
+      waitForInjectedWallet,
+      updateWalletInitialization,
+      windowRef,
+      preferredWallet: preferredInjectedWallet,
+    });
+  }
+
   if (config.privyAppId) {
     try {
       await ensurePrivyMounted();
@@ -97,15 +155,11 @@ export async function resolveWalletLogin({
     }
   }
 
-  updateInjectedStatus(updateWalletInitialization, traceId, false);
-  const injectedWalletEntry = await waitForInjectedWallet({ windowRef });
-  const injectedWallet = await enableInjectedWallet(injectedWalletEntry);
-  if (!injectedWallet) {
-    throw new Error("No supported wallet login is configured.");
-  }
-  return {
-    injectedWallet,
-    injectedWalletEntry,
-    privyAccountContext: null,
-  };
+  return connectInjected({
+    traceId,
+    logger,
+    waitForInjectedWallet,
+    updateWalletInitialization,
+    windowRef,
+  });
 }

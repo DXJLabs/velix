@@ -265,6 +265,14 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       return;
     }
 
+    if (event.target.closest("[data-connect-privacy-wallet]")) {
+      void startWalletConnection(api, {
+        goToInbox: false,
+        preferPrivacyWallet: true,
+      });
+      return;
+    }
+
     if (event.target.closest("[data-connect-wallet]")) {
       void startWalletConnection(api, { goToInbox: state.screen === "unlock" });
       return;

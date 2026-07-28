@@ -155,13 +155,43 @@ export function createWalletController({
           ? "Unsupported privacy wallet"
           : "Connect wallet";
     const registrationLabel = state.privacyRegistrationStatus === "registered"
-      ? "Private identity detected"
+      ? "Registered in VEIL Privacy Pool"
       : state.privacyRegistrationStatus === "not-registered"
-        ? "Private identity not set up"
+        ? "Registration required"
         : "Unknown";
+    const signingAvailable = Boolean(model?.capabilities?.signing);
+    const walletApiAvailable = Boolean(model?.capabilities?.strk20WalletApi);
+    const signingLabel = state.walletConnected
+      ? signingAvailable ? "Available" : "Unavailable"
+      : "Connect wallet";
+    const walletApiLabel = state.walletConnected
+      ? walletApiAvailable
+        ? `Supported · API ${state.privacyWalletApiVersion || "detected"}`
+        : "Not detected"
+      : "Connect wallet";
+    const proofManagementLabel = state.walletConnected
+      ? model?.capabilities?.walletProofManagement ? "Wallet-managed" : "Unavailable"
+      : "Connect wallet";
+    const officialSignerLabel = state.officialPrivacySignerStatus === "wallet-managed"
+      ? "Wallet-managed"
+      : state.officialPrivacySignerStatus === "not-integrated"
+        ? "Privy adapter not integrated"
+        : state.walletConnected ? "Unavailable" : "Connect wallet";
     const total = state.privateBalances?.strk?.display;
     setElementText("#wallet-privacy-capability", capabilityLabel);
     setElementText("#wallet-private-identity", registrationLabel);
+    setElementText("#wallet-standard-signing", signingLabel);
+    setElementText("#wallet-strk20-api", walletApiLabel);
+    setElementText("#wallet-proof-management", proofManagementLabel);
+    setElementText("#wallet-official-sdk-signer", officialSignerLabel);
+    const privacyWalletButton = document.querySelector("[data-connect-privacy-wallet]");
+    if (privacyWalletButton) {
+      const readyConnected = state.walletConnected && state.walletSource === "Ready";
+      privacyWalletButton.disabled = readyConnected;
+      privacyWalletButton.setAttribute("aria-disabled", readyConnected ? "true" : "false");
+      const label = privacyWalletButton.querySelector("strong");
+      if (label) label.textContent = readyConnected ? "Ready Wallet Connected" : "Connect Ready for Privacy";
+    }
     setElementText(
       "#wallet-pool-status",
       privacyRuntime.screening.capable
@@ -231,6 +261,8 @@ export function createWalletController({
     state.walletAssetSyncStatus = "idle";
     state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel();
     state.privacyWalletApiVersion = "";
+    state.privacyWalletTransport = "none";
+    state.officialPrivacySignerStatus = "not-integrated";
     state.privacyRegistrationStatus = "unknown";
     state.privateBalanceStatus = "unavailable";
     state.privateBalances = {};

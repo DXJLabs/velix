@@ -41,9 +41,35 @@ export function createWalletService({
   let encryptionKeyRegistry;
   let encryptionRegistrationAccount;
 
-  async function refreshPrivacyCapabilities(wallet, account) {
+  async function readPrivacyPoolRegistration(readProvider, accountAddress) {
+    if (!readProvider?.callContract || !config.privacyPoolAddress || !accountAddress) return "unknown";
+    try {
+      const response = await readProvider.callContract({
+        contractAddress: config.privacyPoolAddress,
+        entrypoint: "get_public_key",
+        calldata: [accountAddress],
+      }, "latest");
+      const values = Array.isArray(response) ? response : response?.result;
+      if (!Array.isArray(values) || values.length !== 1) return "unknown";
+      return BigInt(values[0]) === 0n ? "not-registered" : "registered";
+    } catch (error) {
+      logger.veilError("wallet.privacy.registration.read.failed", error, {
+        where: "readPrivacyPoolRegistration",
+        howToFix: "Confirm the locked VEIL Privacy Pool and Sepolia RPC are reachable.",
+      });
+      return "unknown";
+    }
+  }
+
+  async function refreshPrivacyCapabilities(wallet, account, readProvider) {
     const detected = await detectWalletCapabilities(wallet);
     state.privacyWalletApiVersion = detected.apiVersion || "";
+    state.privacyWalletTransport = detected.supported ? "wallet-api" : "standard-wallet";
+    state.officialPrivacySignerStatus = detected.supported
+      ? "wallet-managed"
+      : state.walletSource === "Privy"
+        ? "not-integrated"
+        : "unavailable";
     state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel({
       accountConnected: true,
       signing: Boolean(account?.execute || wallet?.request),
@@ -56,16 +82,19 @@ export function createWalletService({
       screeningCapableDeposit: detected.screeningCapableDeposit && config.privacyRuntime.screening.capable,
     });
     state.privateBalances = {};
+    state.privacyRegistrationStatus = await readPrivacyPoolRegistration(
+      readProvider,
+      account?.address || wallet?.account?.address || wallet?.selectedAddress || "",
+    );
+
     if (!detected.supported || !detected.balances) {
       state.privateBalanceStatus = "unsupported";
-      state.privacyRegistrationStatus = "unknown";
       return;
     }
 
     const assets = config.walletAssetConfig.filter((asset) => asset.contractAddress);
     if (!assets.length) {
       state.privateBalanceStatus = "unavailable";
-      state.privacyRegistrationStatus = "unknown";
       return;
     }
     try {
@@ -80,7 +109,9 @@ export function createWalletService({
         return [asset.id, { raw: balance.balance, display: formatAssetBalance(balance.balance, asset) }];
       }));
       state.privateBalanceStatus = "total-only";
-      state.privacyRegistrationStatus = "registered";
+      if (state.privacyRegistrationStatus === "unknown") {
+        state.privacyRegistrationStatus = "registered";
+      }
     } catch (error) {
       if (error?.code === "SENDER_NOT_REGISTERED") {
         state.privateBalanceStatus = "unavailable";
@@ -88,7 +119,6 @@ export function createWalletService({
         return;
       }
       state.privateBalanceStatus = "failed";
-      state.privacyRegistrationStatus = "unknown";
       logger.veilError("wallet.privacy.discovery.failed", error, {
         where: "refreshPrivacyCapabilities",
         howToFix: "Retry from the wallet after confirming STRK20 Wallet API v0.10.3 support.",
@@ -104,7 +134,8 @@ export function createWalletService({
 
   async function connectWallet(options = {}) {
     const goToInbox = options.goToInbox ?? state.screen === "unlock";
-    const traceId = logger.createTraceId("wallet-connect");
+    const preferPrivacyWallet = options.preferPrivacyWallet === true;
+    const traceId = logger.createTraceId(preferPrivacyWallet ? "ready-connect" : "wallet-connect");
     logger.tracePrivyStarkZap(traceId, "connect.start", {
       where: "connectWallet",
       timelineMode: config.timelineMode,
@@ -169,6 +200,7 @@ export function createWalletService({
       waitForInjectedWallet,
       updateWalletInitialization,
       windowRef,
+      preferredInjectedWallet: preferPrivacyWallet ? "ready" : "",
     });
 
     const wallet = privyAccountContext?.account || injectedWallet || getWallet();
@@ -184,6 +216,14 @@ export function createWalletService({
     if (!wallet.account && typeof wallet.enable === "function") await wallet.enable();
 
     const account = wallet.account || wallet;
+    if (injectedWallet) {
+      state.privyAccount = null;
+      state.privyProvider = null;
+      state.privyWallet = null;
+      state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
+    } else if (privyAccountContext) {
+      state.walletSource = "Privy";
+    }
     const walletProvider = privyAccountContext?.provider || state.privyProvider || wallet.provider || wallet.account?.provider;
     const readProvider = await getStarknetReadProvider().catch((error) => {
       logger.veilError("wallet.rpc.provider.failed", error, {
@@ -213,7 +253,7 @@ export function createWalletService({
       });
     }
 
-    await refreshPrivacyCapabilities(wallet, account);
+    await refreshPrivacyCapabilities(wallet, account, readProvider);
 
     const encryptionSetup = await createEncryptionAdapter({
       accountAddress: account.address,
