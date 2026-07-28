@@ -70,7 +70,7 @@ export function createNetworkService({
     return true;
   }
 
-  async function verifyHelperDeployment({ veilClient, channelId }) {
+  async function verifyHelperDeployment() {
     if (config.timelineMode !== "encrypted-direct") return true;
     if (!config.helperAddress) return false;
 

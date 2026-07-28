@@ -229,7 +229,13 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     }
 
     if (event.target.closest("[data-refresh-wallet]")) {
-      api.refreshWalletConnection();
+      void Promise.resolve(api.refreshWalletConnection()).catch((error) => {
+        api.logger?.veilError?.("wallet.refresh.click.failed", error, {
+          where: "refreshWalletConnection",
+          howToFix: "Reconnect Ready Wallet, confirm Starknet Sepolia, and retry.",
+        });
+        api.showToast(error?.message || "Unable to refresh wallet connection.");
+      });
       return;
     }
 
