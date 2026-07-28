@@ -3,6 +3,27 @@ import {
   WALLET_INIT_TIMEOUT_MS,
 } from "../../app/runtime-config.js";
 
+export function formatWalletInitializationError(error, fallback = "Wallet initialization failed.") {
+  const raw = String(error?.message || error || fallback)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/x-paymaster-api-key is invalid/i.test(raw)) {
+    return "Gas sponsor rejected the AVNU API key. Update AVNU_PAYMASTER_API_KEY in Vercel, then redeploy.";
+  }
+
+  if (/paymaster_buildTransaction/i.test(raw)) {
+    return "Gas sponsor could not prepare this wallet deployment. Check the AVNU API key, Sepolia sponsorship credits, and paymaster availability.";
+  }
+
+  if (/paymaster_/i.test(raw)) {
+    return "Gas sponsor could not complete wallet setup. Check the AVNU configuration and retry.";
+  }
+
+  const safe = raw || fallback;
+  return safe.length > 240 ? `${safe.slice(0, 237)}...` : safe;
+}
+
 export function createWalletInitialization({
   state,
   config,
@@ -110,7 +131,10 @@ export function createWalletInitialization({
 
   function failWalletInitialization(error, traceId, details = {}) {
     clearTimeout(walletInitTimer);
-    const errorMessage = error?.message || details.errorMessage || "Wallet initialization failed.";
+    const errorMessage = formatWalletInitializationError(
+      error,
+      details.errorMessage || "Wallet initialization failed.",
+    );
     setWalletInitializationState("failed", {
       traceId,
       message: "Unable to connect wallet.",

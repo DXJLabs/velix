@@ -15,6 +15,7 @@ import {
   waitForInjectedStarknetWallet,
 } from "../frontend/src/services/wallet/injected-wallet.js";
 import { resolveWalletLogin } from "../frontend/src/services/wallet/wallet-login-strategy.js";
+import { formatWalletInitializationError } from "../frontend/src/features/wallet/wallet-initialization.js";
 import { appShellMarkup } from "../frontend/src/ui/shell/app-shell-template.js";
 import {
   createVeilViteConfig,
@@ -68,6 +69,31 @@ async function readDirectoryText(directory) {
   }));
   return contents.flat().join("\n");
 }
+
+test("wallet deployment errors hide raw RPC parameters and explain an invalid AVNU key", () => {
+  const raw = new Error(
+    'RPC: paymaster_buildTransaction with params {"transaction":{"deployment":{"address":"0xsecret"}}}: '
+      + '163 UNKNOWN_ERROR: x-paymaster-api-key is invalid',
+  );
+  const message = formatWalletInitializationError(raw);
+
+  assert.match(message, /AVNU API key/i);
+  assert.match(message, /Vercel/i);
+  assert.doesNotMatch(message, /paymaster_buildTransaction|0xsecret|params|UNKNOWN_ERROR/);
+  assert.ok(message.length < 160);
+});
+
+test("wallet modal CSS contains bounded scrolling and long-text wrapping", async () => {
+  const css = await readFile(
+    new URL("../frontend/src/styles/components/modals-toast.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(css, /max-height:\s*calc\(100dvh - 2rem\)/);
+  assert.match(css, /overflow-y:\s*auto/);
+  assert.match(css, /#transaction-loading-detail[\s\S]*overflow-wrap:\s*anywhere/);
+  assert.match(css, /#transaction-loading-detail[\s\S]*word-break:\s*break-word/);
+});
 
 test("runtime config reads the public Privy App ID and guarantees email/Google login", () => {
   const config = createRuntimeConfig({

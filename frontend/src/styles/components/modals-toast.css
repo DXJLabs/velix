@@ -52,8 +52,13 @@ body.transaction-modal-open {
   position: relative;
   z-index: 1;
   display: grid;
+  box-sizing: border-box;
   width: min(100%, 21.5rem);
+  min-width: 0;
+  max-height: calc(100dvh - 2rem);
   min-height: 17.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
   gap: .72rem;
   align-content: center;
   justify-items: center;
@@ -107,15 +112,28 @@ body.transaction-modal-open {
 
 .transaction-loading-detail {
   display: flex;
+  box-sizing: border-box;
   width: 100%;
-  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  align-items: flex-start;
   justify-content: center;
+  overflow: hidden;
   border-radius: .85rem;
   background: rgb(248 250 252);
   padding: .7rem .8rem;
   color: rgb(30 41 59);
   font-size: .9rem;
   font-weight: 900;
+}
+
+#transaction-loading-detail {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .transaction-loading-link {
