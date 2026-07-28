@@ -27,6 +27,7 @@ import { readJsonStorage, writeJsonStorage } from "../services/storage-service.j
 import { createPrivyBridgeAdapter, getPrivyBridge } from "../services/wallet/privy-bridge.js";
 import { createPrivyWalletApi } from "../services/wallet/privy-wallet-api.js";
 import { createNetworkService } from "../services/wallet/network-service.js";
+import { createRecipientDiscoveryService } from "../services/recipient-discovery-service.js";
 import { createStarkZapAdapter } from "../services/wallet/starkzap-adapter.js";
 import { createWalletAssetsService } from "../services/wallet/wallet-assets.js";
 import { createWalletInitialization } from "../features/wallet/wallet-initialization.js";
@@ -107,6 +108,10 @@ export function bootstrapVeilApp({
     config,
     state: store.state,
     logger,
+  });
+  const recipientDiscovery = createRecipientDiscoveryService({
+    getProvider: networkService.getStarknetReadProvider,
+    expectedChainId: config.expectedChainId,
   });
   const homeUi = createHomeUi({
     document: dom.document,
@@ -192,6 +197,7 @@ export function bootstrapVeilApp({
     store,
     logger,
     knownVeilCounterparties: runtimeCounterparties,
+    recipientDiscovery,
     chainMetaUi,
     networkService,
     walletInitialization,

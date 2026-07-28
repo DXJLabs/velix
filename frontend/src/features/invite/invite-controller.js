@@ -10,6 +10,7 @@ export function createInviteController({
   dealCreationEnabled = false,
   knownVeilCounterparties,
   resolveCounterparty,
+  recipientDiscovery,
   shortHash,
   counterpartyAvatar,
   starkIdentityName,
@@ -39,12 +40,16 @@ export function createInviteController({
   copyToClipboard,
   defaultOfferAmount = "450 STRK",
 }) {
+  let recipientDiscoveryTimer;
+  let recipientDiscoveryRequestId = 0;
+
   function newDealTitleValue() {
     return document.querySelector("#new-deal-title")?.value.trim() || "Rights Transfer";
   }
 
   function newDealCounterpartyValue() {
-    return document.querySelector("#new-deal-counterparty")?.value.trim() || "bob.stark";
+    const input = document.querySelector("#new-deal-counterparty");
+    return input ? input.value.trim() : "bob.stark";
   }
 
   function inviteTargetValue() {
@@ -367,32 +372,15 @@ export function createInviteController({
     const inviteFormPanel = document.querySelector("#invite-form-panel");
     const showInviteForm = document.querySelector("#show-invite-form");
     const query = newDealCounterpartyValue();
-    const lookup = counterpartyLookup(query);
 
     if (!dealCreationEnabled) {
-      if (resultName) resultName.textContent = query || "Counterparty";
-      if (resultDetail) resultDetail.textContent = "Recipient discovery is not E2E-verified.";
-      if (resultStatus) {
-        resultStatus.textContent = "Unavailable";
-        resultStatus.className = "status-pill waiting-deposit";
-      }
-      if (actionHint) actionHint.textContent = "No request, notification, or invite will be created in this build.";
-      if (primaryAction) {
-        primaryAction.disabled = true;
-        primaryAction.setAttribute("aria-disabled", "true");
-        primaryAction.removeAttribute("data-new-deal-action");
-        primaryAction.innerHTML = '<i data-lucide="lock" class="size-5"></i><span>Deal Creation Unavailable</span>';
-      }
-      if (inviteFormPanel) inviteFormPanel.hidden = true;
-      if (showInviteForm) {
-        showInviteForm.hidden = false;
-        showInviteForm.disabled = true;
-        showInviteForm.setAttribute("aria-disabled", "true");
-      }
+      lockDealCreation(primaryAction, inviteFormPanel, showInviteForm);
+      scheduleRecipientDiscovery(query, { resultName, resultDetail, resultStatus, actionHint });
       iconRefresh();
       return;
     }
 
+    const lookup = counterpartyLookup(query);
     if (resultName) resultName.textContent = lookup.displayName;
     if (resultDetail) resultDetail.textContent = lookup.detail;
     if (resultStatus) {
@@ -416,6 +404,96 @@ export function createInviteController({
       showInviteForm.removeAttribute("aria-disabled");
     }
     iconRefresh();
+  }
+
+  function lockDealCreation(primaryAction, inviteFormPanel, showInviteForm) {
+    if (primaryAction) {
+      primaryAction.disabled = true;
+      primaryAction.setAttribute("aria-disabled", "true");
+      primaryAction.removeAttribute("data-new-deal-action");
+      primaryAction.innerHTML = '<i data-lucide="lock" class="size-5"></i><span>Deal Creation Unavailable</span>';
+    }
+    if (inviteFormPanel) inviteFormPanel.hidden = true;
+    if (showInviteForm) {
+      showInviteForm.hidden = false;
+      showInviteForm.disabled = true;
+      showInviteForm.setAttribute("aria-disabled", "true");
+    }
+  }
+
+  function scheduleRecipientDiscovery(query, elements) {
+    clearTimeout(recipientDiscoveryTimer);
+    const requestId = ++recipientDiscoveryRequestId;
+
+    if (!query) {
+      applyRecipientDiscovery({ status: "invalid", query }, elements);
+      return;
+    }
+    if (!recipientDiscovery?.resolve) {
+      applyRecipientDiscovery({ status: "unavailable", query }, elements);
+      return;
+    }
+
+    const { resultName, resultDetail, resultStatus, actionHint } = elements;
+    if (resultName) resultName.textContent = query;
+    if (resultDetail) resultDetail.textContent = "Resolving recipient on Starknet Sepolia...";
+    if (resultStatus) {
+      resultStatus.textContent = "Checking";
+      resultStatus.className = "status-pill public";
+    }
+    if (actionHint) actionHint.textContent = "Identity lookup only. No request, notification, or invite will be created.";
+
+    recipientDiscoveryTimer = setTimeout(async () => {
+      const result = await recipientDiscovery.resolve(query);
+      if (requestId !== recipientDiscoveryRequestId || newDealCounterpartyValue() !== query) return;
+      applyRecipientDiscovery(result, elements);
+      iconRefresh();
+    }, 320);
+  }
+
+  function applyRecipientDiscovery(result, { resultName, resultDetail, resultStatus, actionHint }) {
+    const address = result.address ? shortHash(result.address) : "";
+    if (resultName) resultName.textContent = result.starkName || address || result.query || "Counterparty";
+
+    if (result.status === "resolved") {
+      const reverseNote = result.source === "starknet-id" && !result.reverseVerified
+        ? " The name is not the address primary reverse name."
+        : "";
+      if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} VEIL encryption capability is not verified yet.`;
+      if (resultStatus) {
+        resultStatus.textContent = "Resolved";
+        resultStatus.className = "status-pill escrow-active";
+      }
+      if (actionHint) actionHint.textContent = "Identity resolved. Deal creation remains locked until the encryption key and invite delivery pass E2E verification.";
+      return;
+    }
+
+    if (result.status === "not_found") {
+      if (resultDetail) resultDetail.textContent = "No Starknet address was found for this .stark name.";
+      if (resultStatus) {
+        resultStatus.textContent = "Not Found";
+        resultStatus.className = "status-pill waiting-deposit";
+      }
+      if (actionHint) actionHint.textContent = "Check the .stark name or use a valid Starknet address.";
+      return;
+    }
+
+    if (result.status === "invalid") {
+      if (resultDetail) resultDetail.textContent = "Enter a valid .stark name or Starknet address.";
+      if (resultStatus) {
+        resultStatus.textContent = "Invalid";
+        resultStatus.className = "status-pill waiting-deposit";
+      }
+      if (actionHint) actionHint.textContent = "No request, notification, or invite will be created.";
+      return;
+    }
+
+    if (resultDetail) resultDetail.textContent = "Starknet recipient discovery is temporarily unavailable.";
+    if (resultStatus) {
+      resultStatus.textContent = "Unavailable";
+      resultStatus.className = "status-pill waiting-deposit";
+    }
+    if (actionHint) actionHint.textContent = "Check the Sepolia RPC and retry. Deal creation remains locked.";
   }
 
   function renderInviteWaitingCard(channel) {

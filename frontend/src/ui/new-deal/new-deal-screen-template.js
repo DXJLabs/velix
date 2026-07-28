@@ -16,7 +16,7 @@
                 <span class="new-deal-icon"><i data-lucide="user-check" class="size-5"></i></span>
                 <div>
                   <h2>Choose Counterparty</h2>
-                  <p>Recipient discovery and live two-party delivery must be verified before a deal can be created.</p>
+                  <p>Resolve a .stark name or Starknet address. Deal creation stays locked until VEIL capability and invite delivery are verified.</p>
                 </div>
               </div>
               <label class="field">
@@ -31,7 +31,7 @@
                 <span class="avatar">B</span>
                 <div>
                   <strong id="counterparty-result-name">bob.stark</strong>
-                  <small id="counterparty-result-detail">Recipient discovery is not E2E-verified.</small>
+                  <small id="counterparty-result-detail">Enter a .stark name or Starknet address.</small>
                 </div>
                 <span id="counterparty-result-status" class="status-pill waiting-deposit">Unavailable</span>
               </article>
