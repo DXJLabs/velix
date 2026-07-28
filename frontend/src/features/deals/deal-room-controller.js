@@ -2,6 +2,7 @@ import { conversationRowsMarkup } from "../../ui/conversation-ui.js";
 import { renderChannelHeader, channelFeedMarkup } from "../../ui/deals/channel-ui.js";
 import { inlineEventMarkup, messageMarkup, offerCardMarkup } from "../../ui/timeline-ui.js";
 import { workflowProgressMarkup } from "../../ui/workflow-ui.js";
+import { createMessageTimelineSyncService } from "../../services/messaging/message-sync-service.js";
 
 const INDEXER_CURSOR_PREFIX = "veil:indexer:cursor:v1";
 
@@ -49,12 +50,24 @@ export function createDealRoomController({
   showScreen,
   iconRefresh,
 }) {
+  const messageTimelineSync = createMessageTimelineSyncService({
+    state,
+    loadTimeline: loadIndexedChannelTimeline,
+    onError: (error, { channelId }) => {
+      veilError("indexer.timeline.sync.failed", error, {
+        where: "messageTimelineSync",
+        channelId,
+        howToFix: "Retry the room after confirming the indexer and Starknet RPC are reachable.",
+      });
+    },
+  });
+
   function openChannel(channelId) {
     state.channelId = channelId;
     const channel = currentChannel();
     channel.unread = 0;
     showScreen("channel");
-    loadIndexedChannelTimeline(channelId);
+    void messageTimelineSync.start(channelId);
   }
 
   async function loadIndexedChannelTimeline(channelId) {
@@ -331,6 +344,8 @@ export function createDealRoomController({
     isInviteAcceptedEvent,
     isInviteMetadataEvent,
     loadIndexedChannelTimeline,
+    startChannelTimelineSync: messageTimelineSync.start,
+    stopChannelTimelineSync: messageTimelineSync.stop,
     openChannel,
     renderChannel,
     renderConversationList,
