@@ -131,8 +131,12 @@ export function normalizeDeployment(value, context) {
   if (version !== 1) {
     throw invalidPaymasterRequest(context, "Only account deployment data version 1 is allowed.");
   }
-  if (value.sigdata !== undefined && (!Array.isArray(value.sigdata) || value.sigdata.length > 16)) {
-    throw invalidPaymasterRequest(context, "Deployment sigdata must be a bounded felt array.");
+  const sigdata = value.sigdata;
+  if (sigdata !== undefined && sigdata !== null) {
+    if (!Array.isArray(sigdata) || sigdata.length > 16) {
+      throw invalidPaymasterRequest(context, "Deployment sigdata must be a bounded felt array when present.");
+    }
+    sigdata.forEach((item, index) => normalizeFelt(item, `deployment sigdata[${index}]`));
   }
 
   return Object.freeze({

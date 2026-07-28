@@ -83,3 +83,33 @@ test("wallet deployment validator rejects non-sponsored mode and mismatched acco
     (error) => error.code === "PAYMASTER_DEPLOYMENT_MISMATCH",
   );
 });
+
+
+test("paymaster deployment accepts AVNU null sigdata and still rejects malformed values", async () => {
+  const { normalizeDeployment } = await import("../_lib/wallet-deployment.js");
+  const context = { route: "/api/paymaster" };
+  const base = {
+    address: "0x1",
+    class_hash: "0x2",
+    salt: "0x3",
+    calldata: ["0x4"],
+    version: 1,
+  };
+
+  assert.doesNotThrow(() => normalizeDeployment({ ...base, sigdata: null }, context));
+  assert.doesNotThrow(() => normalizeDeployment({ ...base, sigdata: [] }, context));
+  assert.doesNotThrow(() => normalizeDeployment({ ...base, sigdata: ["0x5", "6"] }, context));
+
+  assert.throws(
+    () => normalizeDeployment({ ...base, sigdata: "0x5" }, context),
+    /bounded felt array/i,
+  );
+  assert.throws(
+    () => normalizeDeployment({ ...base, sigdata: { r: "0x5" } }, context),
+    /bounded felt array/i,
+  );
+  assert.throws(
+    () => normalizeDeployment({ ...base, sigdata: ["not-a-felt"] }, context),
+    /hexadecimal or decimal felt/i,
+  );
+});
