@@ -30,7 +30,11 @@ export function createAppStore({
     walletConnected: false,
     walletAddress: "",
     walletNetwork: config.expectedChainId,
-    walletSource: config.privyAppId ? "Privy" : demoRuntimeMode ? "Demo" : "",
+    walletSource: config.privyEnabled && config.privyAppId
+      ? "Privy"
+      : demoRuntimeMode
+        ? "Demo"
+        : "",
     helperVerified: false,
     privyReady: false,
     privyAuthenticated: false,
@@ -39,7 +43,7 @@ export function createAppStore({
     privyProvider: null,
     privyAccountDeployed: false,
     walletInitState: "idle",
-    walletInitMessage: "Connect Wallet",
+    walletInitMessage: config.privyEnabled ? "Connect Wallet" : "Connect Ready Wallet",
     walletInitError: "",
     walletInitStartedAt: 0,
     walletInitTraceId: "",

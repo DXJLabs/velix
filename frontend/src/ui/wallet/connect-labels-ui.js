@@ -12,9 +12,11 @@ export function createConnectLabelsUi({
         ? "Connected"
         : config.demoRuntimeMode
           ? "Open Demo"
-          : config.privyAppId && !state.privyReady
+          : config.privyEnabled && config.privyAppId && !state.privyReady
             ? "Loading Privy"
-            : "Connect Wallet";
+            : config.privyEnabled
+              ? "Connect Wallet"
+              : "Connect Ready Wallet";
 
     document.querySelectorAll("[data-wallet-label]").forEach((node) => {
       node.textContent = label;

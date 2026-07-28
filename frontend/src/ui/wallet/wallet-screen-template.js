@@ -1,4 +1,4 @@
-﻿export function walletScreenMarkup() {
+export function walletScreenMarkup() {
   return `
         <section class="screen hidden" data-screen="wallet">
           <header class="surface-header">
@@ -15,14 +15,14 @@
                 <span id="wallet-status-pill" class="status-pill public">Required</span>
               </div>
               <h2 id="wallet-status-heading">Wallet Status</h2>
-              <strong id="wallet-state-title">Connect wallet</strong>
-              <small id="wallet-state-subtitle">Use Privy to unlock VEIL on this device.</small>
+              <strong id="wallet-state-title">Connect Ready Wallet</strong>
+              <small id="wallet-state-subtitle">Ready provides the STRK20 wallet capability required by VEIL privacy.</small>
             </section>
 
             <section class="plain-list wallet-readiness" aria-label="Wallet identity">
               <div>
                 <span>Provider</span>
-                <strong id="wallet-provider">Privy</strong>
+                <strong id="wallet-provider">Ready</strong>
               </div>
               <div>
                 <span>Address</span>
@@ -151,13 +151,13 @@
               <div class="wallet-setting-row">
                 <span>
                   <strong>Current Connection</strong>
-                  <small id="wallet-connection-summary">Privy wallet not connected</small>
+                  <small id="wallet-connection-summary">Ready Wallet not connected</small>
                 </span>
                 <span id="wallet-connection-status" class="status-pill public">Disconnected</span>
               </div>
               <button class="wallet-action-row" type="button" data-connect-wallet data-wallet-connect-row>
                 <span><i data-lucide="wallet-cards" class="size-5"></i></span>
-                <strong data-wallet-label>Connect Wallet</strong>
+                <strong data-wallet-label>Connect Ready Wallet</strong>
                 <i data-lucide="chevron-right" class="size-5"></i>
               </button>
               <button class="wallet-action-row" type="button" data-refresh-wallet>

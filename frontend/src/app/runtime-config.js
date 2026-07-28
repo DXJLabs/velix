@@ -267,6 +267,11 @@ export function createRuntimeConfig(
 ) {
   const runtimeParams = new URLSearchParams(search);
   const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") === "demo";
+  const privyEnabled = !demoRuntimeMode && readBooleanEnv(
+    env.VITE_PRIVY_ENABLED,
+    "VITE_PRIVY_ENABLED",
+    false,
+  );
   const expectedChainId = normalizeChainId(env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
   const networkConfig = requireVeilSepoliaConfig(expectedChainId);
   const configuredPrivyLoginMethods = (env.VITE_PRIVY_LOGIN_METHODS || "email,google")
@@ -321,6 +326,7 @@ export function createRuntimeConfig(
 
   return {
     demoRuntimeMode,
+    privyEnabled,
     debugLogsEnabled: readBooleanEnv(env.VITE_VEIL_DEBUG_LOGS, "VITE_VEIL_DEBUG_LOGS", false),
     timelineMode: demoRuntimeMode
       ? "mock"

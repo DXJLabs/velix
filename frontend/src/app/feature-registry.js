@@ -231,6 +231,7 @@ export function createFeatureRegistry({
     walletAssetConfig: config.walletAssetConfig,
     expectedChainId: config.expectedChainId,
     privyAppId: config.privyAppId,
+    privyEnabled: config.privyEnabled,
     timelineMode: config.timelineMode,
     privacyRuntime: config.privacyRuntime,
     privacyPoolCompatibility: config.networkConfig.privacyPool.compatibility,

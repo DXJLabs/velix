@@ -160,7 +160,12 @@ export function bootstrapVeilApp({
   });
   let privyMountPromise;
   const mountPrivy = () => {
-    if (!config.privyAppId) return Promise.resolve({ configured: false });
+    if (!config.privyEnabled || !config.privyAppId) {
+      return Promise.resolve({
+        configured: Boolean(config.privyAppId),
+        enabled: false,
+      });
+    }
     if (!privyMountPromise) {
       privyMountPromise = mountPrivyBridge({
         config,
@@ -289,11 +294,19 @@ export function bootstrapVeilApp({
   });
   const connectWallet = async (options = {}) => {
     const goToInbox = options.goToInbox ?? store.state.screen === "unlock";
-    const connected = await walletService.connectWallet(options);
+    const connectionOptions = config.privyEnabled
+      ? options
+      : {
+          ...options,
+          preferPrivacyWallet: true,
+        };
+    const connected = await walletService.connectWallet(connectionOptions);
     if (connected) {
       registry.walletController.renderWallet();
       api.refreshConnectLabels();
-      if (goToInbox) api.showScreen("conversations");
+      if (goToInbox) {
+        api.showScreen(options.successScreen || (config.privyEnabled ? "conversations" : "wallet"));
+      }
     }
     return connected;
   };

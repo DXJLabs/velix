@@ -6,6 +6,7 @@ export function createWalletController({
   walletAssetConfig,
   expectedChainId,
   privyAppId,
+  privyEnabled,
   timelineMode,
   privacyRuntime,
   privacyPoolCompatibility,
@@ -56,7 +57,9 @@ export function createWalletController({
           ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
           : connected
             ? "This wallet can access encrypted deal channels."
-            : "Connect with Privy to unlock VEIL on this device.";
+            : privyEnabled
+              ? "Connect with Privy to unlock VEIL on this device."
+              : "Connect Ready Wallet to unlock VEIL privacy.";
     const statusText = pending ? "Connecting" : failed ? "Failed" : connected ? "Connected" : "Disconnected";
     const helperText = pending
       ? state.walletInitMessage
@@ -85,7 +88,7 @@ export function createWalletController({
         ? "Wallet connection failed"
         : connected
           ? `${state.walletSource} on ${expectedNetworkName()}`
-          : "Privy wallet not connected";
+          : privyEnabled ? "Privy wallet not connected" : "Ready Wallet not connected";
     const connectionStatus = pending ? "Connecting" : failed ? "Failed" : connected ? "Active" : "Disconnected";
     if (walletTitle) walletTitle.textContent = title;
     if (walletSubtitle) walletSubtitle.textContent = subtitle;
@@ -250,7 +253,7 @@ export function createWalletController({
     state.walletConnected = false;
     state.walletAddress = "";
     state.walletNetwork = expectedChainId;
-    state.walletSource = privyAppId ? "Privy" : "Demo";
+    state.walletSource = privyEnabled && privyAppId ? "Privy" : "";
     state.helperVerified = false;
     state.privyWallet = null;
     state.privyAccount = null;
@@ -266,7 +269,9 @@ export function createWalletController({
     state.privacyRegistrationStatus = "unknown";
     state.privateBalanceStatus = "unavailable";
     state.privateBalances = {};
-    setWalletInitializationState("idle", { message: "Connect Wallet" });
+    setWalletInitializationState("idle", {
+      message: privyEnabled ? "Connect Wallet" : "Connect Ready Wallet",
+    });
   }
 
   function requireConnectedWallet() {

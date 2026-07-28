@@ -1,4 +1,4 @@
-﻿export function homeScreenMarkup() {
+export function homeScreenMarkup() {
   return `
         <section class="screen unlock-screen" data-screen="unlock">
           <div class="home-frame">
@@ -15,7 +15,7 @@
               </nav>
               <button class="home-nav-action" type="button" data-connect-wallet>
                 <i data-lucide="wallet-cards" class="size-4"></i>
-                <span data-wallet-label>Connect Wallet</span>
+                <span data-wallet-label>Connect Ready Wallet</span>
               </button>
               <button class="home-menu-button" type="button" aria-label="Open menu" aria-expanded="false" data-home-menu-toggle>
                 <i data-lucide="menu" class="size-5"></i>
@@ -41,7 +41,7 @@
                 <div class="unlock-actions">
                   <button class="primary-action" type="button" data-connect-wallet>
                     <i data-lucide="wallet-cards" class="size-5"></i>
-                    <span data-wallet-label>Connect Wallet</span>
+                    <span data-wallet-label>Connect Ready Wallet</span>
                   </button>
                 </div>
                 <p class="home-trust-line">
