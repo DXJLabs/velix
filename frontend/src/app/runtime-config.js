@@ -350,10 +350,21 @@ export function createRuntimeConfig(
     privacyRuntime,
     featureStatus: VEIL_PHASE1_FEATURE_STATUS,
     veilInviteBaseUrl: env.VITE_VEIL_INVITE_URL || "https://veil.app/invite",
-    avnuPaymasterEnabled: (() => {
-      const enabled = readBooleanEnv(env.VITE_AVNU_PAYMASTER_ENABLED, "VITE_AVNU_PAYMASTER_ENABLED", false);
+    walletDeployPaymasterEnabled: readBooleanEnv(
+      env.VITE_AVNU_WALLET_DEPLOY_ENABLED ?? env.VITE_AVNU_PAYMASTER_ENABLED,
+      env.VITE_AVNU_WALLET_DEPLOY_ENABLED !== undefined
+        ? "VITE_AVNU_WALLET_DEPLOY_ENABLED"
+        : "VITE_AVNU_PAYMASTER_ENABLED",
+      false,
+    ),
+    privateTransactionPaymasterEnabled: (() => {
+      const enabled = readBooleanEnv(
+        env.VITE_AVNU_PRIVATE_TX_PAYMASTER_ENABLED,
+        "VITE_AVNU_PRIVATE_TX_PAYMASTER_ENABLED",
+        false,
+      );
       if (enabled) {
-        throw new Error("AVNU paymaster is disabled until a proof-aware submission path passes Sepolia E2E.");
+        throw new Error("Private transaction paymaster sponsorship is disabled until the proof-aware path passes Sepolia E2E.");
       }
       return false;
     })(),

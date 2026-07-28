@@ -79,6 +79,26 @@ test("runtime config reads the public Privy App ID and guarantees email/Google l
   assert.deepEqual(config.privyLoginMethods, ["email", "google", "wallet"]);
 });
 
+test("runtime separates wallet deployment sponsorship from private transaction sponsorship", () => {
+  const legacy = createRuntimeConfig({
+    VITE_AVNU_PAYMASTER_ENABLED: "true",
+  }, "");
+  assert.equal(legacy.walletDeployPaymasterEnabled, true);
+  assert.equal(legacy.privateTransactionPaymasterEnabled, false);
+  assert.equal("avnuPaymasterEnabled" in legacy, false);
+
+  const preferred = createRuntimeConfig({
+    VITE_AVNU_PAYMASTER_ENABLED: "true",
+    VITE_AVNU_WALLET_DEPLOY_ENABLED: "false",
+  }, "");
+  assert.equal(preferred.walletDeployPaymasterEnabled, false);
+
+  assert.throws(
+    () => createRuntimeConfig({ VITE_AVNU_PRIVATE_TX_PAYMASTER_ENABLED: "true" }, ""),
+    /Private transaction paymaster sponsorship is disabled/,
+  );
+});
+
 test("build config falls back to public PRIVY_APP_ID only when the VITE alias is absent", () => {
   assert.equal(resolvePublicPrivyAppId({
     VITE_PRIVY_APP_ID: "cm-vite",

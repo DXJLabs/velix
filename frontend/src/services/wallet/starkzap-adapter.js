@@ -83,7 +83,7 @@ export function createStarkZapAdapter({
     }
 
     let paymasterAccessToken = "";
-    if (config.avnuPaymasterEnabled) {
+    if (config.walletDeployPaymasterEnabled) {
       updateWalletInitialization("connecting_paymaster", traceId, {
         message: "Preparing Gas Sponsor",
       });
@@ -111,7 +111,7 @@ export function createStarkZapAdapter({
         strategy: OnboardStrategy.Privy,
         accountPreset: accountPresets.argentXV050,
         deploy: "if_needed",
-        ...(config.avnuPaymasterEnabled ? { feeMode: { type: "paymaster" } } : {}),
+        ...(config.walletDeployPaymasterEnabled ? { feeMode: { type: "paymaster" } } : {}),
         privy: {
           resolve: async () => ({
             walletId: wallet.id,
@@ -178,7 +178,7 @@ export function createStarkZapAdapter({
       walletId: wallet.id,
       address: accountAddress,
       deployed: state.privyAccountDeployed,
-      feeMode: config.avnuPaymasterEnabled ? "paymaster" : "user_pays",
+      feeMode: config.walletDeployPaymasterEnabled ? "paymaster" : "user_pays",
     });
 
     return { account: connectedWallet, provider, starknetAccount: account, wallet: connectedWallet };

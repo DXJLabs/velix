@@ -81,7 +81,7 @@ test("body and per-instance rate boundaries fail closed", () => {
   );
 });
 
-test("raw paymaster forwarding and arbitrary-hash signing are disabled", async () => {
+test("wallet paymaster and signer reject unauthenticated requests without logging secrets", async () => {
   resetRateLimitsForTest();
   const originalInfo = console.info;
   const originalError = console.error;
@@ -94,10 +94,15 @@ test("raw paymaster forwarding and arbitrary-hash signing are disabled", async (
     await paymasterHandler({
       method: "POST",
       headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.6" },
-      body: { method: "paymaster_executeTransaction", secret: "never-log-this" },
+      body: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "paymaster_executeTransaction",
+        secret: "never-log-this",
+      },
     }, paymasterResponse);
-    assert.equal(paymasterResponse.statusCode, 503);
-    assert.equal(paymasterResponse.payload.code, "PAYMASTER_ROUTE_UNVERIFIED");
+    assert.equal(paymasterResponse.statusCode, 401);
+    assert.equal(paymasterResponse.payload.code, "PRIVY_ACCESS_TOKEN_MISSING");
 
     const signResponse = createResponse();
     await signHandler({
@@ -105,8 +110,8 @@ test("raw paymaster forwarding and arbitrary-hash signing are disabled", async (
       headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.7" },
       body: { walletId: "wallet-secret", hash: "0x123", purpose: "allowed-label" },
     }, signResponse);
-    assert.equal(signResponse.statusCode, 503);
-    assert.equal(signResponse.payload.code, "SERVER_SIGNING_DISABLED");
+    assert.equal(signResponse.statusCode, 401);
+    assert.equal(signResponse.payload.code, "PRIVY_ACCESS_TOKEN_MISSING");
 
     const serializedLogs = logs.join("\n");
     assert.doesNotMatch(serializedLogs, /never-log-this|wallet-secret|0x123|allowed-label/);
