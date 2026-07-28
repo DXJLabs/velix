@@ -111,6 +111,7 @@ export function bootstrapVeilApp({
   });
   const recipientDiscovery = createRecipientDiscoveryService({
     getProvider: networkService.getStarknetReadProvider,
+    privacyPoolAddress: config.privacyPoolAddress,
     expectedChainId: config.expectedChainId,
   });
   const homeUi = createHomeUi({

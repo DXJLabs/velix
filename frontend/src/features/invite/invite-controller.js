@@ -459,12 +459,33 @@ export function createInviteController({
       const reverseNote = result.source === "starknet-id" && !result.reverseVerified
         ? " The name is not the address primary reverse name."
         : "";
-      if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} VEIL encryption capability is not verified yet.`;
-      if (resultStatus) {
-        resultStatus.textContent = "Resolved";
-        resultStatus.className = "status-pill escrow-active";
+
+      if (result.privacyPoolStatus === "registered") {
+        if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} Registered in the VEIL Privacy Pool.`;
+        if (resultStatus) {
+          resultStatus.textContent = "Pool Participant";
+          resultStatus.className = "status-pill escrow-active";
+        }
+        if (actionHint) actionHint.textContent = "Recipient identity and Privacy Pool registration are verified. Deal creation remains locked until channel discovery and invite delivery pass two-party E2E verification.";
+        return;
       }
-      if (actionHint) actionHint.textContent = "Identity resolved. Deal creation remains locked until the encryption key and invite delivery pass E2E verification.";
+
+      if (result.privacyPoolStatus === "not_registered") {
+        if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} No viewing public key is registered in the VEIL Privacy Pool.`;
+        if (resultStatus) {
+          resultStatus.textContent = "Registration Required";
+          resultStatus.className = "status-pill waiting-deposit";
+        }
+        if (actionHint) actionHint.textContent = "The recipient must register with the VEIL Privacy Pool before private channel discovery. No deal or invite will be created.";
+        return;
+      }
+
+      if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} Privacy Pool registration could not be verified.`;
+      if (resultStatus) {
+        resultStatus.textContent = "Pool Unverified";
+        resultStatus.className = "status-pill waiting-deposit";
+      }
+      if (actionHint) actionHint.textContent = "Identity resolution succeeded, but the VEIL Privacy Pool check failed closed. Deal creation remains locked.";
       return;
     }
 
