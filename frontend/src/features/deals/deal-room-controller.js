@@ -295,6 +295,9 @@ export function createDealRoomController({
   }
 
   function workflowStageData() {
+    const channel = currentChannel();
+    if (!channel) return [];
+
     const directMemoFlow = !state.escrowReleased && state.screen === "payment";
     if (directMemoFlow) {
       return [
@@ -311,7 +314,7 @@ export function createDealRoomController({
       ];
     }
 
-    const status = String(currentChannel().status || "").toLowerCase();
+    const status = String(channel.status || "").toLowerCase();
     const escrowSettlementComplete = state.escrowReleased && !state.paymentSent;
     const settlementReady = status.includes("settlement ready");
     const settlementStatusComplete = status.includes("deal completed") || (status.includes("settlement") && !status.includes("ready"));
@@ -333,9 +336,12 @@ export function createDealRoomController({
   }
 
   function renderWorkflowProgress() {
-    const stages = workflowStageData();
+    const channel = currentChannel();
+    const stages = channel ? workflowStageData() : [];
     document.querySelectorAll("[data-workflow-progress]").forEach((container) => {
-      container.innerHTML = workflowProgressMarkup(currentChannel().title || "Rights Transfer", stages);
+      container.innerHTML = channel
+        ? workflowProgressMarkup(channel.title || "Rights Transfer", stages)
+        : "";
     });
   }
 

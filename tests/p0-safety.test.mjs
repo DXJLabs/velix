@@ -9,6 +9,7 @@ import { hasRealTransactionHash } from "../frontend/src/features/escrow/escrow-f
 import { buildEscrowController } from "../frontend/src/features/escrow/escrow-controller.js";
 import { createOfferController } from "../frontend/src/features/offer/offer-controller.js";
 import { createPaymentController } from "../frontend/src/features/payment/payment-controller.js";
+import { createDealRoomController } from "../frontend/src/features/deals/deal-room-controller.js";
 import { createBootstrapData } from "../frontend/src/state/bootstrap-data.js";
 import { createDealStorage } from "../frontend/src/services/storage/deal-storage.js";
 import { createAppStore } from "../frontend/src/state/app-store.js";
@@ -76,6 +77,65 @@ test("production store starts without demo channels, rewards, or accepted deal s
   assert.equal(state.paymentSent, false);
   assert.equal(state.inviteCode, "");
   assert.equal(state.demoRuntimeMode, false);
+});
+
+test("workflow progress is empty until a production deal exists", () => {
+  const state = {
+    screen: "unlock",
+    channelId: "",
+    escrowReleased: false,
+    offerAccepted: false,
+    paymentSent: false,
+  };
+  const containers = [{ innerHTML: "stale workflow" }];
+  let channel;
+
+  const controller = createDealRoomController({
+    state,
+    channels: [],
+    messages: {},
+    document: {
+      querySelectorAll(selector) {
+        assert.equal(selector, "[data-workflow-progress]");
+        return containers;
+      },
+    },
+    conversationList: { innerHTML: "" },
+    conversationSearch: null,
+    messageFeed: { innerHTML: "" },
+    composerForm: null,
+    timelineMode: "encrypted-direct",
+    helperAddress: "",
+    chatDisplayMode: "encrypted-direct",
+    bobIdentity: "bob.stark",
+    currentChannel: () => channel,
+    currentDealId: () => channel?.dealId || "Deal",
+    channelMessages: () => [],
+    channelRequiresJoin: () => false,
+    renderInviteWaitingCard: () => "",
+    getVeilClient: () => ({ encryption: {} }),
+    veilError() {},
+    statusPillClass: () => "",
+    starkIdentityName: String,
+    itemStateClass: () => "",
+    renderChainMeta: () => "",
+    showScreen() {},
+    iconRefresh() {},
+  });
+
+  assert.deepEqual(controller.workflowStageData(), []);
+  assert.doesNotThrow(() => controller.renderWorkflowProgress());
+  assert.equal(containers[0].innerHTML, "");
+
+  channel = {
+    id: "deal-1",
+    dealId: "Deal #1",
+    title: "Private Deal",
+    status: "Negotiation Active",
+  };
+  controller.renderWorkflowProgress();
+  assert.match(containers[0].innerHTML, /Private Deal/);
+  assert.match(containers[0].innerHTML, /Negotiation/);
 });
 
 test("production deal storage is fail-closed and writes no plaintext local cache", () => {
