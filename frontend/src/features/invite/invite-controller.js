@@ -8,6 +8,7 @@ export function createInviteController({
   document,
   conversationSearch,
   dealCreationEnabled = false,
+  onboardingInviteEnabled = true,
   knownVeilCounterparties,
   resolveCounterparty,
   recipientDiscovery,
@@ -42,6 +43,7 @@ export function createInviteController({
 }) {
   let recipientDiscoveryTimer;
   let recipientDiscoveryRequestId = 0;
+  let latestRecipientDiscovery = null;
 
   function newDealTitleValue() {
     return document.querySelector("#new-deal-title")?.value.trim() || "Rights Transfer";
@@ -54,6 +56,24 @@ export function createInviteController({
 
   function inviteTargetValue() {
     return document.querySelector("#invite-target")?.value.trim() || "Counterparty";
+  }
+
+  function ensureInviteCode() {
+    if (state.inviteCode) return state.inviteCode;
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    state.inviteCode = Array.from(bytes, (value) => value.toString(36).padStart(2, "0"))
+      .join("")
+      .slice(0, 12);
+    return state.inviteCode;
+  }
+
+  function onboardingInviteLink(target) {
+    ensureInviteCode();
+    const url = new URL(createDealInviteLink());
+    url.searchParams.set("onboarding", "1");
+    if (target) url.searchParams.set("counterparty", target);
+    return url.toString();
   }
 
   function counterpartyLookup(value = newDealCounterpartyValue()) {
@@ -167,6 +187,58 @@ export function createInviteController({
         ...confirmedTimelineMeta(`${channel.id}-joined`, 12),
       },
     ];
+  }
+
+  async function createOnboardingInvite({ inviteOnly = false } = {}) {
+    if (!onboardingInviteEnabled) {
+      showToast("VEIL onboarding invites are unavailable.");
+      return false;
+    }
+
+    const target = inviteOnly ? inviteTargetValue() : newDealCounterpartyValue();
+    if (!target) {
+      showToast("Enter a .stark name, Starknet address, or contact first.");
+      return false;
+    }
+
+    const person = latestRecipientDiscovery?.starkName
+      || latestRecipientDiscovery?.address
+      || target;
+    beginChannelModal({ inviteOnly: true, person, dealId: "VEIL Invite" });
+    setAppLoading("channel", "Preparing VEIL Invite");
+
+    try {
+      await transactionDelay(260);
+      const link = onboardingInviteLink(target);
+      let copied = false;
+      try {
+        await copyToClipboard(link);
+        copied = true;
+      } catch {}
+
+      state.lastInviteLink = link;
+      clearAppLoading("channel");
+      finishChannelModal({
+        title: "Invite Ready",
+        subtitle: copied
+          ? "Link copied. Share it with your counterparty."
+          : "Invite created. Copy it from the waiting card.",
+      });
+      showToast(
+        copied
+          ? "VEIL onboarding invite copied."
+          : "VEIL onboarding invite ready.",
+      );
+      return { link, copied };
+    } catch (error) {
+      clearAppLoading("channel");
+      failChannelModal({
+        title: "Invite Failed",
+        subtitle: "Unable to prepare this VEIL invite.",
+        detail: error?.message || "Retry creating the invite.",
+      });
+      return false;
+    }
   }
 
   async function createDealChannel({ inviteOnly = false } = {}) {
@@ -374,8 +446,16 @@ export function createInviteController({
     const query = newDealCounterpartyValue();
 
     if (!dealCreationEnabled) {
-      lockDealCreation(primaryAction, inviteFormPanel, showInviteForm);
-      scheduleRecipientDiscovery(query, { resultName, resultDetail, resultStatus, actionHint });
+      prepareOnboardingUi(primaryAction, inviteFormPanel, showInviteForm);
+      scheduleRecipientDiscovery(query, {
+        resultName,
+        resultDetail,
+        resultStatus,
+        actionHint,
+        primaryAction,
+        inviteFormPanel,
+        showInviteForm,
+      });
       iconRefresh();
       return;
     }
@@ -404,6 +484,89 @@ export function createInviteController({
       showInviteForm.removeAttribute("aria-disabled");
     }
     iconRefresh();
+  }
+
+  function setPrimaryAction(primaryAction, {
+    label,
+    icon = "send",
+    action = "",
+    disabled = false,
+  }) {
+    if (!primaryAction) return;
+    primaryAction.disabled = disabled;
+    primaryAction.setAttribute("aria-disabled", disabled ? "true" : "false");
+    if (action && !disabled) primaryAction.dataset.newDealAction = action;
+    else primaryAction.removeAttribute("data-new-deal-action");
+    primaryAction.innerHTML = `<i data-lucide="${icon}" class="size-5"></i><span>${escapeHtml(label)}</span>`;
+  }
+
+  function prepareOnboardingUi(primaryAction, inviteFormPanel, showInviteForm) {
+    setPrimaryAction(primaryAction, {
+      label: "Checking private readiness",
+      icon: "loader-circle",
+      disabled: true,
+    });
+    if (inviteFormPanel) inviteFormPanel.hidden = !state.inviteFormOpen;
+    if (showInviteForm) {
+      showInviteForm.hidden = state.inviteFormOpen;
+      showInviteForm.disabled = !onboardingInviteEnabled;
+      showInviteForm.setAttribute(
+        "aria-disabled",
+        onboardingInviteEnabled ? "false" : "true",
+      );
+    }
+    const inviteSubmit = document.querySelector(
+      '#invite-form-panel [data-new-deal-action="invite"]',
+    );
+    if (inviteSubmit && !state.demoRuntimeMode) {
+      inviteSubmit.dataset.newDealAction = "onboard";
+    }
+  }
+
+  function updateOnboardingAction(result, {
+    primaryAction,
+    inviteFormPanel,
+    showInviteForm,
+  }) {
+    prepareOnboardingUi(primaryAction, inviteFormPanel, showInviteForm);
+    if (!onboardingInviteEnabled) {
+      lockDealCreation(primaryAction, inviteFormPanel, showInviteForm);
+      return;
+    }
+
+    if (result.status === "resolved") {
+      const registered = result.privacyPoolStatus === "registered";
+      setPrimaryAction(primaryAction, {
+        label: registered ? "Copy VEIL Invite" : "Invite to Register",
+        icon: registered ? "send" : "user-plus",
+        action: "onboard",
+      });
+      return;
+    }
+
+    if (result.status === "not_found") {
+      setPrimaryAction(primaryAction, {
+        label: "Counterparty not found",
+        icon: "search-x",
+        disabled: true,
+      });
+      return;
+    }
+
+    if (result.status === "invalid") {
+      setPrimaryAction(primaryAction, {
+        label: "Enter a valid identity",
+        icon: "circle-alert",
+        disabled: true,
+      });
+      return;
+    }
+
+    setPrimaryAction(primaryAction, {
+      label: "Private readiness unavailable",
+      icon: "shield-alert",
+      disabled: true,
+    });
   }
 
   function lockDealCreation(primaryAction, inviteFormPanel, showInviteForm) {
@@ -451,7 +614,15 @@ export function createInviteController({
     }, 320);
   }
 
-  function applyRecipientDiscovery(result, { resultName, resultDetail, resultStatus, actionHint }) {
+  function applyRecipientDiscovery(result, elements) {
+    const {
+      resultName,
+      resultDetail,
+      resultStatus,
+      actionHint,
+    } = elements;
+    latestRecipientDiscovery = result;
+    if (!dealCreationEnabled) updateOnboardingAction(result, elements);
     const address = result.address ? shortHash(result.address) : "";
     if (resultName) resultName.textContent = result.starkName || address || result.query || "Counterparty";
 
@@ -466,7 +637,7 @@ export function createInviteController({
           resultStatus.textContent = "Pool Participant";
           resultStatus.className = "status-pill escrow-active";
         }
-        if (actionHint) actionHint.textContent = "Recipient identity and Privacy Pool registration are verified. Deal creation remains locked until channel discovery and invite delivery pass two-party E2E verification.";
+        if (actionHint) actionHint.textContent = "Recipient is registered. You can share a VEIL invite now; the private room opens after the two-party channel check succeeds.";
         return;
       }
 
@@ -476,7 +647,7 @@ export function createInviteController({
           resultStatus.textContent = "Registration Required";
           resultStatus.className = "status-pill waiting-deposit";
         }
-        if (actionHint) actionHint.textContent = "The recipient must register with the VEIL Privacy Pool before private channel discovery. No deal or invite will be created.";
+        if (actionHint) actionHint.textContent = "Invite them to open VEIL and connect Ready Wallet. The private room unlocks after their Privacy Pool registration is detected.";
         return;
       }
 
@@ -548,6 +719,7 @@ export function createInviteController({
     copyInviteLink,
     counterpartyLookup,
     createDealChannel,
+    createOnboardingInvite,
     createLocalChannelModel,
     declinePendingCounterparty,
     inviteTargetValue,

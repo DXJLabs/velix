@@ -1,4 +1,4 @@
-﻿.conversation-workspace {
+.conversation-workspace {
   min-height: 100dvh;
 }
 
@@ -286,5 +286,167 @@
   color: rgb(51 65 85);
   font-size: .9rem;
   font-weight: 950;
+}
+
+/* Private Deal onboarding experience */
+.new-deal-header {
+  align-items: flex-start;
+}
+
+.new-deal-header-copy {
+  max-width: 38rem;
+  margin-top: .22rem;
+  color: rgb(100 116 139);
+  font-size: .82rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.new-deal-journey {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: .45rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: .9rem;
+  background: white;
+  padding: .75rem;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 5%);
+}
+
+.new-deal-journey > i {
+  color: rgb(148 163 184);
+}
+
+.new-deal-journey-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .42rem;
+  color: rgb(100 116 139);
+}
+
+.new-deal-journey-step span {
+  display: grid;
+  width: 1.55rem;
+  height: 1.55rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(241 245 249);
+  font-size: .7rem;
+  font-weight: 950;
+}
+
+.new-deal-journey-step small {
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.new-deal-journey-step.active {
+  color: rgb(15 23 42);
+}
+
+.new-deal-journey-step.active span {
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.new-deal-primary-panel {
+  border-color: rgb(203 213 225);
+  box-shadow: 0 18px 50px rgb(15 23 42 / 7%);
+}
+
+.new-deal-step-label {
+  margin: 0 0 .18rem;
+  color: rgb(14 116 144);
+  font-size: .68rem;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.privacy-gate-card,
+.invite-explainer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: .65rem;
+  border: 1px solid rgb(186 230 253);
+  border-radius: .78rem;
+  background: linear-gradient(135deg, rgb(240 249 255), rgb(248 250 252));
+  padding: .78rem;
+  color: rgb(3 105 161);
+}
+
+.privacy-gate-card strong,
+.privacy-gate-card small {
+  display: block;
+}
+
+.privacy-gate-card strong {
+  color: rgb(15 23 42);
+  font-size: .84rem;
+  font-weight: 950;
+}
+
+.privacy-gate-card small,
+.invite-explainer p {
+  margin-top: .12rem;
+  color: rgb(71 85 105);
+  font-size: .76rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.new-deal-action-hint {
+  border-left: 3px solid rgb(14 116 144);
+  border-radius: .35rem;
+  background: rgb(248 250 252);
+  padding: .7rem .78rem;
+}
+
+.new-deal-primary-cta {
+  min-height: 3.15rem;
+  border-radius: .78rem;
+  box-shadow: 0 10px 24px rgb(15 23 42 / 14%);
+}
+
+.new-deal-primary-cta:disabled {
+  box-shadow: none;
+}
+
+.new-deal-invite-panel {
+  background: linear-gradient(180deg, white, rgb(248 250 252));
+}
+
+.invite-explainer {
+  border-color: rgb(226 232 240);
+  background: white;
+  color: rgb(71 85 105);
+}
+
+.invite-explainer p {
+  margin: 0;
+}
+
+@media (max-width: 520px) {
+  .new-deal-journey-step {
+    display: grid;
+    justify-items: center;
+    gap: .25rem;
+  }
+
+  .new-deal-journey-step small {
+    font-size: .62rem;
+  }
+
+  .counterparty-result {
+    grid-template-columns: 2.65rem minmax(0, 1fr);
+  }
+
+  .counterparty-result .status-pill {
+    grid-column: 2;
+    width: max-content;
+  }
 }
 

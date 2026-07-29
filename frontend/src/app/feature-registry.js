@@ -82,13 +82,22 @@ export function createFeatureRegistry({
     document: dom.document,
     conversationSearch: dom.conversationSearch,
     dealCreationEnabled: config.demoRuntimeMode,
+    onboardingInviteEnabled: true,
     knownVeilCounterparties,
     resolveCounterparty,
     recipientDiscovery,
     shortHash,
     counterpartyAvatar,
     starkIdentityName,
-    createDealInviteLink: () => buildDealInviteLink(config.veilInviteBaseUrl, store.state.inviteCode),
+    createDealInviteLink: () => {
+      const configuredBase = String(config.veilInviteBaseUrl || "").trim();
+      if (!configuredBase || configuredBase === "https://veil.app/invite") {
+        const url = new URL(window.location.origin);
+        url.searchParams.set("invite", store.state.inviteCode);
+        return url.toString();
+      }
+      return buildDealInviteLink(configuredBase, store.state.inviteCode);
+    },
     confirmedTimelineMeta: data.confirmedTimelineMeta,
     connectWallet: call(api, "connectWallet"),
     beginChannelModal: call(transactionModalController, "beginChannelModal"),

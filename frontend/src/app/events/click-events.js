@@ -331,6 +331,12 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       api.createDealChannel({ inviteOnly: false });
       return;
     }
+    if (newDealAction?.dataset.newDealAction === "onboard") {
+      api.createOnboardingInvite({
+        inviteOnly: Boolean(newDealAction.closest("#invite-form-panel")),
+      });
+      return;
+    }
     if (newDealAction?.dataset.newDealAction === "show-invite") {
       state.inviteFormOpen = true;
       api.renderNewDeal();
@@ -342,7 +348,8 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       return;
     }
     if (newDealAction?.dataset.newDealAction === "invite") {
-      api.createDealChannel({ inviteOnly: true });
+      if (state.demoRuntimeMode) api.createDealChannel({ inviteOnly: true });
+      else api.createOnboardingInvite({ inviteOnly: true });
       return;
     }
 

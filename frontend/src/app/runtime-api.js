@@ -34,6 +34,7 @@ export function buildRuntimeApi({
     renderChannel: (...args) => registry.dealRoomController.renderChannel(...args),
     renderWorkflowProgress: (...args) => registry.dealRoomController.renderWorkflowProgress(...args),
     openChannel: (...args) => registry.dealRoomController.openChannel(...args),
+    createOnboardingInvite: (...args) => registry.inviteController.createOnboardingInvite(...args),
     renderDeal: (...args) => registry.offerController.renderDeal(...args),
     renderEscrow: (...args) => registry.escrowController.renderEscrow(...args),
     renderPayment: (...args) => registry.paymentController.renderPayment(...args),
