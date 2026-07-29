@@ -1,0 +1,503 @@
+name: "4.2 | READY | Browser Registration E2E"
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_minutes:
+        description: "How long the temporary Ready browser session stays online"
+        required: true
+        default: "240"
+        type: choice
+        options:
+          - "60"
+          - "120"
+          - "180"
+          - "240"
+          - "300"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: veil-ready-browser-registration-e2e
+  cancel-in-progress: true
+
+jobs:
+  ready-browser-registration:
+    name: Ready Wallet Browser Registration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+
+    env:
+      PROVER_IMAGE: ghcr.io/dxjlabs/starknet-privacy-transaction-prover:privacy-0.14.3-rc.2-x86-64-v3
+
+    steps:
+      - name: Validate required prover secret
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RPC_URL:-}" ]; then
+            echo "Required secret STARKNET_SEPOLIA_RPC_URL is unavailable."
+            exit 1
+          fi
+          echo "The private prover RPC configuration is present."
+          echo "The secret value will not be embedded in the browser build."
+
+      - name: Checkout VEIL source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate registration implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:sdk
+          node --test \
+            packages/veil-sdk/tests/registration-proof.test.mjs \
+            packages/veil-sdk/tests/registration-submission.test.mjs \
+            packages/veil-sdk/tests/device-storage-key.test.mjs \
+            packages/veil-sdk/tests/viewing-key-vault.test.mjs \
+            packages/veil-sdk/tests/ready-proof-signer.test.mjs \
+            tests/private-identity-registration-ui.test.mjs
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull temporary session images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$PROVER_IMAGE"
+          docker pull node:24-alpine
+          docker pull python:3.13-alpine
+          docker pull cloudflare/cloudflared:latest
+
+      - name: Start transaction prover
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          docker rm -f veil-ready-prover 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-prover \
+            --network host \
+            -e RPC_URL="$RPC_URL" \
+            -e CHAIN_ID="SN_SEPOLIA" \
+            -e PROVER_IP="127.0.0.1" \
+            -e PROVER_PORT="3000" \
+            -e MAX_CONCURRENT_REQUESTS="1" \
+            -e MAX_QUEUED_REQUESTS="1" \
+            -e MAX_CONNECTIONS="2" \
+            -e COMPILED_CLASS_CACHE_SIZE="50" \
+            -e PREFETCH_STATE="false" \
+            -e RUST_LOG="info" \
+            "$PROVER_IMAGE"
+
+      - name: Wait for transaction prover
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 90); do
+            running="$(docker inspect -f '{{.State.Running}}' veil-ready-prover 2>/dev/null || true)"
+            if [ "$running" != "true" ]; then
+              echo "Transaction prover stopped before becoming ready."
+              docker logs veil-ready-prover 2>&1 \
+                | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+                | tail -n 120
+              exit 1
+            fi
+
+            response="$(
+              curl -sS \
+                --connect-timeout 2 \
+                --max-time 8 \
+                -X POST \
+                http://127.0.0.1:3000 \
+                -H 'Content-Type: application/json' \
+                -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}' \
+                2>/dev/null || true
+            )"
+            if echo "$response" | grep -q '"result"'; then
+              ready=1
+              break
+            fi
+            echo "Waiting for prover: $attempt/90"
+            sleep 2
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            echo "Transaction prover did not become ready."
+            exit 1
+          fi
+          echo "VEIL_TRANSACTION_PROVER_READY"
+
+      - name: Start browser-safe prover bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/veil-ready-bridge-state
+          mkdir -p /tmp/veil-ready-bridge-state
+          : > /tmp/veil-ready-bridge-state/allowed-origin
+
+          docker rm -f veil-ready-prover-bridge 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-prover-bridge \
+            --network host \
+            -e VEIL_BRIDGE_HOST="127.0.0.1" \
+            -e VEIL_BRIDGE_PORT="3001" \
+            -e VEIL_PROVER_HOST="127.0.0.1" \
+            -e VEIL_PROVER_PORT="3000" \
+            -e VEIL_ALLOWED_ORIGIN_PATH="/state/allowed-origin" \
+            -v "$GITHUB_WORKSPACE/.github/scripts/ready-browser-prover-bridge.mjs:/app/bridge.mjs:ro" \
+            -v /tmp/veil-ready-bridge-state:/state \
+            node:24-alpine \
+            node /app/bridge.mjs
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null; then
+              echo "VEIL_PROVER_BRIDGE_READY"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs veil-ready-prover-bridge
+          exit 1
+
+      - name: Open temporary prover tunnel
+        id: prover_tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f veil-ready-prover-tunnel 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-prover-tunnel \
+            --network host \
+            cloudflare/cloudflared:latest \
+            tunnel --no-autoupdate --url http://127.0.0.1:3001
+
+          prover_url=""
+          for attempt in $(seq 1 90); do
+            prover_url="$(
+              docker logs veil-ready-prover-tunnel 2>&1 \
+                | grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' \
+                | tail -n 1 \
+                || true
+            )"
+            if [ -n "$prover_url" ]; then
+              break
+            fi
+            running="$(docker inspect -f '{{.State.Running}}' veil-ready-prover-tunnel 2>/dev/null || true)"
+            if [ "$running" != "true" ]; then
+              echo "Prover tunnel stopped before publishing a URL."
+              docker logs veil-ready-prover-tunnel
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ -z "$prover_url" ]; then
+            echo "Prover tunnel URL was not published."
+            docker logs veil-ready-prover-tunnel
+            exit 1
+          fi
+
+          echo "url=$prover_url" >> "$GITHUB_OUTPUT"
+          echo "VEIL_PROVER_TUNNEL_READY"
+
+      - name: Build temporary Ready frontend
+        shell: bash
+        env:
+          VITE_PRIVY_ENABLED: "false"
+          VITE_STARKNET_CHAIN_ID: "SN_SEPOLIA"
+          VITE_STRK20_PROVER_MODE: "hosted"
+          VITE_STRK20_PROVER_URL: ${{ steps.prover_tunnel.outputs.url }}
+          VITE_STRK20_DISCOVERY_PROVIDER: "contract"
+        run: |
+          set -euo pipefail
+          npm exec vite build
+          test -s dist/index.html
+          echo "VEIL_READY_FRONTEND_BUILD_PASSED"
+
+      - name: Start temporary frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f veil-ready-frontend 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-frontend \
+            --network host \
+            -v "$GITHUB_WORKSPACE/dist:/site:ro" \
+            -w /site \
+            python:3.13-alpine \
+            python -m http.server 4173 --bind 127.0.0.1
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then
+              echo "VEIL_READY_FRONTEND_LOCAL"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs veil-ready-frontend
+          exit 1
+
+      - name: Open temporary frontend tunnel
+        id: frontend_tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f veil-ready-frontend-tunnel 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-frontend-tunnel \
+            --network host \
+            cloudflare/cloudflared:latest \
+            tunnel --no-autoupdate --url http://127.0.0.1:4173
+
+          frontend_url=""
+          for attempt in $(seq 1 90); do
+            frontend_url="$(
+              docker logs veil-ready-frontend-tunnel 2>&1 \
+                | grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' \
+                | tail -n 1 \
+                || true
+            )"
+            if [ -n "$frontend_url" ]; then
+              break
+            fi
+            running="$(docker inspect -f '{{.State.Running}}' veil-ready-frontend-tunnel 2>/dev/null || true)"
+            if [ "$running" != "true" ]; then
+              echo "Frontend tunnel stopped before publishing a URL."
+              docker logs veil-ready-frontend-tunnel
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ -z "$frontend_url" ]; then
+            echo "Frontend tunnel URL was not published."
+            docker logs veil-ready-frontend-tunnel
+            exit 1
+          fi
+
+          echo "url=$frontend_url" >> "$GITHUB_OUTPUT"
+          echo "VEIL_FRONTEND_TUNNEL_READY"
+
+      - name: Authorize browser origin and verify tunnels
+        shell: bash
+        env:
+          FRONTEND_URL: ${{ steps.frontend_tunnel.outputs.url }}
+          PROVER_URL: ${{ steps.prover_tunnel.outputs.url }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$FRONTEND_URL" \
+            > /tmp/veil-ready-bridge-state/allowed-origin
+
+          frontend_ready=0
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 10 "$FRONTEND_URL" \
+                | grep -q '<!doctype html>'; then
+              frontend_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$frontend_ready" -ne 1 ]; then
+            echo "Temporary frontend URL is not reachable."
+            exit 1
+          fi
+
+          cors_headers="$(
+            curl -sS -D - -o /dev/null \
+              --max-time 20 \
+              -X OPTIONS "$PROVER_URL/" \
+              -H "Origin: $FRONTEND_URL" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: content-type'
+          )"
+          echo "$cors_headers" \
+            | tr -d '\r' \
+            | grep -Fqi "access-control-allow-origin: $FRONTEND_URL"
+
+          prover_response="$(
+            curl -sS \
+              --max-time 30 \
+              -X POST "$PROVER_URL/" \
+              -H "Origin: $FRONTEND_URL" \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"starknet_specVersion","params":[]}'
+          )"
+          echo "$prover_response" | grep -q '"result"'
+
+          echo "VEIL_PUBLIC_FRONTEND_REACHABLE"
+          echo "VEIL_PUBLIC_PROVER_CORS_VERIFIED"
+
+      - name: Publish temporary browser URLs
+        id: session
+        shell: bash
+        env:
+          FRONTEND_URL: ${{ steps.frontend_tunnel.outputs.url }}
+          PROVER_URL: ${{ steps.prover_tunnel.outputs.url }}
+          SESSION_MINUTES: ${{ inputs.session_minutes }}
+        run: |
+          set -euo pipefail
+          expires_at="$(date -u -d "+${SESSION_MINUTES} minutes" '+%Y-%m-%dT%H:%M:%SZ')"
+          export EXPIRES_AT="$expires_at"
+
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
+
+          const session = {
+            result: "VEIL_READY_BROWSER_SESSION_ACTIVE",
+            frontendUrl: process.env.FRONTEND_URL,
+            proverUrl: process.env.PROVER_URL,
+            expiresAt: process.env.EXPIRES_AT,
+            instructions: [
+              "Open frontendUrl while this workflow is still running.",
+              "Open Wallet and connect Ready Wallet on Starknet Sepolia.",
+              "Press Register Private Identity.",
+              "Approve the request in Ready Wallet.",
+              "Cancel the workflow when testing is finished.",
+            ],
+          };
+
+          writeFileSync(
+            "veil-ready-browser-session.json",
+            `${JSON.stringify(session, null, 2)}\n`,
+            { encoding: "utf8", mode: 0o600 },
+          );
+          NODE
+
+          echo "expires_at=$expires_at" >> "$GITHUB_OUTPUT"
+          echo "::notice title=VEIL Ready Browser URL::$FRONTEND_URL"
+          echo "::notice title=Temporary session expiry::$expires_at"
+
+          {
+            echo "## VEIL Ready Wallet Browser Session"
+            echo
+            echo "**Open this URL now while the workflow remains running:**"
+            echo
+            echo "[$FRONTEND_URL]($FRONTEND_URL)"
+            echo
+            echo "- Network: Starknet Sepolia"
+            echo "- Session expiry: \`$expires_at\`"
+            echo "- Open **Wallet → Connect Ready Wallet → Register Private Identity**"
+            echo "- Cancel this workflow when the test is complete."
+            echo
+            echo "The prover URL is intentionally temporary and restricted to the frontend origin."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo
+          echo "============================================================"
+          echo "OPEN THIS VEIL URL NOW:"
+          echo "$FRONTEND_URL"
+          echo
+          echo "SESSION EXPIRES:"
+          echo "$expires_at"
+          echo "============================================================"
+
+      - name: Upload active session information
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-ready-browser-session
+          path: veil-ready-browser-session.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Keep temporary Ready session online
+        shell: bash
+        env:
+          SESSION_MINUTES: ${{ inputs.session_minutes }}
+          FRONTEND_URL: ${{ steps.frontend_tunnel.outputs.url }}
+        run: |
+          set -euo pipefail
+          echo "Temporary VEIL session is online for $SESSION_MINUTES minutes."
+          echo "Cancel the workflow manually when testing is finished."
+
+          for minute in $(seq 1 "$SESSION_MINUTES"); do
+            for container in \
+              veil-ready-prover \
+              veil-ready-prover-bridge \
+              veil-ready-prover-tunnel \
+              veil-ready-frontend \
+              veil-ready-frontend-tunnel; do
+              running="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
+              if [ "$running" != "true" ]; then
+                echo "Required session container stopped: $container"
+                exit 1
+              fi
+            done
+
+            if [ $((minute % 10)) -eq 0 ]; then
+              echo "Session active: minute $minute/$SESSION_MINUTES"
+              curl -fsS --max-time 10 "$FRONTEND_URL" >/dev/null || \
+                echo "Temporary frontend health check was briefly unavailable."
+            fi
+            sleep 60
+          done
+
+      - name: Collect safe logs and stop temporary services
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p veil-ready-browser-logs
+
+          if docker inspect veil-ready-prover >/dev/null 2>&1; then
+            docker logs veil-ready-prover 2>&1 \
+              | awk 'BEGIN { IGNORECASE = 1 } !/(private[_ -]?key|viewing[_ -]?key|signature|secret|calldata|proof)/' \
+              > veil-ready-browser-logs/prover-redacted.log || true
+          fi
+
+          for item in \
+            "veil-ready-prover-bridge bridge.log" \
+            "veil-ready-prover-tunnel prover-tunnel.log" \
+            "veil-ready-frontend frontend.log" \
+            "veil-ready-frontend-tunnel frontend-tunnel.log"; do
+            set -- $item
+            container="$1"
+            filename="$2"
+            if docker inspect "$container" >/dev/null 2>&1; then
+              docker logs "$container" > "veil-ready-browser-logs/$filename" 2>&1 || true
+            fi
+          done
+
+          if [ -f veil-ready-browser-session.json ]; then
+            cp veil-ready-browser-session.json \
+              veil-ready-browser-logs/session.json
+          fi
+
+          docker rm -f \
+            veil-ready-frontend-tunnel \
+            veil-ready-frontend \
+            veil-ready-prover-tunnel \
+            veil-ready-prover-bridge \
+            veil-ready-prover \
+            2>/dev/null || true
+
+      - name: Upload safe session logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-ready-browser-session-logs
+          path: veil-ready-browser-logs
+          if-no-files-found: warn
+          retention-days: 3
