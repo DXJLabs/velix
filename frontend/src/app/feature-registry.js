@@ -113,6 +113,7 @@ export function createFeatureRegistry({
     saveLocalChannels: call(api, "saveLocalChannels"),
     renderConversationList: call(api, "renderConversationList"),
     openChannel: call(api, "openChannel"),
+    showScreen: call(api, "showScreen"),
     renderChannel: call(api, "renderChannel"),
     renderWorkflowProgress: call(api, "renderWorkflowProgress"),
     awardReward: call(api, "awardReward"),

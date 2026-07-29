@@ -58,9 +58,9 @@ export function inviteWaitingCardMarkup(channel, { inviteLink } = {}) {
         <button type="button" data-share-invite="whatsapp">WhatsApp</button>
       </div>
       <div class="invite-wait-actions">
-        <button class="primary-action" type="button" data-counterparty-accept>
-          <i data-lucide="user-plus" class="size-5"></i>
-          <span>Preview Accept Invitation</span>
+        <button class="secondary-action" type="button" disabled aria-disabled="true">
+          <i data-lucide="clock-3" class="size-5"></i>
+          <span>Waiting for counterparty</span>
         </button>
       </div>
     </section>

@@ -31,6 +31,7 @@ export function createInviteController({
   saveLocalChannels,
   renderConversationList,
   openChannel,
+  showScreen,
   renderChannel,
   renderWorkflowProgress,
   awardReward,
@@ -68,12 +69,124 @@ export function createInviteController({
     return state.inviteCode;
   }
 
-  function onboardingInviteLink(target) {
+  function createInviteRoomId() {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return `room-${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function onboardingInviteLink(target, roomId, dealTitle) {
     ensureInviteCode();
     const url = new URL(createDealInviteLink());
     url.searchParams.set("onboarding", "1");
+    url.searchParams.set("room", roomId);
+    url.searchParams.set("deal", dealTitle);
+    if (state.walletAddress) url.searchParams.set("inviter", state.walletAddress);
     if (target) url.searchParams.set("counterparty", target);
     return url.toString();
+  }
+
+  function readIncomingInvite() {
+    const view = document.defaultView;
+    if (!view) return null;
+    const url = new URL(view.location.href);
+    if (url.searchParams.get("onboarding") !== "1") return null;
+
+    const inviteCode = String(url.searchParams.get("invite") || "").trim();
+    const roomId = String(url.searchParams.get("room") || "").trim();
+    const dealTitle = String(url.searchParams.get("deal") || "Private Deal").trim().slice(0, 120);
+    const inviter = String(url.searchParams.get("inviter") || "").trim();
+
+    if (!/^[a-z0-9]{6,32}$/i.test(inviteCode)) return null;
+    if (!/^room-[a-f0-9]{32}$/i.test(roomId)) return null;
+    if (inviter && !/^0x[0-9a-f]{1,64}$/i.test(inviter)) return null;
+
+    return Object.freeze({
+      inviteCode,
+      roomId,
+      dealTitle: dealTitle || "Private Deal",
+      inviter,
+    });
+  }
+
+  function openIncomingInvite() {
+    const invite = readIncomingInvite();
+    if (!invite) return false;
+
+    const panel = document.querySelector("#incoming-invite-panel");
+    const title = document.querySelector("#incoming-invite-title");
+    const inviter = document.querySelector("#incoming-invite-inviter");
+    const room = document.querySelector("#incoming-invite-room");
+
+    if (panel) panel.hidden = false;
+    if (title) title.textContent = invite.dealTitle;
+    if (inviter) inviter.textContent = invite.inviter ? shortHash(invite.inviter) : "VEIL counterparty";
+    if (room) room.textContent = invite.roomId.slice(0, 17) + "…";
+
+    document.querySelector(".new-deal-journey")?.setAttribute("hidden", "");
+    document.querySelector(".new-deal-primary-panel")?.setAttribute("hidden", "");
+    document.querySelector(".new-deal-invite-panel")?.setAttribute("hidden", "");
+    document.querySelector(".new-deal-flow")?.setAttribute("hidden", "");
+
+    showScreen("new-deal");
+    showToast("VEIL invitation received.");
+    return true;
+  }
+
+  async function acceptIncomingInvite() {
+    const invite = readIncomingInvite();
+    if (!invite) {
+      showToast("This VEIL invitation is invalid or incomplete.");
+      return false;
+    }
+
+    if (!state.walletConnected) {
+      const connected = await connectWallet({ goToInbox: false, preferPrivacyWallet: true });
+      if (!connected) return false;
+    }
+
+    let channel = channels.find((candidate) => candidate.id === invite.roomId);
+    if (!channel) {
+      const person = invite.inviter ? shortHash(invite.inviter) : "Counterparty";
+      channel = createLocalChannelModel({
+        channelId: invite.roomId,
+        title: invite.dealTitle,
+        person,
+        status: "Negotiation Active",
+        last: "Invitation accepted",
+        invited: false,
+        pendingJoin: false,
+        counterpartyOnVeil: true,
+        dealId: `Invite ${invite.inviteCode}`,
+        counterpartyAddress: invite.inviter,
+      });
+      channels.unshift(channel);
+      messages[channel.id] = [
+        {
+          type: "event",
+          title: "VEIL invitation accepted",
+          subtitle: "You joined the shared private room. Private messaging still requires both wallet identities to be ready.",
+          time: Date.now(),
+          offchain: true,
+          actor: "System",
+          ...confirmedTimelineMeta(`${channel.id}-invite-accepted`, 12),
+        },
+      ];
+    }
+
+    state.channelId = channel.id;
+    resetDealStateForPendingChannel();
+    saveLocalChannels();
+    renderConversationList();
+
+    const view = document.defaultView;
+    if (view) {
+      view.history.replaceState({}, "", view.location.pathname);
+    }
+
+    openChannel(channel.id);
+    showToast("Invitation accepted. Private room opened.");
+    return true;
   }
 
   function counterpartyLookup(value = newDealCounterpartyValue()) {
@@ -113,11 +226,12 @@ export function createInviteController({
     counterpartyOnVeil = true,
     dealId = "",
     counterpartyAddress = "",
+    channelId = "",
   } = {}) {
     const channelNumber = channels.length + 1;
-    const channelId = `channel-${Date.now().toString(36)}`;
+    const resolvedChannelId = channelId || `channel-${Date.now().toString(36)}`;
     return {
-      id: channelId,
+      id: resolvedChannelId,
       title,
       person,
       avatar: counterpartyAvatar(person),
@@ -209,7 +323,30 @@ export function createInviteController({
 
     try {
       await transactionDelay(260);
-      const link = onboardingInviteLink(target);
+      const roomId = createInviteRoomId();
+      const dealTitle = newDealTitleValue();
+      const link = onboardingInviteLink(target, roomId, dealTitle);
+      const dealId = nextDealId();
+      const channel = createLocalChannelModel({
+        channelId: roomId,
+        title: dealTitle,
+        person,
+        status: "Waiting for Counterparty",
+        last: "Invite link ready",
+        invited: true,
+        pendingJoin: true,
+        counterpartyOnVeil: false,
+        dealId,
+        counterpartyAddress: /^0x[0-9a-fA-F]{1,64}$/.test(target) ? target : "",
+      });
+      channel.inviteLink = link;
+      channels.unshift(channel);
+      messages[channel.id] = seedDealTimeline(channel);
+      state.channelId = channel.id;
+      saveLocalChannels();
+      renderConversationList();
+      openChannel(channel.id);
+
       let copied = false;
       try {
         await copyToClipboard(link);
@@ -720,6 +857,8 @@ export function createInviteController({
     counterpartyLookup,
     createDealChannel,
     createOnboardingInvite,
+    openIncomingInvite,
+    acceptIncomingInvite,
     createLocalChannelModel,
     declinePendingCounterparty,
     inviteTargetValue,

@@ -450,3 +450,41 @@
   }
 }
 
+/* Incoming VEIL invite */
+.incoming-invite-panel {
+  text-align: center;
+  border-color: rgb(186 230 253);
+  background:
+    radial-gradient(circle at top, rgb(224 242 254 / 72%), transparent 48%),
+    white;
+  box-shadow: 0 20px 60px rgb(15 23 42 / 9%);
+}
+
+.incoming-invite-icon {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-inline: auto;
+  place-items: center;
+  border-radius: 1rem;
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.incoming-invite-panel > h2 {
+  color: rgb(15 23 42);
+  font-size: 1.35rem;
+  font-weight: 950;
+}
+
+.incoming-invite-panel > p:not(.new-deal-step-label) {
+  color: rgb(71 85 105);
+  font-size: .84rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.incoming-invite-meta {
+  text-align: left;
+}
+

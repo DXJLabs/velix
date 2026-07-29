@@ -320,6 +320,11 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       return;
     }
 
+    if (event.target.closest("[data-accept-incoming-invite]")) {
+      void api.acceptIncomingInvite();
+      return;
+    }
+
     if (event.target.closest("[data-new-conversation]")) {
       state.inviteFormOpen = false;
       api.showScreen("new-deal");

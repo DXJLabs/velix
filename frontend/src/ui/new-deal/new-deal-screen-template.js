@@ -13,6 +13,28 @@ export function newDealScreenMarkup() {
           </header>
 
           <div class="detail-content new-deal-content">
+            <section id="incoming-invite-panel" class="new-deal-panel incoming-invite-panel" hidden>
+              <span class="incoming-invite-icon"><i data-lucide="mail-check" class="size-6"></i></span>
+              <p class="new-deal-step-label">Invitation received</p>
+              <h2 id="incoming-invite-title">Private Deal</h2>
+              <p>You were invited to a VEIL private room. Connect Ready Wallet, review the inviter, then accept.</p>
+              <div class="plain-list incoming-invite-meta">
+                <div><span>Inviter</span><strong id="incoming-invite-inviter">VEIL counterparty</strong></div>
+                <div><span>Room</span><strong id="incoming-invite-room">Checking…</strong></div>
+                <div><span>Privacy</span><strong>Wallet-managed STRK20</strong></div>
+              </div>
+              <div class="privacy-gate-card">
+                <i data-lucide="shield-check" class="size-5"></i>
+                <div>
+                  <strong>No plaintext is placed in the invite URL</strong>
+                  <small>The link carries only room bootstrap metadata. Messages are encrypted locally.</small>
+                </div>
+              </div>
+              <button class="primary-action w-full new-deal-primary-cta" type="button" data-accept-incoming-invite>
+                <i data-lucide="log-in" class="size-5"></i>
+                <span>Connect Ready & accept invite</span>
+              </button>
+            </section>
             <nav class="new-deal-journey" aria-label="Private deal setup">
               <div class="new-deal-journey-step active">
                 <span>1</span>
