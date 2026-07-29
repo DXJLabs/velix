@@ -175,8 +175,8 @@ export function createWalletController({
     const proofManagementLabel = state.walletConnected
       ? model?.capabilities?.walletProofManagement ? "Wallet-managed" : "Unavailable"
       : "Connect wallet";
-    const officialSignerLabel = state.officialPrivacySignerStatus === "wallet-managed"
-      ? "Wallet-managed"
+    const officialSignerLabel = state.officialPrivacySignerStatus === "ready"
+      ? "Ready signer detected"
       : state.officialPrivacySignerStatus === "not-integrated"
         ? "Privy adapter not integrated"
         : state.walletConnected ? "Unavailable" : "Connect wallet";
@@ -207,6 +207,49 @@ export function createWalletController({
     );
     setElementText("#wallet-private-spendable", total ? "Not exposed by wallet" : "Unavailable");
     setElementText("#wallet-private-maturing", total ? "Not exposed by wallet" : "Unavailable");
+
+    const registrationButton = document.querySelector("[data-register-private-identity]");
+    const registrationStatus = document.querySelector("#wallet-registration-action-status");
+    const registrationReason = document.querySelector("#wallet-registration-reason");
+    const registrationActionLabel = registrationButton?.querySelector("strong");
+    const busy = ["preparing", "proving", "submitting"].includes(
+      state.privacyRegistrationActionStatus,
+    );
+    const registered = state.privacyRegistrationStatus === "registered";
+    const registrationReady = state.privacyRegistrationReadiness === "ready";
+    if (registrationButton) {
+      registrationButton.disabled = registered || busy || !registrationReady;
+      registrationButton.setAttribute(
+        "aria-disabled",
+        registrationButton.disabled ? "true" : "false",
+      );
+    }
+    if (registrationActionLabel) {
+      registrationActionLabel.textContent = registered
+        ? "Private Identity Registered"
+        : busy
+          ? state.privacyRegistrationActionStatus === "proving"
+            ? "Generating Registration Proof"
+            : state.privacyRegistrationActionStatus === "submitting"
+              ? "Approve in Ready Wallet"
+              : "Preparing Private Identity"
+          : "Register Private Identity";
+    }
+    if (registrationStatus) {
+      registrationStatus.textContent = registered
+        ? "Ready"
+        : busy
+          ? "Working"
+          : registrationReady
+            ? "Available"
+            : state.privacyRegistrationActionStatus === "failed"
+              ? "Failed"
+              : "Blocked";
+      registrationStatus.className = `status-pill ${
+        registered || registrationReady || busy ? "private" : "waiting-deposit"
+      }`;
+    }
+    if (registrationReason) registrationReason.textContent = state.privacyRegistrationReason;
   }
 
   function renderWalletRewards() {
@@ -267,6 +310,15 @@ export function createWalletController({
     state.privacyWalletTransport = "none";
     state.officialPrivacySignerStatus = "not-integrated";
     state.privacyRegistrationStatus = "unknown";
+    state.privacyRegistrationReadiness = "blocked";
+    state.privacyRegistrationReadinessCode = "wallet";
+    state.privacyRegistrationReason = "Connect Ready Wallet first.";
+    state.privacyRegistrationActionStatus = "idle";
+    state.privacyRegistrationTxHash = "";
+    state.readyWallet = null;
+    state.readyAccount = null;
+    state.readyProvider = null;
+    state.readyReadProvider = null;
     state.privateBalanceStatus = "unavailable";
     state.privateBalances = {};
     setWalletInitializationState("idle", {

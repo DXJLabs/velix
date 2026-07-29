@@ -7,6 +7,7 @@ import { networkLabel } from "../../app/runtime-config.js";
 import { createWalletPrivacyCapabilityModel } from "../../domain/privacy-capabilities.js";
 import { getInjectedStarknetWallet, getWalletSourceLabel, waitForInjectedStarknetWallet } from "./injected-wallet.js";
 import { formatAssetBalance } from "./wallet-format.js";
+import { createPrivacyRegistrationService } from "./privacy-registration-service.js";
 import { resolveWalletLogin, userFacingWalletError } from "./wallet-login-strategy.js";
 
 export function createWalletService({
@@ -32,6 +33,7 @@ export function createWalletService({
   completeWalletInitialization,
   failWalletInitialization,
   handleTransactionSubmitted,
+  onPrivacyRegistrationStateChanged = () => {},
   getInjectedWallet = getInjectedStarknetWallet,
   waitForInjectedWallet = waitForInjectedStarknetWallet,
   detectWalletCapabilities = detectStrk20WalletCapabilities,
@@ -40,6 +42,19 @@ export function createWalletService({
 }) {
   let encryptionKeyRegistry;
   let encryptionRegistrationAccount;
+  const privacyRegistration = createPrivacyRegistrationService({
+    config,
+    state,
+    logger,
+    getContext: () => ({
+      wallet: state.readyWallet,
+      account: state.readyAccount,
+      walletProvider: state.readyProvider,
+      readProvider: state.readyReadProvider,
+    }),
+    onStateChanged: onPrivacyRegistrationStateChanged,
+    windowRef,
+  });
 
   async function readPrivacyPoolRegistration(readProvider, accountAddress) {
     if (!readProvider?.callContract || !config.privacyPoolAddress || !accountAddress) return "unknown";
@@ -65,11 +80,12 @@ export function createWalletService({
     const detected = await detectWalletCapabilities(wallet);
     state.privacyWalletApiVersion = detected.apiVersion || "";
     state.privacyWalletTransport = detected.supported ? "wallet-api" : "standard-wallet";
-    state.officialPrivacySignerStatus = detected.supported
-      ? "wallet-managed"
-      : state.walletSource === "Privy"
-        ? "not-integrated"
-        : "unavailable";
+    state.officialPrivacySignerStatus =
+      typeof account?.signer?.signTransaction === "function"
+        ? "ready"
+        : state.walletSource === "Privy"
+          ? "not-integrated"
+          : "unavailable";
     state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel({
       accountConnected: true,
       signing: Boolean(account?.execute || wallet?.request),
@@ -206,12 +222,17 @@ export function createWalletService({
       state.privyAccount = null;
       state.privyProvider = null;
       state.privyWallet = null;
+      state.readyWallet = wallet;
+      state.readyAccount = account;
+      state.readyProvider = walletProvider;
+      state.readyReadProvider = readProvider;
       state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
       await refreshPrivacyCapabilities(wallet, account, readProvider);
 
       state.walletConnected = true;
       state.walletAddress = account.address || wallet.selectedAddress || "";
       state.walletNetwork = config.expectedChainId;
+      privacyRegistration.refreshReadiness();
       completeWalletInitialization(traceId);
       logger.tracePrivyStarkZap(traceId, "connect.success", {
         where: "connectWallet",
@@ -331,6 +352,12 @@ export function createWalletService({
       });
     }
 
+    if (state.walletSource === "Ready") {
+      state.readyWallet = injectedWallet || wallet;
+      state.readyAccount = account;
+      state.readyProvider = walletProvider;
+      state.readyReadProvider = readProvider;
+    }
     await refreshPrivacyCapabilities(wallet, account, readProvider);
 
     const encryptionSetup = await createEncryptionAdapter({
@@ -367,6 +394,7 @@ export function createWalletService({
     state.walletConnected = true;
     state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
     if (injectedWallet) state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
+    privacyRegistration.refreshReadiness();
     completeWalletInitialization(traceId);
     logger.tracePrivyStarkZap(traceId, "connect.success", {
       where: "connectWallet",
@@ -387,6 +415,8 @@ export function createWalletService({
   return {
     connectWallet,
     getWallet,
+    registerPrivateIdentity: privacyRegistration.registerPrivateIdentity,
+    refreshPrivacyRegistrationReadiness: privacyRegistration.refreshReadiness,
     async registerEncryptionKey() {
       if (!encryptionKeyRegistry || !encryptionRegistrationAccount) {
         throw Object.assign(new Error("Encryption key registry is not configured."), {

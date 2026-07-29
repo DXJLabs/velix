@@ -1,21 +1,43 @@
+import { ProvingServiceProofProvider } from "@starkware-libs/starknet-privacy-sdk";
+import { constants } from "starknet";
 import {
+  BrowserEncryptedPrivacyProfileStore,
   BrowserEncryptionIdentityStore,
+  BrowserIndexedDbDeviceStorageKeyRepository,
   DirectEcdhEncryptionAdapter,
   DirectHelperTransport,
   EncryptionPublicKeyRegistryService,
+  PersistentDeviceStorageKeyProvider,
+  PrivacyProfileViewingKeyVault,
   VeilEncryptionIdentityService,
   VeilClient,
+  computeProvingBlockId,
+  createPrivacyNamespace,
+  createReadyPrivateTransfersUser,
   detectStrk20WalletCapabilities,
+  prepareOfficialRegistrationProof,
+  submitOfficialRegistration,
   Strk20WalletApiClient,
 } from "../../../packages/veil-sdk/src/index.ts";
 
 export {
+  BrowserEncryptedPrivacyProfileStore,
   BrowserEncryptionIdentityStore,
+  BrowserIndexedDbDeviceStorageKeyRepository,
   DirectEcdhEncryptionAdapter,
   DirectHelperTransport,
   EncryptionPublicKeyRegistryService,
+  PersistentDeviceStorageKeyProvider,
+  PrivacyProfileViewingKeyVault,
+  ProvingServiceProofProvider,
   VeilEncryptionIdentityService,
+  computeProvingBlockId,
+  constants,
+  createPrivacyNamespace,
+  createReadyPrivateTransfersUser,
   detectStrk20WalletCapabilities,
+  prepareOfficialRegistrationProof,
+  submitOfficialRegistration,
   Strk20WalletApiClient,
 };
 
