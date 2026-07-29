@@ -220,6 +220,15 @@ export {
   type RegistrationTransfersLike,
 } from "./privacy/registration-proof";
 export {
+  assertSuccessfulRegistrationReceipt,
+  submitOfficialRegistration,
+  type OfficialRegistrationSubmissionResult,
+  type ReadyRegistrationSubmissionAccount,
+  type RegistrationSubmissionProvider,
+  type RegistrationSubmissionReceipt,
+  type SubmitOfficialRegistrationInput,
+} from "./privacy/registration-submission";
+export {
   createReadyPrivateTransfersUser,
   hasReadyProofSigner,
   type ReadyProofSignerAccount,
