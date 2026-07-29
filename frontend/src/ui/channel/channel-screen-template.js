@@ -1,4 +1,4 @@
-﻿export function channelScreenMarkup() {
+export function channelScreenMarkup() {
   return `
         <section class="screen hidden bg-white" data-screen="channel">
           <header class="detail-header">
@@ -19,15 +19,15 @@
           <section class="channel-security-banner">
             <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
             <div class="min-w-0">
-              <strong>Direct encrypted</strong>
-              <small>Available</small>
+              <strong id="channel-security-title">Private messaging</strong>
+              <small id="channel-security-state">Checking readiness</small>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
               <div class="channel-security-badges" aria-label="Encryption status">
                 <span>Encrypted locally</span>
                 <span>Ciphertext on-chain</span>
                 <span>Metadata public</span>
               </div>
-              <p>Shielded via STRK20: Coming Soon</p>
+              <p id="channel-security-note">Availability is checked per room.</p>
             </div>
             <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
           </section>

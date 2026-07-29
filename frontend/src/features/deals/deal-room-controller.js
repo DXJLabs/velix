@@ -68,9 +68,8 @@ export function createDealRoomController({
     channel.unread = 0;
     showScreen("channel");
 
-    // An onboarding room has no recipient encryption identity yet.
-    // Start private timeline discovery only after the invite is accepted.
-    if (!channelRequiresJoin(channel)) {
+    // Do not poll a room until both wallet-managed encryption identities are ready.
+    if (!channelRequiresJoin(channel) && channel.privateMessagingReady !== false) {
       void messageTimelineSync.start(channelId);
     }
   }
@@ -139,6 +138,30 @@ export function createDealRoomController({
         renderChannel();
       }
     } catch (error) {
+      const terminalCodes = new Set([
+        "RECIPIENT_ENCRYPTION_KEY_NOT_FOUND",
+        "ENCRYPTION_KEY_REGISTRY_UNAVAILABLE",
+        "ENCRYPTION_IDENTITY_REGISTRATION_REQUIRED",
+      ]);
+      if (terminalCodes.has(error?.code)) {
+        messageTimelineSync.stop();
+        const channel = channels.find((item) => item.id === channelId);
+        if (channel) {
+          channel.privateMessagingReady = false;
+          channel.status = "Private Setup Required";
+          channel.last = "Waiting for wallet-managed encryption";
+        }
+        veilError("indexer.timeline.blocked", error, {
+          where: "loadIndexedChannelTimeline",
+          channelId,
+          howToFix: "Do not retry. Complete the wallet-managed encryption integration before opening private messaging.",
+        });
+        if (state.channelId === channelId && state.screen === "channel") {
+          renderChannel();
+        }
+        return;
+      }
+
       veilError("indexer.timeline.load.failed", error, {
         where: "loadIndexedChannelTimeline",
         howToFix: "Check the bounded indexer RPC, cursor secret, and verified helper deployment, then retry.",
@@ -239,16 +262,58 @@ export function createDealRoomController({
   function renderChannel() {
     const channel = currentChannel();
     const waitingForCounterparty = channelRequiresJoin(channel);
+    const privateSetupRequired = channel.privateMessagingReady === false;
     renderChannelHeader(document, {
       channel,
       dealId: currentDealId(channel),
       statusPillClass,
     });
+
+    const setupMarkup = privateSetupRequired
+      ? `
+        <section class="private-setup-card">
+          <span class="private-setup-icon"><i data-lucide="shield-alert" class="size-5"></i></span>
+          <div>
+            <strong>Private messaging is not ready</strong>
+            <p>The invite is open, but VEIL has not submitted an on-chain acceptance. Wallet-managed encryption must be completed before messages can be sent.</p>
+            <small>Timeline polling stopped automatically. No retry is running.</small>
+          </div>
+        </section>
+      `
+      : "";
+
     messageFeed.innerHTML = channelFeedMarkup({
-      waitingMarkup: waitingForCounterparty ? renderInviteWaitingCard(channel) : "",
+      waitingMarkup: waitingForCounterparty
+        ? renderInviteWaitingCard(channel)
+        : setupMarkup,
       feedMarkup: channelMessages().map(renderFeedItem).join(""),
     });
-    if (composerForm) composerForm.hidden = waitingForCounterparty;
+    if (composerForm) composerForm.hidden = waitingForCounterparty || privateSetupRequired;
+
+    const securityTitle = document.querySelector("#channel-security-title");
+    const securityState = document.querySelector("#channel-security-state");
+    const securityNote = document.querySelector("#channel-security-note");
+    if (securityTitle) {
+      securityTitle.textContent = privateSetupRequired
+        ? "Private setup required"
+        : timelineMode === "strk20-shielded"
+          ? "Wallet-managed private messaging"
+          : "Direct encrypted messaging";
+    }
+    if (securityState) {
+      securityState.textContent = privateSetupRequired
+        ? "Blocked"
+        : timelineMode === "strk20-shielded"
+          ? "Ready Wallet"
+          : "Direct helper";
+    }
+    if (securityNote) {
+      securityNote.textContent = privateSetupRequired
+        ? "No on-chain message or acceptance has been submitted."
+        : timelineMode === "strk20-shielded"
+          ? "Ready owns proof generation and helper submission."
+          : "Recipient encryption-key registration is required.";
+    }
     iconRefresh();
   }
 

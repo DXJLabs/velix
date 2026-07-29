@@ -152,26 +152,30 @@ export function createInviteController({
         channelId: invite.roomId,
         title: invite.dealTitle,
         person,
-        status: "Negotiation Active",
-        last: "Invitation accepted",
+        status: "Private Setup Required",
+        last: "Waiting for wallet-managed encryption",
         invited: false,
         pendingJoin: false,
         counterpartyOnVeil: true,
         dealId: `Invite ${invite.inviteCode}`,
         counterpartyAddress: invite.inviter,
+        privateMessagingReady: false,
       });
       channels.unshift(channel);
       messages[channel.id] = [
         {
           type: "event",
-          title: "VEIL invitation accepted",
-          subtitle: "You joined the shared private room. Private messaging still requires both wallet identities to be ready.",
+          title: "VEIL invitation opened",
+          subtitle: "The invite was accepted on this device. No on-chain acceptance has been submitted yet.",
           time: Date.now(),
           offchain: true,
           actor: "System",
-          ...confirmedTimelineMeta(`${channel.id}-invite-accepted`, 12),
         },
       ];
+    } else {
+      channel.status = "Private Setup Required";
+      channel.last = "Waiting for wallet-managed encryption";
+      channel.privateMessagingReady = false;
     }
 
     state.channelId = channel.id;
@@ -185,7 +189,7 @@ export function createInviteController({
     }
 
     openChannel(channel.id);
-    showToast("Invitation accepted. Private room opened.");
+    showToast("Invite opened. Private messaging is blocked until wallet-managed encryption is ready.");
     return true;
   }
 
@@ -227,6 +231,7 @@ export function createInviteController({
     dealId = "",
     counterpartyAddress = "",
     channelId = "",
+    privateMessagingReady = true,
   } = {}) {
     const channelNumber = channels.length + 1;
     const resolvedChannelId = channelId || `channel-${Date.now().toString(36)}`;
@@ -243,6 +248,7 @@ export function createInviteController({
       channelNumber,
       dealId,
       counterpartyAddress,
+      privateMessagingReady,
       inviteLink: invited ? createDealInviteLink() : "",
       invited,
       pendingJoin,

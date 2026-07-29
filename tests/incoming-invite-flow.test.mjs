@@ -36,7 +36,7 @@ test("pending onboarding room does not start private timeline discovery", async 
   );
   assert.match(
     controller,
-    /if \(!channelRequiresJoin\(channel\)\) \{\s*void messageTimelineSync\.start\(channelId\);/,
+    /if \(!channelRequiresJoin\(channel\) && channel\.privateMessagingReady !== false\) \{\s*void messageTimelineSync\.start\(channelId\);/,
   );
 });
 
