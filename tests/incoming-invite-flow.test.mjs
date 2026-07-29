@@ -28,3 +28,15 @@ test("sender waiting card no longer exposes fake preview acceptance", async () =
   assert.doesNotMatch(ui, /Preview Accept Invitation/);
   assert.match(ui, /Waiting for counterparty/);
 });
+
+test("pending onboarding room does not start private timeline discovery", async () => {
+  const controller = await readFile(
+    "frontend/src/features/deals/deal-room-controller.js",
+    "utf8",
+  );
+  assert.match(
+    controller,
+    /if \(!channelRequiresJoin\(channel\)\) \{\s*void messageTimelineSync\.start\(channelId\);/,
+  );
+});
+

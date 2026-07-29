@@ -67,7 +67,12 @@ export function createDealRoomController({
     const channel = currentChannel();
     channel.unread = 0;
     showScreen("channel");
-    void messageTimelineSync.start(channelId);
+
+    // An onboarding room has no recipient encryption identity yet.
+    // Start private timeline discovery only after the invite is accepted.
+    if (!channelRequiresJoin(channel)) {
+      void messageTimelineSync.start(channelId);
+    }
   }
 
   async function loadIndexedChannelTimeline(channelId) {
