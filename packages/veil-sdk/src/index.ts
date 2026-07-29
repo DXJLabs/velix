@@ -204,6 +204,11 @@ export {
   createLocalViewingKeyProvider,
 } from "./privacy/viewing-key";
 export {
+  createReadyPrivateTransfersUser,
+  hasReadyProofSigner,
+  type ReadyProofSignerAccount,
+} from "./privacy/ready-proof-signer";
+export {
   VEIL_OFFICIAL_PRIVACY_SDK_VERSION,
   VEIL_PRIVACY_PROFILE_VERSION,
   createPrivacyNamespace,
