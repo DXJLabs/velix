@@ -157,7 +157,7 @@ export function createWalletController({
         : support === "unsupported"
           ? "Unsupported privacy wallet"
           : "Connect wallet";
-    const registrationLabel = walletApiAvailable ? "Managed by Ready Wallet" : state.walletConnected ? "Unavailable" : "Connect wallet";
+    const registrationLabel = Boolean(model?.capabilities?.strk20WalletApi) ? "Managed by Ready Wallet" : state.walletConnected ? "Unavailable" : "Connect wallet";
     const signingAvailable = Boolean(model?.capabilities?.signing);
     const walletApiAvailable = Boolean(model?.capabilities?.strk20WalletApi);
     const signingLabel = state.walletConnected
