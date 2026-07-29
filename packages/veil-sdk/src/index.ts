@@ -373,6 +373,15 @@ export {
   type EncryptedPrivacyProfileStore,
 } from "./privacy/profile-store";
 export {
+  BrowserIndexedDbDeviceStorageKeyRepository,
+  PersistentDeviceStorageKeyProvider,
+  createPersistentDeviceStorageKeyGetter,
+  validateDeviceStorageKey,
+  type BrowserIndexedDbDeviceStorageKeyRepositoryConfig,
+  type DeviceStorageKeyRepository,
+  type PersistentDeviceStorageKeyProviderConfig,
+} from "./privacy/device-storage-key";
+export {
   VEIL_APPLICATION_KEY_DOMAINS,
   decryptApplicationPayload,
   encryptApplicationPayload,
