@@ -13,6 +13,80 @@ import {
 } from "../veil-client-service.js";
 
 const PROVING_TIMEOUT_MS = 300 * 60 * 1_000;
+const STARKNET_HEX_FELT = /^0x[0-9a-f]+$/iu;
+
+export async function fetchPrivacyPoolNonce({
+  rpcUrl,
+  poolAddress,
+  fetchImpl = globalThis.fetch,
+}) {
+  if (typeof fetchImpl !== "function") {
+    throw new Error("Browser fetch is unavailable for Privacy Pool nonce lookup.");
+  }
+
+  const response = await fetchImpl(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "starknet_getNonce",
+      params: {
+        block_id: "latest",
+        contract_address: poolAddress,
+      },
+    }),
+  });
+
+  if (!response?.ok) {
+    throw new Error(
+      `Privacy Pool nonce RPC failed with HTTP ${response?.status ?? "unknown"}.`,
+    );
+  }
+
+  const payload = await response.json();
+  if (
+    typeof payload?.result !== "string"
+    || !STARKNET_HEX_FELT.test(payload.result)
+  ) {
+    throw new Error("Privacy Pool nonce RPC returned no valid hexadecimal result.");
+  }
+
+  return BigInt(payload.result);
+}
+
+export function createNoncePinnedProvingProvider({
+  proverUrl,
+  chainId,
+  blockIdentifier,
+  requestTimeoutMs,
+  retry,
+  getNonce,
+}) {
+  const provider = new ProvingServiceProofProvider(
+    proverUrl,
+    chainId,
+    {
+      blockIdentifier,
+      requestTimeoutMs,
+      retry,
+    },
+  );
+
+  let cachedNonce;
+  return {
+    prove: provider.prove.bind(provider),
+    async getDefaultDetails() {
+      const details = await provider.getDefaultDetails();
+      if (cachedNonce === undefined) cachedNonce = await getNonce();
+      return { ...details, nonce: cachedNonce };
+    },
+    invalidateNonceCache() {
+      cachedNonce = undefined;
+      provider.invalidateNonceCache?.();
+    },
+  };
+}
 
 export function evaluatePrivacyRegistrationReadiness({
   config,
@@ -62,7 +136,11 @@ export function evaluatePrivacyRegistrationReadiness({
   if (!config.privacyPoolAddress || !config.rpcUrl) {
     return blocked("runtime", "The locked Privacy Pool or Sepolia RPC is missing.");
   }
-  if (!windowRef.indexedDB || !windowRef.crypto?.subtle) {
+  if (
+    !windowRef.indexedDB
+    || !windowRef.crypto?.subtle
+    || typeof windowRef.fetch !== "function"
+  ) {
     return blocked(
       "storage",
       "Encrypted browser storage is unavailable on this device.",
@@ -112,10 +190,13 @@ export function createPrivacyRegistrationService({
     }
 
     const context = getContext();
+    let stage = "initialization";
     setActionState("preparing", "Preparing encrypted private identity...");
 
     try {
+      stage = "Ready account validation";
       const user = createReadyPrivateTransfersUser(context.account);
+      stage = "privacy namespace creation";
       const namespace = createPrivacyNamespace({
         chainId: config.expectedChainId,
         poolAddress: config.privacyPoolAddress,
@@ -128,6 +209,7 @@ export function createPrivacyRegistrationService({
           : config.rpcUrl,
       });
 
+      stage = "encrypted viewing-key storage";
       const keyRepository = new BrowserIndexedDbDeviceStorageKeyRepository({
         indexedDb: windowRef.indexedDB,
       });
@@ -142,20 +224,26 @@ export function createPrivacyRegistrationService({
       });
       const viewingKeyVault = new PrivacyProfileViewingKeyVault(encryptedStore);
 
+      stage = "latest block lookup";
       const currentBlock = await context.readProvider.getBlockNumber();
       const provingBlockId = computeProvingBlockId(currentBlock);
-      const provingProvider = new ProvingServiceProofProvider(
-        config.privacyRuntime.prover.url,
-        constants.StarknetChainId.SN_SEPOLIA,
-        {
-          nodeUrl: config.rpcUrl,
-          poolAddress: BigInt(config.privacyPoolAddress),
-          blockIdentifier: provingBlockId,
-          requestTimeoutMs: PROVING_TIMEOUT_MS,
-          retry: { maxRetries: 0 },
-        },
-      );
 
+      stage = "Privacy Pool nonce lookup";
+      const fetchImpl = windowRef.fetch.bind(windowRef);
+      const provingProvider = createNoncePinnedProvingProvider({
+        proverUrl: config.privacyRuntime.prover.url,
+        chainId: constants.StarknetChainId.SN_SEPOLIA,
+        blockIdentifier: provingBlockId,
+        requestTimeoutMs: PROVING_TIMEOUT_MS,
+        retry: { maxRetries: 0 },
+        getNonce: () => fetchPrivacyPoolNonce({
+          rpcUrl: config.rpcUrl,
+          poolAddress: config.privacyPoolAddress,
+          fetchImpl,
+        }),
+      });
+
+      stage = "official proof generation";
       setActionState("proving", "Generating the official registration proof...");
       const prepared = await prepareOfficialRegistrationProof({
         user,
@@ -167,6 +255,7 @@ export function createPrivacyRegistrationService({
         crypto: windowRef.crypto,
       });
 
+      stage = "Ready proof submission";
       setActionState("submitting", "Approve private identity registration in Ready.");
       const submitted = await submitOfficialRegistration({
         account: context.account,
@@ -195,15 +284,24 @@ export function createPrivacyRegistrationService({
       });
       return submitted;
     } catch (error) {
-      const reason = registrationFailureMessage(error);
+      const baseReason = registrationFailureMessage(error);
+      const reason = `Registration failed during ${stage}: ${baseReason}`;
+      const surfacedError = Object.assign(
+        new Error(reason, { cause: error }),
+        {
+          code: error?.code || "PRIVACY_REGISTRATION_FAILED",
+          registrationStage: stage,
+        },
+      );
       state.privacyRegistrationActionStatus = "failed";
       state.privacyRegistrationReason = reason;
-      logger.veilError?.("wallet.privacy.registration.failed", error, {
+      logger.veilError?.("wallet.privacy.registration.failed", surfacedError, {
         where: "registerPrivateIdentity",
+        stage,
         howToFix: reason,
       });
       onStateChanged();
-      throw error;
+      throw surfacedError;
     }
   }
 

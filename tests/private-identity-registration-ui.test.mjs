@@ -26,12 +26,18 @@ test("frontend private identity registration remains readiness gated", async () 
   assert.match(source, /submitOfficialRegistration/);
   assert.match(source, /computeProvingBlockId/);
   assert.match(source, /PrivacyProfileViewingKeyVault/);
+  assert.match(source, /typeof windowRef\.fetch !== "function"/);
 });
 
 test("registration verifies receipt and Pool key through R3 services", async () => {
   const source = await readFile(files.service, "utf8");
 
   assert.match(source, /ProvingServiceProofProvider/);
+  assert.match(source, /starknet_getNonce/);
+  assert.match(source, /fetchPrivacyPoolNonce/);
+  assert.match(source, /createNoncePinnedProvingProvider/);
+  assert.match(source, /return \{ \.\.\.details, nonce: cachedNonce \}/);
+  assert.doesNotMatch(source, /nodeUrl: config\.rpcUrl/);
   assert.match(source, /provider: context\.readProvider/);
   assert.match(source, /state\.privacyRegistrationStatus = "registered"/);
   assert.match(source, /privacyRegistrationTxHash/);
@@ -62,4 +68,16 @@ test("wallet UI exposes one fail-closed registration action", async () => {
   assert.match(bootstrap, /registerPrivateIdentity: \(\) => walletService\.registerPrivateIdentity\(\)/);
   assert.match(runtimeApi, /registerPrivateIdentity/);
   assert.match(client, /ProvingServiceProofProvider/);
+});
+
+
+test("registration failures identify the exact browser stage", async () => {
+  const source = await readFile(files.service, "utf8");
+
+  assert.match(source, /let stage = "initialization"/);
+  assert.match(source, /stage = "Privacy Pool nonce lookup"/);
+  assert.match(source, /stage = "official proof generation"/);
+  assert.match(source, /stage = "Ready proof submission"/);
+  assert.match(source, /Registration failed during \$\{stage\}/);
+  assert.match(source, /registrationStage: stage/);
 });
