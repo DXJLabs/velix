@@ -34,7 +34,7 @@ test("workflow does not embed account or private RPC secrets into the browser bu
 
   assert.doesNotMatch(workflow, /ACCOUNT_PRIVATE_KEY/);
   assert.doesNotMatch(workflow, /VIEWING_KEY/);
-  assert.doesNotMatch(workflow, /VITE_STARKNET_RPC_URL/);
+  assert.doesNotMatch(workflow, /VITE_STARKNET_RPC_URL:\s*\$\{\{\s*secrets\./);
   assert.match(
     workflow,
     /The secret value will not be embedded in the browser build/,
@@ -71,4 +71,30 @@ test("workflow validates CORS, exposes the Ready URL, and cleans up", async () =
   assert.match(workflow, /docker rm -f/);
   assert.match(workflow, /prover-redacted\.log/);
   assert.match(workflow, /retention-days: 1/);
+});
+
+
+test("workflow proxies Starknet RPC without embedding its secret URL", async () => {
+  const [workflow, bridge] = await Promise.all([
+    readFile(workflowPath, "utf8"),
+    readFile(".github/scripts/ready-browser-rpc-bridge.mjs", "utf8"),
+  ]);
+
+  assert.match(workflow, /Start browser-safe Starknet RPC bridge/);
+  assert.match(workflow, /Open temporary Starknet RPC tunnel/);
+  assert.match(
+    workflow,
+    /VITE_STARKNET_RPC_URL: "\$\{\{ steps\.rpc_tunnel\.outputs\.url \}\}\/rpc\/v0_9"/,
+  );
+  assert.match(workflow, /starknet_getNonce/);
+  assert.match(workflow, /VEIL_POOL_NONCE_RPC_VERIFIED/);
+  assert.match(workflow, /VEIL_PUBLIC_RPC_CORS_VERIFIED/);
+  assert.match(workflow, /veil-ready-rpc-bridge/);
+  assert.match(workflow, /veil-ready-rpc-tunnel/);
+
+  assert.match(bridge, /origin !== allowed/);
+  assert.match(bridge, /"Access-Control-Allow-Origin": origin/);
+  assert.match(bridge, /VEIL_UPSTREAM_RPC_URL/);
+  assert.doesNotMatch(bridge, /console\.log\([^)]*upstreamRpcUrl/);
+  assert.doesNotMatch(bridge, /console\.log\([^)]*body/);
 });

@@ -222,11 +222,84 @@ jobs:
           echo "url=$prover_url" >> "$GITHUB_OUTPUT"
           echo "VEIL_PROVER_TUNNEL_READY"
 
+      - name: Start browser-safe Starknet RPC bridge
+        shell: bash
+        env:
+          RPC_URL: ${{ secrets.STARKNET_SEPOLIA_RPC_URL }}
+        run: |
+          set -euo pipefail
+          docker rm -f veil-ready-rpc-bridge 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-rpc-bridge \
+            --network host \
+            -e VEIL_RPC_BRIDGE_HOST="127.0.0.1" \
+            -e VEIL_RPC_BRIDGE_PORT="3002" \
+            -e VEIL_RPC_PUBLIC_PATH="/rpc/v0_9" \
+            -e VEIL_UPSTREAM_RPC_URL="$RPC_URL" \
+            -e VEIL_ALLOWED_ORIGIN_PATH="/state/allowed-origin" \
+            -v "$GITHUB_WORKSPACE/.github/scripts/ready-browser-rpc-bridge.mjs:/app/rpc-bridge.mjs:ro" \
+            -v /tmp/veil-ready-bridge-state:/state \
+            node:24-alpine \
+            node /app/rpc-bridge.mjs
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3002/health >/dev/null; then
+              echo "VEIL_RPC_BRIDGE_READY"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs veil-ready-rpc-bridge
+          exit 1
+
+      - name: Open temporary Starknet RPC tunnel
+        id: rpc_tunnel
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f veil-ready-rpc-tunnel 2>/dev/null || true
+          docker run -d \
+            --name veil-ready-rpc-tunnel \
+            --network host \
+            cloudflare/cloudflared:latest \
+            tunnel --no-autoupdate --url http://127.0.0.1:3002
+
+          rpc_url=""
+          for attempt in $(seq 1 90); do
+            rpc_url="$(
+              docker logs veil-ready-rpc-tunnel 2>&1 \
+                | grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' \
+                | tail -n 1 \
+                || true
+            )"
+            if [ -n "$rpc_url" ]; then
+              break
+            fi
+            running="$(docker inspect -f '{{.State.Running}}' veil-ready-rpc-tunnel 2>/dev/null || true)"
+            if [ "$running" != "true" ]; then
+              echo "Starknet RPC tunnel stopped before publishing a URL."
+              docker logs veil-ready-rpc-tunnel
+              exit 1
+            fi
+            sleep 2
+          done
+
+          if [ -z "$rpc_url" ]; then
+            echo "Starknet RPC tunnel URL was not published."
+            docker logs veil-ready-rpc-tunnel
+            exit 1
+          fi
+
+          echo "url=$rpc_url" >> "$GITHUB_OUTPUT"
+          echo "VEIL_RPC_TUNNEL_READY"
+
       - name: Build temporary Ready frontend
         shell: bash
         env:
           VITE_PRIVY_ENABLED: "false"
           VITE_STARKNET_CHAIN_ID: "SN_SEPOLIA"
+          VITE_STARKNET_RPC_URL: "${{ steps.rpc_tunnel.outputs.url }}/rpc/v0_9"
           VITE_STRK20_PROVER_MODE: "hosted"
           VITE_STRK20_PROVER_URL: ${{ steps.prover_tunnel.outputs.url }}
           VITE_STRK20_DISCOVERY_PROVIDER: "contract"
@@ -306,6 +379,7 @@ jobs:
         env:
           FRONTEND_URL: ${{ steps.frontend_tunnel.outputs.url }}
           PROVER_URL: ${{ steps.prover_tunnel.outputs.url }}
+          RPC_URL: "${{ steps.rpc_tunnel.outputs.url }}/rpc/v0_9"
         run: |
           set -euo pipefail
           printf '%s\n' "$FRONTEND_URL" \
@@ -347,8 +421,51 @@ jobs:
           )"
           echo "$prover_response" | grep -q '"result"'
 
+          rpc_cors_headers="$(
+            curl -sS -D - -o /dev/null \
+              --max-time 20 \
+              -X OPTIONS "$RPC_URL" \
+              -H "Origin: $FRONTEND_URL" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: content-type'
+          )"
+          echo "$rpc_cors_headers" \
+            | tr -d '\r' \
+            | grep -Fqi "access-control-allow-origin: $FRONTEND_URL"
+
+          rpc_spec_response="$(
+            curl -sS \
+              --max-time 30 \
+              -X POST "$RPC_URL" \
+              -H "Origin: $FRONTEND_URL" \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":2,"method":"starknet_specVersion","params":[]}'
+          )"
+          echo "$rpc_spec_response" | grep -q '"result"'
+
+          rpc_nonce_response="$(
+            curl -sS \
+              --max-time 30 \
+              -X POST "$RPC_URL" \
+              -H "Origin: $FRONTEND_URL" \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":3,"method":"starknet_getNonce","params":{"block_id":"latest","contract_address":"0x03a91bc44040f4173f30f3233d3cb2510aa05a0b74c22a5ee8240a313a0c8de5"}}'
+          )"
+          RPC_NONCE_RESPONSE="$rpc_nonce_response" node --input-type=module <<'NODE'
+          const response = JSON.parse(process.env.RPC_NONCE_RESPONSE);
+          if (
+            typeof response.result !== "string"
+            || !/^0x[0-9a-f]+$/iu.test(response.result)
+          ) {
+            throw new Error("Temporary Starknet RPC returned an invalid Pool nonce.");
+          }
+          BigInt(response.result);
+          console.log("VEIL_POOL_NONCE_RPC_VERIFIED");
+          NODE
+
           echo "VEIL_PUBLIC_FRONTEND_REACHABLE"
           echo "VEIL_PUBLIC_PROVER_CORS_VERIFIED"
+          echo "VEIL_PUBLIC_RPC_CORS_VERIFIED"
 
       - name: Publish temporary browser URLs
         id: session
@@ -356,6 +473,7 @@ jobs:
         env:
           FRONTEND_URL: ${{ steps.frontend_tunnel.outputs.url }}
           PROVER_URL: ${{ steps.prover_tunnel.outputs.url }}
+          RPC_URL: "${{ steps.rpc_tunnel.outputs.url }}/rpc/v0_9"
           SESSION_MINUTES: ${{ inputs.session_minutes }}
         run: |
           set -euo pipefail
@@ -369,6 +487,7 @@ jobs:
             result: "VEIL_READY_BROWSER_SESSION_ACTIVE",
             frontendUrl: process.env.FRONTEND_URL,
             proverUrl: process.env.PROVER_URL,
+            rpcUrl: process.env.RPC_URL,
             expiresAt: process.env.EXPIRES_AT,
             instructions: [
               "Open frontendUrl while this workflow is still running.",
@@ -402,7 +521,7 @@ jobs:
             echo "- Open **Wallet → Connect Ready Wallet → Register Private Identity**"
             echo "- Cancel this workflow when the test is complete."
             echo
-            echo "The prover URL is intentionally temporary and restricted to the frontend origin."
+            echo "The prover and Starknet RPC URLs are temporary and restricted to the frontend origin."
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo
@@ -437,6 +556,8 @@ jobs:
               veil-ready-prover \
               veil-ready-prover-bridge \
               veil-ready-prover-tunnel \
+              veil-ready-rpc-bridge \
+              veil-ready-rpc-tunnel \
               veil-ready-frontend \
               veil-ready-frontend-tunnel; do
               running="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)"
@@ -470,6 +591,8 @@ jobs:
           for item in \
             "veil-ready-prover-bridge bridge.log" \
             "veil-ready-prover-tunnel prover-tunnel.log" \
+            "veil-ready-rpc-bridge rpc-bridge.log" \
+            "veil-ready-rpc-tunnel rpc-tunnel.log" \
             "veil-ready-frontend frontend.log" \
             "veil-ready-frontend-tunnel frontend-tunnel.log"; do
             set -- $item
@@ -488,6 +611,8 @@ jobs:
           docker rm -f \
             veil-ready-frontend-tunnel \
             veil-ready-frontend \
+            veil-ready-rpc-tunnel \
+            veil-ready-rpc-bridge \
             veil-ready-prover-tunnel \
             veil-ready-prover-bridge \
             veil-ready-prover \
