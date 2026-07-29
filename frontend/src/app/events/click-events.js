@@ -7,13 +7,6 @@ export function encryptionRegistrationErrorMessage(error) {
   return "Encryption key registration failed. Check the wallet and Sepolia balance.";
 }
 
-export function privateIdentityRegistrationErrorMessage(error) {
-  const message = String(error?.message || error || "");
-  if (/prover|proof/iu.test(message)) return "Registration proof failed. Check the configured prover.";
-  if (/rejected|declined|cancel/iu.test(message)) return "Registration was cancelled in Ready Wallet.";
-  if (/signer|signTransaction|signature/iu.test(message)) return "Ready Wallet signer is unavailable.";
-  return message || "Private identity registration failed.";
-}
 
 export function startWalletConnection(api, options) {
   try {
@@ -214,24 +207,6 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
       return;
     }
 
-    const privateIdentityButton = event.target.closest("[data-register-private-identity]");
-    if (privateIdentityButton) {
-      if (privateIdentityButton.disabled) return;
-      privateIdentityButton.disabled = true;
-      api.renderWallet();
-      api.showToast("Preparing private identity registration...");
-      void api.registerPrivateIdentity()
-        .then((result) => {
-          api.showToast(
-            result?.alreadyRegistered
-              ? "Private identity is already registered."
-              : "Private identity registered and verified in the VEIL Privacy Pool.",
-          );
-        })
-        .catch((error) => api.showToast(privateIdentityRegistrationErrorMessage(error)))
-        .finally(() => api.renderWallet());
-      return;
-    }
 
     const registrationButton = event.target.closest("[data-register-encryption-key]");
     if (registrationButton) {

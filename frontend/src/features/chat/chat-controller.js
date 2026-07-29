@@ -61,9 +61,9 @@ export function createChatController({
       },
       "Message sent.",
       {
-        actionLabel: "Encrypting locally",
-        successTitle: "Direct encrypted",
-        successSubtitle: "Encrypted ciphertext confirmed on-chain.",
+        actionLabel: "Encrypting private message",
+        successTitle: "Shielded message",
+        successSubtitle: "Ready created the proof and submitted one VeilChannelHelper invoke.",
       },
     );
     if (submitted) awardReward("sendMessage");

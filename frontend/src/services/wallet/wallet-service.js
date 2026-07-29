@@ -1,13 +1,13 @@
 import {
   DirectHelperTransport,
   Strk20WalletApiClient,
+  Strk20WalletMessageTransport,
   detectStrk20WalletCapabilities,
 } from "../veil-client-service.js";
 import { networkLabel } from "../../app/runtime-config.js";
 import { createWalletPrivacyCapabilityModel } from "../../domain/privacy-capabilities.js";
 import { getInjectedStarknetWallet, getWalletSourceLabel, waitForInjectedStarknetWallet } from "./injected-wallet.js";
 import { formatAssetBalance } from "./wallet-format.js";
-import { createPrivacyRegistrationService } from "./privacy-registration-service.js";
 import { resolveWalletLogin, userFacingWalletError } from "./wallet-login-strategy.js";
 
 export function createWalletService({
@@ -33,28 +33,15 @@ export function createWalletService({
   completeWalletInitialization,
   failWalletInitialization,
   handleTransactionSubmitted,
-  onPrivacyRegistrationStateChanged = () => {},
   getInjectedWallet = getInjectedStarknetWallet,
   waitForInjectedWallet = waitForInjectedStarknetWallet,
   detectWalletCapabilities = detectStrk20WalletCapabilities,
   createDirectHelperTransport = (options) => new DirectHelperTransport(options),
+  createStrk20WalletMessageTransport = (options) => new Strk20WalletMessageTransport(options),
   windowRef = window,
 }) {
   let encryptionKeyRegistry;
   let encryptionRegistrationAccount;
-  const privacyRegistration = createPrivacyRegistrationService({
-    config,
-    state,
-    logger,
-    getContext: () => ({
-      wallet: state.readyWallet,
-      account: state.readyAccount,
-      walletProvider: state.readyProvider,
-      readProvider: state.readyReadProvider,
-    }),
-    onStateChanged: onPrivacyRegistrationStateChanged,
-    windowRef,
-  });
 
   async function readPrivacyPoolRegistration(readProvider, accountAddress) {
     if (!readProvider?.callContract || !config.privacyPoolAddress || !accountAddress) return "unknown";
@@ -141,6 +128,56 @@ export function createWalletService({
       });
     }
   }
+
+  async function activateMessagingTransport({ wallet, account, readProvider }) {
+    const encryptionSetup = await createEncryptionAdapter({
+      accountAddress: account?.address || wallet?.selectedAddress || "",
+      provider: readProvider,
+    });
+    const readTransport = createDirectHelperTransport({
+      helperAddress: config.helperAddress,
+      account,
+      ...(readProvider ? { provider: readProvider } : {}),
+      storePayloadChunks: config.onchainPayloads,
+      channelIdEncoder: async (channelId) => {
+        if (typeof encryptionSetup.adapter?.deriveConversationTag !== "function") {
+          throw Object.assign(
+            new Error("An opaque conversation tag cannot be derived until channel encryption setup is complete."),
+            { code: "CONVERSATION_TAG_UNAVAILABLE" },
+          );
+        }
+        return encryptionSetup.adapter.deriveConversationTag(channelId);
+      },
+    });
+
+    const walletApiAvailable = Boolean(
+      state.walletPrivacyCapabilities?.capabilities?.strk20WalletApi
+      && state.walletPrivacyCapabilities?.capabilities?.customAnonymizerInvocation,
+    );
+    const shielded = state.walletSource === "Ready" && walletApiAvailable;
+    const activeTransport = shielded
+      ? createStrk20WalletMessageTransport({
+          walletApiClient: new Strk20WalletApiClient({
+            wallet,
+            allowedInvokeContracts: [config.helperAddress],
+            ...(state.privacyWalletApiVersion
+              ? { apiVersion: state.privacyWalletApiVersion }
+              : {}),
+          }),
+          helperAddress: config.helperAddress,
+          readTransport,
+          ...(readProvider ? { provider: readProvider } : {}),
+          onTransactionSubmitted: handleTransactionSubmitted,
+        })
+      : readTransport;
+
+    encryptionKeyRegistry = encryptionSetup.registry;
+    encryptionRegistrationAccount = account;
+    setDirectTransport(activeTransport);
+    setVeilClient(createClient(activeTransport, encryptionSetup.adapter));
+    return { shielded };
+  }
+
   function getWallet() {
     return state.privyAccount
       || windowRef.veilDemoWallet
@@ -198,10 +235,10 @@ export function createWalletService({
         return walletProvider;
       });
 
-      if (!account?.execute) {
-        return failWalletInitialization(new Error("Ready Wallet account does not expose execute()."), traceId, {
+      if (typeof wallet.request !== "function") {
+        return failWalletInitialization(new Error("Ready Wallet does not expose the Starknet Wallet API request transport."), traceId, {
           where: "connectWallet",
-          howToFix: "Unlock Ready Wallet, approve the connection, and select a Starknet account.",
+          howToFix: "Update Ready Wallet, unlock it, approve the connection, and retry.",
         });
       }
       if (!walletProvider) {
@@ -228,18 +265,30 @@ export function createWalletService({
       state.readyReadProvider = readProvider;
       state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
       await refreshPrivacyCapabilities(wallet, account, readProvider);
+      const messaging = await activateMessagingTransport({ wallet, account, readProvider });
+      if (!messaging.shielded) {
+        return failWalletInitialization(new Error("Ready Wallet does not expose the STRK20 custom invoke capability required for private messages."), traceId, {
+          where: "connectWallet",
+          howToFix: "Use a Ready Wallet build that supports STRK20 Wallet API invoke actions.",
+        });
+      }
+      if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
+        return failWalletInitialization(new Error("VeilChannelHelper verification failed on the configured Sepolia RPC."), traceId, {
+          where: "connectWallet",
+          howToFix: "Confirm the locked VEIL helper address and Starknet Sepolia RPC.",
+        });
+      }
 
       state.walletConnected = true;
       state.walletAddress = account.address || wallet.selectedAddress || "";
       state.walletNetwork = config.expectedChainId;
-      privacyRegistration.refreshReadiness();
       completeWalletInitialization(traceId);
       logger.tracePrivyStarkZap(traceId, "connect.success", {
         where: "connectWallet",
         walletSource: state.walletSource,
         walletAddress: state.walletAddress,
         directHelper: false,
-        privacyWalletAudit: true,
+        shieldedMessaging: true,
         network: state.walletNetwork,
       });
       return true;
@@ -360,30 +409,7 @@ export function createWalletService({
     }
     await refreshPrivacyCapabilities(wallet, account, readProvider);
 
-    const encryptionSetup = await createEncryptionAdapter({
-      accountAddress: account.address,
-      provider: readProvider,
-    });
-    const directTransport = createDirectHelperTransport({
-      helperAddress: config.helperAddress,
-      account,
-      ...(readProvider ? { provider: readProvider } : {}),
-      storePayloadChunks: config.onchainPayloads,
-      channelIdEncoder: async (channelId) => {
-        if (typeof encryptionSetup.adapter?.deriveConversationTag !== "function") {
-          throw Object.assign(
-            new Error("An opaque conversation tag cannot be derived until channel encryption setup is complete."),
-            { code: "CONVERSATION_TAG_UNAVAILABLE" },
-          );
-        }
-        return encryptionSetup.adapter.deriveConversationTag(channelId);
-      },
-      onTransactionSubmitted: handleTransactionSubmitted,
-    });
-    encryptionKeyRegistry = encryptionSetup.registry;
-    encryptionRegistrationAccount = account;
-    setDirectTransport(directTransport);
-    setVeilClient(createClient(directTransport, encryptionSetup.adapter));
+    const messaging = await activateMessagingTransport({ wallet, account, readProvider });
     if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
       return failWalletInitialization(new Error("Helper contract verification failed on the configured RPC/network."), traceId, {
         where: "connectWallet",
@@ -394,13 +420,13 @@ export function createWalletService({
     state.walletConnected = true;
     state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
     if (injectedWallet) state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
-    privacyRegistration.refreshReadiness();
     completeWalletInitialization(traceId);
     logger.tracePrivyStarkZap(traceId, "connect.success", {
       where: "connectWallet",
       walletSource: state.walletSource,
       walletAddress: state.walletAddress,
-      directHelper: true,
+      directHelper: !messaging.shielded,
+      shieldedMessaging: messaging.shielded,
       network: state.walletNetwork,
     });
     return true;
@@ -415,8 +441,6 @@ export function createWalletService({
   return {
     connectWallet,
     getWallet,
-    registerPrivateIdentity: privacyRegistration.registerPrivateIdentity,
-    refreshPrivacyRegistrationReadiness: privacyRegistration.refreshReadiness,
     async registerEncryptionKey() {
       if (!encryptionKeyRegistry || !encryptionRegistrationAccount) {
         throw Object.assign(new Error("Encryption key registry is not configured."), {

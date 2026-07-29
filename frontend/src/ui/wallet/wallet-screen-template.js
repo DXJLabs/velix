@@ -54,7 +54,7 @@ export function walletScreenMarkup() {
                 <strong>Connect Ready for Privacy</strong>
                 <i data-lucide="chevron-right" class="size-5"></i>
               </button>
-              <p class="wallet-reward-note">Ready Wallet, previously Argent X, is checked directly for the STRK20 Wallet API. Connecting does not enable private actions until Sepolia E2E tests pass.</p>
+              <p class="wallet-reward-note">Ready Wallet, previously Argent X, is checked directly for the STRK20 Wallet API. For private messages, Ready owns STRK20 state, proof generation, fees, approval, and submission.</p>
             </section>
 
             <section class="wallet-section" aria-labelledby="wallet-private-heading">
@@ -65,14 +65,8 @@ export function walletScreenMarkup() {
                 <div><span>Maturing private</span><strong id="wallet-private-maturing">Unavailable</strong></div>
                 <div><span>Privacy Pool</span><strong id="wallet-pool-status">Checking</strong></div>
                 <div><span>Wallet privacy capability</span><strong id="wallet-privacy-capability">Connect wallet</strong></div>
-                <div><span>Private identity</span><strong id="wallet-private-identity">Unknown</strong></div>
+                <div><span>Private identity</span><strong id="wallet-private-identity">Managed by Ready Wallet</strong></div>
               </div>
-              <button class="wallet-action-row" type="button" data-register-private-identity disabled aria-disabled="true">
-                <span><i data-lucide="key-round" class="size-5"></i></span>
-                <strong>Register Private Identity</strong>
-                <span id="wallet-registration-action-status" class="status-pill waiting-deposit">Blocked</span>
-              </button>
-              <p id="wallet-registration-reason" class="wallet-reward-note">Connect Ready Wallet first.</p>
               <p class="wallet-reward-note">Unavailable is not a zero balance. VEIL never sends private balance or note data to its backend.</p>
             </section>
 

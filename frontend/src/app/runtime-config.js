@@ -11,7 +11,7 @@ import {
 
 export const ENCRYPTED_DIRECT_MESSAGE_MODE = "encrypted-direct";
 export const STRK20_SHIELDED_MESSAGE_MODE = "strk20-shielded";
-export const CHAT_DISPLAY_MODE = ENCRYPTED_DIRECT_MESSAGE_MODE;
+export const CHAT_DISPLAY_MODE = STRK20_SHIELDED_MESSAGE_MODE;
 export const DIRECT_HELPER_MESSAGE_MODE = ENCRYPTED_DIRECT_MESSAGE_MODE;
 export const DEAL_OFFER_AMOUNT = "450 STRK";
 export const ACTIVE_DEAL_LABEL = "Deal #381";
@@ -53,7 +53,7 @@ export function isDirectHelperTimelineMode(timelineMode) {
 export function normalizeTimelineMode(value, env = {}) {
   const requested = String(value || "").trim();
   void env;
-  if (!requested) return ENCRYPTED_DIRECT_MESSAGE_MODE;
+  if (!requested) return STRK20_SHIELDED_MESSAGE_MODE;
   if (["direct-helper", "direct-helper-dev", "unshield"].includes(requested)) return ENCRYPTED_DIRECT_MESSAGE_MODE;
   if (["privacy-pool", "shield"].includes(requested)) return STRK20_SHIELDED_MESSAGE_MODE;
   if ([ENCRYPTED_DIRECT_MESSAGE_MODE, STRK20_SHIELDED_MESSAGE_MODE].includes(requested)) return requested;

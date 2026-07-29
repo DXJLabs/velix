@@ -438,6 +438,10 @@ export {
   type Strk20WalletCapabilities,
 } from "./privacy/wallet-api";
 export {
+  Strk20WalletMessageTransport,
+  type Strk20WalletMessageTransportConfig,
+} from "./privacy/wallet-message-transport";
+export {
   decodeChannelEvent,
   decodeInvokeExternalEvent,
   decodeNoteEvent,

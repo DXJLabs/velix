@@ -291,7 +291,6 @@ export function bootstrapVeilApp({
     completeWalletInitialization: walletInitialization.completeWalletInitialization,
     failWalletInitialization: walletInitialization.failWalletInitialization,
     handleTransactionSubmitted: (...args) => registry.transactionModalController.handleTransactionSubmitted(...args),
-    onPrivacyRegistrationStateChanged: () => registry.walletController.renderWallet(),
   });
   const connectWallet = async (options = {}) => {
     const goToInbox = options.goToInbox ?? store.state.screen === "unlock";
@@ -347,7 +346,6 @@ export function bootstrapVeilApp({
     store,
     logger,
     registerEncryptionKey: () => walletService.registerEncryptionKey(),
-    registerPrivateIdentity: () => walletService.registerPrivateIdentity(),
   }));
 
   const router = createRouter({
