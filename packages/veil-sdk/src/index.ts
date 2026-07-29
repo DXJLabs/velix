@@ -204,6 +204,11 @@ export {
   createLocalViewingKeyProvider,
 } from "./privacy/viewing-key";
 export {
+  PrivacyProfileViewingKeyVault,
+  viewingKeyNamespace,
+  type EncryptedViewingKeyVault,
+} from "./privacy/viewing-key-vault";
+export {
   createReadyPrivateTransfersUser,
   hasReadyProofSigner,
   type ReadyProofSignerAccount,
