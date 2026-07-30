@@ -19,6 +19,7 @@ import {
   submitOfficialRegistration,
   Strk20WalletApiClient,
   Strk20WalletMessageTransport,
+  submitInviteAcceptance,
 } from "../../../packages/veil-sdk/src/index.ts";
 
 export {
@@ -41,6 +42,7 @@ export {
   submitOfficialRegistration,
   Strk20WalletApiClient,
   Strk20WalletMessageTransport,
+  submitInviteAcceptance,
 };
 
 export function createVeilClientFactory({

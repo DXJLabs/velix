@@ -442,6 +442,12 @@ export {
   type Strk20WalletMessageTransportConfig,
 } from "./privacy/wallet-message-transport";
 export {
+  deriveInviteAcceptanceMaterial,
+  submitInviteAcceptance,
+  type InviteAcceptanceInput,
+  type InviteAcceptanceMaterial,
+} from "./privacy/invite-acceptance";
+export {
   decodeChannelEvent,
   decodeInvokeExternalEvent,
   decodeNoteEvent,

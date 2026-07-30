@@ -1,5 +1,6 @@
 import { inviteWaitingCardMarkup } from "../../ui/invite-ui.js";
 import { escapeHtml } from "../../ui/html.js";
+import { submitInviteAcceptance } from "../../services/veil-client-service.js";
 
 export function createInviteController({
   state,
@@ -139,7 +140,7 @@ export function createInviteController({
     button.disabled = loading;
     button.setAttribute("aria-busy", loading ? "true" : "false");
     button.innerHTML = loading
-      ? '<span class="veil-button-spinner" aria-hidden="true"></span><span>Opening your invitation...</span>'
+      ? '<span class="veil-button-spinner" aria-hidden="true"></span><span>Confirming with Ready...</span>'
       : '<i data-lucide="arrow-right" class="size-5"></i><span>Review & join with Ready</span>';
     iconRefresh();
   }
@@ -158,6 +159,28 @@ export function createInviteController({
         if (!connected) return false;
       }
 
+      const acceptance = await submitInviteAcceptance({
+        client: getVeilClient(),
+        inviteCode: invite.inviteCode,
+        roomId: invite.roomId,
+        receiverAddress: state.walletAddress,
+      });
+      if (!acceptance?.transactionHash) {
+        throw new Error("Ready did not return an invite-acceptance transaction hash.");
+      }
+
+      const acceptanceEvent = {
+        type: "event",
+        title: "Invitation accepted on Starknet",
+        subtitle: "Your invitation is open. VEIL is preparing the private room.",
+        time: acceptance.timestamp || Date.now(),
+        txHash: acceptance.transactionHash,
+        blockNumber: acceptance.blockNumber,
+        status: acceptance.status || "pending",
+        mode: "strk20-shielded",
+        actor: "You",
+      };
+
       let channel = channels.find((candidate) => candidate.id === invite.roomId);
       if (!channel) {
         const person = invite.inviter ? shortHash(invite.inviter) : "Counterparty";
@@ -166,7 +189,7 @@ export function createInviteController({
           title: invite.dealTitle,
           person,
           status: "Setting Up Private Room",
-          last: "Finishing private setup",
+          last: "Acceptance confirmed on Starknet",
           invited: false,
           pendingJoin: false,
           counterpartyOnVeil: true,
@@ -175,20 +198,16 @@ export function createInviteController({
           privateMessagingReady: false,
         });
         channels.unshift(channel);
-        messages[channel.id] = [
-          {
-            type: "event",
-            title: "VEIL invitation opened",
-            subtitle: "Your invitation is open. VEIL is preparing the private room.",
-            time: Date.now(),
-            offchain: true,
-            actor: "System",
-          },
-        ];
+        messages[channel.id] = [acceptanceEvent];
       } else {
         channel.status = "Setting Up Private Room";
-        channel.last = "Finishing private setup";
+        channel.last = "Acceptance confirmed on Starknet";
         channel.privateMessagingReady = false;
+        messages[channel.id] ||= [];
+        const alreadyRecorded = messages[channel.id].some(
+          (item) => item.txHash === acceptance.transactionHash,
+        );
+        if (!alreadyRecorded) messages[channel.id].push(acceptanceEvent);
       }
 
       state.channelId = channel.id;
@@ -200,10 +219,15 @@ export function createInviteController({
       if (view) view.history.replaceState({}, "", view.location.pathname);
 
       openChannel(channel.id);
-      showToast("Invitation opened. Your private room is being prepared.");
+      showToast("Invitation accepted on Starknet.");
       return true;
-    } catch {
-      showToast("We couldn't open this invitation. Please try again.");
+    } catch (error) {
+      veilError("invite.acceptance.submit.failed", error, {
+        where: "acceptIncomingInvite",
+        roomId: invite.roomId,
+        howToFix: "Unlock Ready Wallet, confirm Starknet Sepolia, and approve the private invite action.",
+      });
+      showToast("The invitation was not accepted. No payment was made.");
       return false;
     } finally {
       setIncomingInviteButtonLoading(false);
