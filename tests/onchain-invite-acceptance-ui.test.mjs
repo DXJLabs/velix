@@ -76,7 +76,12 @@ test("receiver creates the room only after Ready returns a transaction hash", as
     channelIndex > submitIndex,
     "local room must be created only after on-chain acceptance",
   );
-  assert.match(source, /inviteSecret: invite\.inviteSecret/);
+  const submitBlock = source.slice(submitIndex, source.indexOf("});", submitIndex) + 3);
+  assert.match(
+    submitBlock,
+    /inviteSecret: invite\.inviteSecret/,
+    "invite secret must be passed to the acceptance submission",
+  );
   assert.match(source, /acceptance\.transactionHash/);
   assert.match(source, /Invitation accepted on Starknet/);
   assert.match(source, /mode: "strk20-shielded"/);

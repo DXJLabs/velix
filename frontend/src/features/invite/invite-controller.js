@@ -188,6 +188,7 @@ export function createInviteController({
       const acceptance = await submitInviteAcceptance({
         client: getVeilClient(),
         inviteCode: invite.inviteCode,
+        inviteSecret: invite.inviteSecret,
         roomId: invite.roomId,
         receiverAddress: state.walletAddress,
       });
