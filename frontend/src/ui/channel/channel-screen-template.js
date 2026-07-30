@@ -16,18 +16,18 @@ export function channelScreenMarkup() {
 
           <section class="workflow-progress" data-workflow-progress></section>
 
-          <section class="channel-security-banner">
+          <section class="channel-security-banner" data-channel-security-banner>
             <span class="security-lock"><i data-lucide="lock-keyhole" class="size-5"></i></span>
             <div class="min-w-0">
-              <strong id="channel-security-title">Private messaging</strong>
-              <small id="channel-security-state">Checking readiness</small>
+              <strong id="channel-security-title">Private room</strong>
+              <small id="channel-security-state">Ready</small>
               <p><span id="channel-context-title">Rights Transfer</span> with <span id="channel-context-party">Bob</span></p>
               <div class="channel-security-badges" aria-label="Encryption status">
-                <span>Encrypted locally</span>
-                <span>Ciphertext on-chain</span>
-                <span>Metadata public</span>
+                <span>Private messages</span>
+                <span>Wallet controlled</span>
+                <span>Starknet record</span>
               </div>
-              <p id="channel-security-note">Availability is checked per room.</p>
+              <p id="channel-security-note">Your wallet confirms each private action.</p>
             </div>
             <span id="channel-context-status" class="status-pill escrow-active">Escrow Active</span>
           </section>

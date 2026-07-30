@@ -45,3 +45,21 @@ test("waiting and setup states use calm non-technical language", async () => {
   assert.match(ui, /Waiting for them to open the invite/);
   assert.doesNotMatch(ui, /STRK20|Privacy Pool|encryption registry/i);
 });
+
+test("waiting rooms hide technical security banner and use a bundled icon", async () => {
+  const [controller, template, channelTemplate] = await Promise.all([
+    readFile("frontend/src/features/deals/deal-room-controller.js", "utf8"),
+    readFile("frontend/src/ui/new-deal/new-deal-screen-template.js", "utf8"),
+    readFile("frontend/src/ui/channel/channel-screen-template.js", "utf8"),
+  ]);
+
+  assert.match(
+    controller,
+    /securityBanner\.hidden = waitingForCounterparty \|\| privateSetupRequired/,
+  );
+  assert.doesNotMatch(template, /message-circle-lock/);
+  assert.match(template, /data-lucide="lock-keyhole"/);
+  assert.match(channelTemplate, /Private messages/);
+  assert.doesNotMatch(channelTemplate, /Ciphertext on-chain/);
+});
+

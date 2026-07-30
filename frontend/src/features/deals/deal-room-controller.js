@@ -298,29 +298,26 @@ export function createDealRoomController({
       container.hidden = waitingForCounterparty || privateSetupRequired;
     });
 
+    const securityBanner = document.querySelector("[data-channel-security-banner]");
+    if (securityBanner) {
+      securityBanner.hidden = waitingForCounterparty || privateSetupRequired;
+    }
+
     const securityTitle = document.querySelector("#channel-security-title");
     const securityState = document.querySelector("#channel-security-state");
     const securityNote = document.querySelector("#channel-security-note");
     if (securityTitle) {
-      securityTitle.textContent = privateSetupRequired
-        ? "Private room"
-        : timelineMode === "strk20-shielded"
-          ? "Wallet-managed private messaging"
-          : "Direct encrypted messaging";
+      securityTitle.textContent = "Private room";
     }
     if (securityState) {
-      securityState.textContent = privateSetupRequired
-        ? "Setting up"
-        : timelineMode === "strk20-shielded"
-          ? "Ready Wallet"
-          : "Direct helper";
+      securityState.textContent = privateSetupRequired ? "Setting up" : "Ready";
     }
     if (securityNote) {
       securityNote.textContent = privateSetupRequired
         ? "Messages will unlock when both sides are ready."
         : timelineMode === "strk20-shielded"
-          ? "Ready owns proof generation and helper submission."
-          : "Recipient encryption-key registration is required.";
+          ? "Ready Wallet confirms each private action."
+          : "Messages are encrypted before they are submitted.";
     }
     iconRefresh();
   }

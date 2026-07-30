@@ -57,7 +57,7 @@ export function newDealScreenMarkup() {
             <section class="new-deal-primary-panel veil-create-card">
               <div class="veil-create-heading">
                 <span class="veil-create-icon">
-                  <i data-lucide="message-circle-lock" class="size-5"></i>
+                  <i data-lucide="lock-keyhole" class="size-5"></i>
                 </span>
                 <div>
                   <h2>Create a private room</h2>

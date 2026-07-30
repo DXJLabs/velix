@@ -471,3 +471,7 @@
   .veil-invite-actions { grid-template-columns: 1fr; }
 }
 
+.channel-security-banner[hidden] {
+  display: none !important;
+}
+
