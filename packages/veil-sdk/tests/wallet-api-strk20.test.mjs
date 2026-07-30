@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createJiti } from "jiti";
 
 import {
   Strk20WalletApiClient,
@@ -7,6 +8,11 @@ import {
   strk20InvokeAction,
   strk20TransferAction,
 } from "../dist/privacy/wallet-api.js";
+
+const jiti = createJiti(import.meta.url);
+const { Strk20WalletMessageTransport: WalletMessageTransport } = await jiti.import(
+  "../src/privacy/wallet-message-transport.ts",
+);
 
 test("capability detection uses the official wallet_supportedWalletApi version without probing private state", async () => {
   const requests = [];
@@ -80,6 +86,51 @@ test("wallet action submission allows only configured VEIL targets and one invok
     () => client.invoke([strk20InvokeAction(0x555n, [1n]), strk20InvokeAction(0x555n, [2n])]),
     (error) => error.code === "MULTIPLE_EXTERNAL_INVOKES",
   );
+});
+
+test("wallet message transport prefixes helper calldata as a Cairo Span", async () => {
+  const requests = [];
+  const client = new Strk20WalletApiClient({
+    wallet: {
+      async request(input) {
+        requests.push(input);
+        return { transaction_hash: "0xabc" };
+      },
+    },
+    allowedInvokeContracts: [0x555n],
+  });
+  const transport = new WalletMessageTransport({
+    walletApiClient: client,
+    helperAddress: "0x555",
+    readTransport: {},
+    waitForConfirmation: false,
+  });
+
+  const item = await transport.invokeExternal({
+    privacyPoolAddress: "0x666",
+    helperAddress: "0x555",
+    calldata: ["0x1", "0x2"],
+    mode: "strk20-shielded",
+    canonicalMessage: {
+      messageReference: "veil-message:test",
+      messageLocator: "0x3",
+      payloadCommitment: "0x4",
+      helperCalldata: ["0x1", "0x2"],
+    },
+    item: {
+      eventId: "0",
+      channelId: "room-test",
+      eventType: 1,
+      encryptedPayload: "0x1",
+      payloadHash: "0x2",
+      timestamp: 1,
+    },
+  });
+
+  assert.equal(item.transactionHash, "0xabc");
+  assert.deepEqual(requests[0].params.actions, [
+    { type: "invoke", contract: "0x555", calldata: ["0x2", "0x1", "0x2"] },
+  ]);
 });
 
 test("prepared wallet proofs are validated and simulation cannot be mistaken for submission", async () => {

@@ -99,9 +99,12 @@ export class Strk20WalletMessageTransport implements VeilTransport {
     }
 
     // Private messaging is invoke-only. Never add deposit, withdraw, transfer,
-    // payment, or OPEN-note actions to this transport.
+    // payment, or OPEN-note actions to this transport. The helper entrypoint
+    // accepts a Cairo Span, so the wallet action must include its ABI length
+    // prefix just like the direct Starknet transport does.
+    const helperCalldata = [String(input.calldata.length), ...input.calldata];
     const transactionHash = await this.#walletApiClient.invoke([
-      strk20InvokeAction(this.#helperAddress, input.calldata),
+      strk20InvokeAction(this.#helperAddress, helperCalldata),
     ]);
 
     this.#onTransactionSubmitted?.(transactionHash, input.item);

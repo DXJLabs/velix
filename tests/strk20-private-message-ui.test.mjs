@@ -14,7 +14,8 @@ const files = {
 
 test("private-message transport submits exactly one helper invoke action", async () => {
   const source = await readFile(files.transport, "utf8");
-  assert.match(source, /strk20InvokeAction\(this\.#helperAddress, input\.calldata\)/);
+  assert.match(source, /const helperCalldata = \[String\(input\.calldata\.length\), \.\.\.input\.calldata\]/);
+  assert.match(source, /strk20InvokeAction\(this\.#helperAddress, helperCalldata\)/);
   assert.match(source, /this\.#walletApiClient\.invoke\(\[/);
   assert.doesNotMatch(source, /type:\s*["']transfer["']/);
   assert.doesNotMatch(source, /strk20TransferAction/);
