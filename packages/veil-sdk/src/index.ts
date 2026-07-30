@@ -443,7 +443,9 @@ export {
 } from "./privacy/wallet-message-transport";
 export {
   deriveInviteAcceptanceMaterial,
+  generateInviteSecret,
   submitInviteAcceptance,
+  type DeriveInviteAcceptanceMaterialInput,
   type InviteAcceptanceInput,
   type InviteAcceptanceMaterial,
 } from "./privacy/invite-acceptance";

@@ -2,13 +2,21 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("invite URL carries shared room metadata and receiver parses it", async () => {
-  const controller = await readFile("frontend/src/features/invite/invite-controller.js", "utf8");
-  assert.match(controller, /url\.searchParams\.set\("room", roomId\)/);
-  assert.match(controller, /url\.searchParams\.set\("deal", dealTitle\)/);
-  assert.match(controller, /url\.searchParams\.set\("inviter", state\.walletAddress\)/);
+test("invite metadata and capability secret use the URL fragment", async () => {
+  const controller = await readFile(
+    "frontend/src/features/invite/invite-controller.js",
+    "utf8",
+  );
+
+  assert.match(controller, /fragment\.set\("v", "2"\)/);
+  assert.match(controller, /fragment\.set\("k", inviteSecret\)/);
+  assert.match(controller, /fragment\.set\("room", roomId\)/);
+  assert.match(controller, /fragment\.set\("deal", dealTitle\)/);
+  assert.match(controller, /url\.hash = fragment\.toString\(\)/);
+  assert.doesNotMatch(controller, /url\.searchParams\.set\("room"/);
+  assert.doesNotMatch(controller, /url\.searchParams\.set\("deal"/);
   assert.match(controller, /function readIncomingInvite/);
-  assert.match(controller, /async function acceptIncomingInvite/);
+  assert.match(controller, /inviteSecret/);
   assert.match(controller, /channelId: invite\.roomId/);
 });
 
@@ -39,4 +47,3 @@ test("pending onboarding room does not start private timeline discovery", async 
     /if \(!channelRequiresJoin\(channel\) && channel\.privateMessagingReady !== false\) \{\s*void messageTimelineSync\.start\(channelId\);/,
   );
 });
-

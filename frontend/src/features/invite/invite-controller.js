@@ -1,6 +1,10 @@
 import { inviteWaitingCardMarkup } from "../../ui/invite-ui.js";
 import { escapeHtml } from "../../ui/html.js";
-import { submitInviteAcceptance } from "../../services/veil-client-service.js";
+import {
+  deriveInviteAcceptanceMaterial,
+  generateInviteSecret,
+  submitInviteAcceptance,
+} from "../../services/veil-client-service.js";
 
 export function createInviteController({
   state,
@@ -76,14 +80,23 @@ export function createInviteController({
     return `room-${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
   }
 
-  function onboardingInviteLink(target, roomId, dealTitle) {
+  function onboardingInviteLink(target, roomId, dealTitle, inviteSecret) {
     ensureInviteCode();
     const url = new URL(createDealInviteLink());
     url.searchParams.set("onboarding", "1");
-    url.searchParams.set("room", roomId);
-    url.searchParams.set("deal", dealTitle);
-    if (state.walletAddress) url.searchParams.set("inviter", state.walletAddress);
-    if (target) url.searchParams.set("counterparty", target);
+    url.searchParams.delete("room");
+    url.searchParams.delete("deal");
+    url.searchParams.delete("inviter");
+    url.searchParams.delete("counterparty");
+
+    const fragment = new URLSearchParams();
+    fragment.set("v", "2");
+    fragment.set("k", inviteSecret);
+    fragment.set("room", roomId);
+    fragment.set("deal", dealTitle);
+    if (state.walletAddress) fragment.set("inviter", state.walletAddress);
+    if (target) fragment.set("counterparty", target);
+    url.hash = fragment.toString();
     return url.toString();
   }
 
@@ -93,17 +106,25 @@ export function createInviteController({
     const url = new URL(view.location.href);
     if (url.searchParams.get("onboarding") !== "1") return null;
 
+    const fragment = new URLSearchParams(
+      url.hash.startsWith("#") ? url.hash.slice(1) : url.hash,
+    );
+    if (fragment.get("v") !== "2") return null;
+
     const inviteCode = String(url.searchParams.get("invite") || "").trim();
-    const roomId = String(url.searchParams.get("room") || "").trim();
-    const dealTitle = String(url.searchParams.get("deal") || "Private Deal").trim().slice(0, 120);
-    const inviter = String(url.searchParams.get("inviter") || "").trim();
+    const inviteSecret = String(fragment.get("k") || "").trim();
+    const roomId = String(fragment.get("room") || "").trim();
+    const dealTitle = String(fragment.get("deal") || "Private Deal").trim().slice(0, 120);
+    const inviter = String(fragment.get("inviter") || "").trim();
 
     if (!/^[a-z0-9]{6,32}$/i.test(inviteCode)) return null;
+    if (!/^[A-Za-z0-9_-]{43}$/.test(inviteSecret)) return null;
     if (!/^room-[a-f0-9]{32}$/i.test(roomId)) return null;
     if (inviter && !/^0x[0-9a-f]{1,64}$/i.test(inviter)) return null;
 
     return Object.freeze({
       inviteCode,
+      inviteSecret,
       roomId,
       dealTitle: dealTitle || "Private Deal",
       inviter,
@@ -159,6 +180,11 @@ export function createInviteController({
         if (!connected) return false;
       }
 
+      const acceptanceMaterial = await deriveInviteAcceptanceMaterial({
+        inviteCode: invite.inviteCode,
+        inviteSecret: invite.inviteSecret,
+        roomId: invite.roomId,
+      });
       const acceptance = await submitInviteAcceptance({
         client: getVeilClient(),
         inviteCode: invite.inviteCode,
@@ -196,6 +222,7 @@ export function createInviteController({
           dealId: `Invite ${invite.inviteCode}`,
           counterpartyAddress: invite.inviter,
           privateMessagingReady: false,
+          inviteAcceptanceLocator: acceptanceMaterial.messageLocator,
         });
         channels.unshift(channel);
         messages[channel.id] = [acceptanceEvent];
@@ -273,6 +300,7 @@ export function createInviteController({
     counterpartyAddress = "",
     channelId = "",
     privateMessagingReady = true,
+    inviteAcceptanceLocator = "",
   } = {}) {
     const channelNumber = channels.length + 1;
     const resolvedChannelId = channelId || `channel-${Date.now().toString(36)}`;
@@ -290,6 +318,7 @@ export function createInviteController({
       dealId,
       counterpartyAddress,
       privateMessagingReady,
+      inviteAcceptanceLocator,
       inviteLink: invited ? createDealInviteLink() : "",
       invited,
       pendingJoin,
@@ -372,7 +401,18 @@ export function createInviteController({
       await transactionDelay(260);
       const roomId = createInviteRoomId();
       const dealTitle = newDealTitleValue();
-      const link = onboardingInviteLink(target, roomId, dealTitle);
+      const inviteSecret = generateInviteSecret();
+      const acceptanceMaterial = await deriveInviteAcceptanceMaterial({
+        inviteCode: ensureInviteCode(),
+        inviteSecret,
+        roomId,
+      });
+      const link = onboardingInviteLink(
+        target,
+        roomId,
+        dealTitle,
+        inviteSecret,
+      );
       const dealId = nextDealId();
       const channel = createLocalChannelModel({
         channelId: roomId,
@@ -385,6 +425,7 @@ export function createInviteController({
         counterpartyOnVeil: false,
         dealId,
         counterpartyAddress: /^0x[0-9a-fA-F]{1,64}$/.test(target) ? target : "",
+        inviteAcceptanceLocator: acceptanceMaterial.messageLocator,
       });
       channel.inviteLink = link;
       channels.unshift(channel);
