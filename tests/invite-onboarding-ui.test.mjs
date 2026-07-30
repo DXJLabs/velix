@@ -10,7 +10,7 @@ const paths = {
   runtimeApi: "frontend/src/app/runtime-api.js",
 };
 
-test("production invite is onboarding-only and does not create a private channel", async () => {
+test("production invite remains onboarding-only", async () => {
   const [controller, events, registry, runtimeApi] = await Promise.all([
     readFile(paths.controller, "utf8"),
     readFile(paths.events, "utf8"),
@@ -20,20 +20,27 @@ test("production invite is onboarding-only and does not create a private channel
 
   assert.match(controller, /async function createOnboardingInvite/);
   assert.match(controller, /onboardingInviteLink/);
-  assert.match(controller, /The private room unlocks after/);
   assert.match(events, /dataset\.newDealAction === "onboard"/);
-  assert.match(events, /state\.demoRuntimeMode/);
   assert.match(registry, /onboardingInviteEnabled: true/);
   assert.match(runtimeApi, /createOnboardingInvite/);
 });
 
-test("new deal UI explains identity, invite, and private-room progression", async () => {
+test("new deal UI is simple and avoids LMS-style progression", async () => {
   const template = await readFile(paths.template, "utf8");
-  assert.match(template, /Start a private deal/);
-  assert.match(template, /Private by default/);
-  assert.match(template, /Create onboarding invite/);
-  assert.match(template, /From invite to private room/);
-  assert.match(template, /data-new-deal-action="show-invite"/);
+  assert.match(template, /Start a new deal/);
+  assert.match(template, /Create a private room/);
+  assert.match(template, /Nothing is sent until you create the invite/);
+  assert.doesNotMatch(template, /How it works/);
+  assert.doesNotMatch(template, /new-deal-journey/);
+  assert.doesNotMatch(template, /Step 1/);
+});
+
+test("incoming invite explains safety before wallet connection", async () => {
+  const template = await readFile(paths.template, "utf8");
+  assert.match(template, /No payment requested/);
+  assert.match(template, /No funds move when joining/);
+  assert.match(template, /Never share your seed phrase/);
+  assert.match(template, /Review & join with Ready/);
 });
 
 test("invite link falls back to the deployed application origin", async () => {

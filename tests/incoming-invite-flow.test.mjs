@@ -26,7 +26,7 @@ test("application opens the incoming invitation route at startup", async () => {
 test("sender waiting card no longer exposes fake preview acceptance", async () => {
   const ui = await readFile("frontend/src/ui/invite-ui.js", "utf8");
   assert.doesNotMatch(ui, /Preview Accept Invitation/);
-  assert.match(ui, /Waiting for counterparty/);
+  assert.match(ui, /Waiting for them to open the invite/);
 });
 
 test("pending onboarding room does not start private timeline discovery", async () => {

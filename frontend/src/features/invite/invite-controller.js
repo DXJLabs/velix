@@ -133,64 +133,81 @@ export function createInviteController({
     return true;
   }
 
+  function setIncomingInviteButtonLoading(loading) {
+    const button = document.querySelector("#accept-incoming-invite-button");
+    if (!button) return;
+    button.disabled = loading;
+    button.setAttribute("aria-busy", loading ? "true" : "false");
+    button.innerHTML = loading
+      ? '<span class="veil-button-spinner" aria-hidden="true"></span><span>Opening your invitation...</span>'
+      : '<i data-lucide="arrow-right" class="size-5"></i><span>Review & join with Ready</span>';
+    iconRefresh();
+  }
+
   async function acceptIncomingInvite() {
     const invite = readIncomingInvite();
     if (!invite) {
-      showToast("This VEIL invitation is invalid or incomplete.");
+      showToast("This invitation is no longer available.");
       return false;
     }
 
-    if (!state.walletConnected) {
-      const connected = await connectWallet({ goToInbox: false, preferPrivacyWallet: true });
-      if (!connected) return false;
+    setIncomingInviteButtonLoading(true);
+    try {
+      if (!state.walletConnected) {
+        const connected = await connectWallet({ goToInbox: false, preferPrivacyWallet: true });
+        if (!connected) return false;
+      }
+
+      let channel = channels.find((candidate) => candidate.id === invite.roomId);
+      if (!channel) {
+        const person = invite.inviter ? shortHash(invite.inviter) : "Counterparty";
+        channel = createLocalChannelModel({
+          channelId: invite.roomId,
+          title: invite.dealTitle,
+          person,
+          status: "Setting Up Private Room",
+          last: "Finishing private setup",
+          invited: false,
+          pendingJoin: false,
+          counterpartyOnVeil: true,
+          dealId: `Invite ${invite.inviteCode}`,
+          counterpartyAddress: invite.inviter,
+          privateMessagingReady: false,
+        });
+        channels.unshift(channel);
+        messages[channel.id] = [
+          {
+            type: "event",
+            title: "VEIL invitation opened",
+            subtitle: "Your invitation is open. VEIL is preparing the private room.",
+            time: Date.now(),
+            offchain: true,
+            actor: "System",
+          },
+        ];
+      } else {
+        channel.status = "Setting Up Private Room";
+        channel.last = "Finishing private setup";
+        channel.privateMessagingReady = false;
+      }
+
+      state.channelId = channel.id;
+      resetDealStateForPendingChannel();
+      saveLocalChannels();
+      renderConversationList();
+
+      const view = document.defaultView;
+      if (view) view.history.replaceState({}, "", view.location.pathname);
+
+      openChannel(channel.id);
+      showToast("Invitation opened. Your private room is being prepared.");
+      return true;
+    } catch {
+      showToast("We couldn't open this invitation. Please try again.");
+      return false;
+    } finally {
+      setIncomingInviteButtonLoading(false);
     }
-
-    let channel = channels.find((candidate) => candidate.id === invite.roomId);
-    if (!channel) {
-      const person = invite.inviter ? shortHash(invite.inviter) : "Counterparty";
-      channel = createLocalChannelModel({
-        channelId: invite.roomId,
-        title: invite.dealTitle,
-        person,
-        status: "Private Setup Required",
-        last: "Waiting for wallet-managed encryption",
-        invited: false,
-        pendingJoin: false,
-        counterpartyOnVeil: true,
-        dealId: `Invite ${invite.inviteCode}`,
-        counterpartyAddress: invite.inviter,
-        privateMessagingReady: false,
-      });
-      channels.unshift(channel);
-      messages[channel.id] = [
-        {
-          type: "event",
-          title: "VEIL invitation opened",
-          subtitle: "The invite was accepted on this device. No on-chain acceptance has been submitted yet.",
-          time: Date.now(),
-          offchain: true,
-          actor: "System",
-        },
-      ];
-    } else {
-      channel.status = "Private Setup Required";
-      channel.last = "Waiting for wallet-managed encryption";
-      channel.privateMessagingReady = false;
-    }
-
-    state.channelId = channel.id;
-    resetDealStateForPendingChannel();
-    saveLocalChannels();
-    renderConversationList();
-
-    const view = document.defaultView;
-    if (view) {
-      view.history.replaceState({}, "", view.location.pathname);
-    }
-
-    openChannel(channel.id);
-    showToast("Invite opened. Private messaging is blocked until wallet-managed encryption is ready.");
-    return true;
   }
 
   function counterpartyLookup(value = newDealCounterpartyValue()) {
@@ -325,7 +342,7 @@ export function createInviteController({
       || latestRecipientDiscovery?.address
       || target;
     beginChannelModal({ inviteOnly: true, person, dealId: "VEIL Invite" });
-    setAppLoading("channel", "Preparing VEIL Invite");
+    setAppLoading("channel", "Preparing your invite...");
 
     try {
       await transactionDelay(260);
@@ -337,8 +354,8 @@ export function createInviteController({
         channelId: roomId,
         title: dealTitle,
         person,
-        status: "Waiting for Counterparty",
-        last: "Invite link ready",
+        status: "Waiting for Them",
+        last: "Invitation ready",
         invited: true,
         pendingJoin: true,
         counterpartyOnVeil: false,
@@ -362,15 +379,15 @@ export function createInviteController({
       state.lastInviteLink = link;
       clearAppLoading("channel");
       finishChannelModal({
-        title: "Invite Ready",
+        title: "Invitation ready",
         subtitle: copied
-          ? "Link copied. Share it with your counterparty."
-          : "Invite created. Copy it from the waiting card.",
+          ? "The link is copied and ready to share."
+          : "Your invitation is ready.",
       });
       showToast(
         copied
-          ? "VEIL onboarding invite copied."
-          : "VEIL onboarding invite ready.",
+          ? "Invitation copied."
+          : "Invitation ready.",
       );
       return { link, copied };
     } catch (error) {
@@ -645,7 +662,7 @@ export function createInviteController({
 
   function prepareOnboardingUi(primaryAction, inviteFormPanel, showInviteForm) {
     setPrimaryAction(primaryAction, {
-      label: "Checking private readiness",
+      label: "Checking recipient",
       icon: "loader-circle",
       disabled: true,
     });
@@ -680,8 +697,8 @@ export function createInviteController({
     if (result.status === "resolved") {
       const registered = result.privacyPoolStatus === "registered";
       setPrimaryAction(primaryAction, {
-        label: registered ? "Copy VEIL Invite" : "Invite to Register",
-        icon: registered ? "send" : "user-plus",
+        label: "Create private invite",
+        icon: "send",
         action: "onboard",
       });
       return;
@@ -706,7 +723,7 @@ export function createInviteController({
     }
 
     setPrimaryAction(primaryAction, {
-      label: "Private readiness unavailable",
+      label: "Try again",
       icon: "shield-alert",
       disabled: true,
     });
@@ -742,12 +759,12 @@ export function createInviteController({
 
     const { resultName, resultDetail, resultStatus, actionHint } = elements;
     if (resultName) resultName.textContent = query;
-    if (resultDetail) resultDetail.textContent = "Resolving recipient on Starknet Sepolia...";
+    if (resultDetail) resultDetail.textContent = "Checking this identity...";
     if (resultStatus) {
       resultStatus.textContent = "Checking";
       resultStatus.className = "status-pill public";
     }
-    if (actionHint) actionHint.textContent = "Identity lookup only. No request, notification, or invite will be created.";
+    if (actionHint) actionHint.textContent = "Nothing is sent until you create the invite.";
 
     recipientDiscoveryTimer = setTimeout(async () => {
       const result = await recipientDiscovery.resolve(query);
@@ -775,31 +792,31 @@ export function createInviteController({
         : "";
 
       if (result.privacyPoolStatus === "registered") {
-        if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} Registered in the VEIL Privacy Pool.`;
+        if (resultDetail) resultDetail.textContent = `${address} is ready to receive a private invite.`;
         if (resultStatus) {
-          resultStatus.textContent = "Pool Participant";
+          resultStatus.textContent = "Ready";
           resultStatus.className = "status-pill escrow-active";
         }
-        if (actionHint) actionHint.textContent = "Recipient is registered. You can share a VEIL invite now; the private room opens after the two-party channel check succeeds.";
+        if (actionHint) actionHint.textContent = "You can create and review the invitation now.";
         return;
       }
 
       if (result.privacyPoolStatus === "not_registered") {
-        if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} No viewing public key is registered in the VEIL Privacy Pool.`;
+        if (resultDetail) resultDetail.textContent = `${address} can join through a VEIL invite.`;
         if (resultStatus) {
-          resultStatus.textContent = "Registration Required";
+          resultStatus.textContent = "Invite needed";
           resultStatus.className = "status-pill waiting-deposit";
         }
-        if (actionHint) actionHint.textContent = "Invite them to open VEIL and connect Ready Wallet. The private room unlocks after their Privacy Pool registration is detected.";
+        if (actionHint) actionHint.textContent = "Send them a private invite to continue.";
         return;
       }
 
-      if (resultDetail) resultDetail.textContent = `${address} resolved on Starknet Sepolia.${reverseNote} Privacy Pool registration could not be verified.`;
+      if (resultDetail) resultDetail.textContent = `${address} was found, but readiness could not be confirmed.`;
       if (resultStatus) {
-        resultStatus.textContent = "Pool Unverified";
+        resultStatus.textContent = "Try again";
         resultStatus.className = "status-pill waiting-deposit";
       }
-      if (actionHint) actionHint.textContent = "Identity resolution succeeded, but the VEIL Privacy Pool check failed closed. Deal creation remains locked.";
+      if (actionHint) actionHint.textContent = "Please try again in a moment.";
       return;
     }
 

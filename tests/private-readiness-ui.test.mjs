@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("incoming invite remains blocked until wallet-managed encryption is ready", async () => {
+test("incoming invite remains closed until private messaging is ready", async () => {
   const controller = await readFile(
     "frontend/src/features/invite/invite-controller.js",
     "utf8",
   );
 
-  assert.match(controller, /status: "Private Setup Required"/);
+  assert.match(controller, /status: "Setting Up Private Room"/);
   assert.match(controller, /privateMessagingReady: false/);
-  assert.match(controller, /No on-chain acceptance has been submitted yet/);
+  assert.match(controller, /Your invitation is open\. VEIL is preparing the private room/);
   assert.doesNotMatch(
     controller,
     /confirmedTimelineMeta\(`\$\{channel\.id\}-invite-accepted`/,
@@ -23,10 +23,7 @@ test("private setup blocks composer and timeline polling", async () => {
     "utf8",
   );
 
-  assert.match(
-    controller,
-    /channel\.privateMessagingReady !== false/,
-  );
+  assert.match(controller, /channel\.privateMessagingReady !== false/);
   assert.match(
     controller,
     /composerForm\.hidden = waitingForCounterparty \|\| privateSetupRequired/,
@@ -36,14 +33,15 @@ test("private setup blocks composer and timeline polling", async () => {
   assert.match(controller, /ENCRYPTION_KEY_REGISTRY_UNAVAILABLE/);
 });
 
-test("invite card constrains long links and mobile actions", async () => {
-  const css = await readFile(
-    "frontend/src/styles/features/chat-feed.css",
-    "utf8",
-  );
+test("waiting and setup states use calm non-technical language", async () => {
+  const [controller, ui] = await Promise.all([
+    readFile("frontend/src/features/deals/deal-room-controller.js", "utf8"),
+    readFile("frontend/src/ui/invite-ui.js", "utf8"),
+  ]);
 
-  assert.match(css, /\.invite-link-card strong/);
-  assert.match(css, /text-overflow: ellipsis/);
-  assert.match(css, /overflow-x: hidden/);
-  assert.match(css, /grid-template-columns: 1fr/);
+  assert.match(controller, /Setting up your private room/);
+  assert.match(controller, /No payment is requested and no funds move/);
+  assert.match(ui, /Invitation ready/);
+  assert.match(ui, /Waiting for them to open the invite/);
+  assert.doesNotMatch(ui, /STRK20|Privacy Pool|encryption registry/i);
 });

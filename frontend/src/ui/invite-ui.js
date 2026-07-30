@@ -3,65 +3,60 @@ import { escapeHtml } from "./html.js";
 export function inviteWaitingCardMarkup(channel, { inviteLink } = {}) {
   if (!channel.invited) {
     return `
-      <section class="invite-wait-card">
-        <span class="invite-wait-icon"><i data-lucide="bell" class="size-5"></i></span>
+      <section class="invite-wait-card veil-wait-card">
+        <span class="invite-wait-icon"><i data-lucide="user-round-clock" class="size-5"></i></span>
         <div>
           <strong>Waiting for ${escapeHtml(channel.person)}</strong>
-          <p>${escapeHtml(channel.dealId || "Deal request")} created. ${escapeHtml(channel.person)} received an in-app notification and must accept before negotiation opens.</p>
-          <small>New private deal request - Accept or Decline</small>
-        </div>
-        <div class="invite-wait-actions">
-          <button class="primary-action" type="button" data-counterparty-accept>
-            <i data-lucide="check" class="size-5"></i>
-            <span>Preview Bob Accept</span>
-          </button>
-          <button class="secondary-action" type="button" data-counterparty-decline>
-            <i data-lucide="x" class="size-5"></i>
-            <span>Decline</span>
-          </button>
+          <p>The room will open after they accept your invitation.</p>
         </div>
       </section>
     `;
   }
 
   const link = inviteLink || channel.inviteLink || "";
+  const displayHost = (() => {
+    try {
+      return new URL(link).host;
+    } catch {
+      return "VEIL private invite";
+    }
+  })();
+
   return `
-    <section class="invite-wait-card">
-      <span class="invite-wait-icon"><i data-lucide="send" class="size-5"></i></span>
-      <div>
-        <strong>Invite link ready</strong>
-        <p>${escapeHtml(channel.person)} is not on VEIL yet. Share the invite link; after they connect wallet and accept, the deal opens.</p>
+    <section class="invite-wait-card veil-wait-card">
+      <span class="invite-wait-icon veil-wait-icon-soft">
+        <i data-lucide="send" class="size-5"></i>
+      </span>
+
+      <div class="veil-wait-copy">
+        <strong>Invitation ready</strong>
+        <p>Share this invite with ${escapeHtml(channel.person)}.</p>
       </div>
-      <div class="invite-link-card">
-        <span>Invite Link</span>
-        <strong>${escapeHtml(link)}</strong>
+
+      <div class="veil-invite-link-summary">
+        <span class="veil-invite-link-mark">
+          <i data-lucide="link-2" class="size-4"></i>
+        </span>
         <div>
-          <button class="secondary-action" type="button" data-copy-invite>
-            <i data-lucide="copy" class="size-4"></i>
-            <small>Copy</small>
-          </button>
-          <button class="secondary-action" type="button" data-share-invite="share">
-            <i data-lucide="send" class="size-4"></i>
-            <small>Share</small>
-          </button>
-          <button class="secondary-action" type="button" data-qr-invite>
-            <i data-lucide="qr-code" class="size-4"></i>
-            <small>QR Code</small>
-          </button>
+          <small>Secure VEIL invite</small>
+          <strong>${escapeHtml(displayHost)}</strong>
         </div>
       </div>
-      <div class="invite-share-grid" aria-label="Share invite">
-        <button type="button" data-share-invite="telegram">Telegram</button>
-        <button type="button" data-share-invite="discord">Discord</button>
-        <button type="button" data-share-invite="x">X</button>
-        <button type="button" data-share-invite="email">Email</button>
-        <button type="button" data-share-invite="whatsapp">WhatsApp</button>
-      </div>
-      <div class="invite-wait-actions">
-        <button class="secondary-action" type="button" disabled aria-disabled="true">
-          <i data-lucide="clock-3" class="size-5"></i>
-          <span>Waiting for counterparty</span>
+
+      <div class="veil-invite-actions">
+        <button class="primary-action" type="button" data-copy-invite>
+          <i data-lucide="copy" class="size-4"></i>
+          <span>Copy invite</span>
         </button>
+        <button class="secondary-action" type="button" data-share-invite="share">
+          <i data-lucide="share-2" class="size-4"></i>
+          <span>Share</span>
+        </button>
+      </div>
+
+      <div class="veil-waiting-state" role="status" aria-live="polite">
+        <span class="veil-pulse-dot"></span>
+        <span>Waiting for them to open the invite</span>
       </div>
     </section>
   `;

@@ -13,6 +13,8 @@ function isInviteMetadataEvent(item = {}) {
     ? item.details.map(([label]) => String(label || "").trim().toLowerCase())
     : [];
   return title === "invite status"
+    || title === "invite link generated"
+    || title === "veil invitation opened"
     || (subtitle.includes("invite can no longer be used") && detailLabels.includes("reuse"));
 }
 
@@ -148,8 +150,8 @@ export function createDealRoomController({
         const channel = channels.find((item) => item.id === channelId);
         if (channel) {
           channel.privateMessagingReady = false;
-          channel.status = "Private Setup Required";
-          channel.last = "Waiting for wallet-managed encryption";
+          channel.status = "Setting Up Private Room";
+          channel.last = "Finishing private setup";
         }
         veilError("indexer.timeline.blocked", error, {
           where: "loadIndexedChannelTimeline",
@@ -271,12 +273,15 @@ export function createDealRoomController({
 
     const setupMarkup = privateSetupRequired
       ? `
-        <section class="private-setup-card">
-          <span class="private-setup-icon"><i data-lucide="shield-alert" class="size-5"></i></span>
+        <section class="veil-room-preparing" role="status" aria-live="polite">
+          <span class="veil-preparing-orb">
+            <span></span>
+            <i data-lucide="shield-check" class="size-5"></i>
+          </span>
           <div>
-            <strong>Private messaging is not ready</strong>
-            <p>The invite is open, but VEIL has not submitted an on-chain acceptance. Wallet-managed encryption must be completed before messages can be sent.</p>
-            <small>Timeline polling stopped automatically. No retry is running.</small>
+            <strong>Setting up your private room</strong>
+            <p>VEIL is waiting for both sides to be ready before messages are enabled.</p>
+            <small>No payment is requested and no funds move during this step.</small>
           </div>
         </section>
       `
@@ -289,27 +294,30 @@ export function createDealRoomController({
       feedMarkup: channelMessages().map(renderFeedItem).join(""),
     });
     if (composerForm) composerForm.hidden = waitingForCounterparty || privateSetupRequired;
+    document.querySelectorAll("[data-workflow-progress]").forEach((container) => {
+      container.hidden = waitingForCounterparty || privateSetupRequired;
+    });
 
     const securityTitle = document.querySelector("#channel-security-title");
     const securityState = document.querySelector("#channel-security-state");
     const securityNote = document.querySelector("#channel-security-note");
     if (securityTitle) {
       securityTitle.textContent = privateSetupRequired
-        ? "Private setup required"
+        ? "Private room"
         : timelineMode === "strk20-shielded"
           ? "Wallet-managed private messaging"
           : "Direct encrypted messaging";
     }
     if (securityState) {
       securityState.textContent = privateSetupRequired
-        ? "Blocked"
+        ? "Setting up"
         : timelineMode === "strk20-shielded"
           ? "Ready Wallet"
           : "Direct helper";
     }
     if (securityNote) {
       securityNote.textContent = privateSetupRequired
-        ? "No on-chain message or acceptance has been submitted."
+        ? "Messages will unlock when both sides are ready."
         : timelineMode === "strk20-shielded"
           ? "Ready owns proof generation and helper submission."
           : "Recipient encryption-key registration is required.";
