@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import { assert, sdk } from "./production-messaging.helpers.mjs";
-import { resolveChannelKeyConfig } from "../../../src/services/encryption/channel-key-service.js";
+import { resolveChannelKeyConfig } from "../../../frontend/src/services/encryption/channel-key-service.js";
 
 const VECTORS = [
   {

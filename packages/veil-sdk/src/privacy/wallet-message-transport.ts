@@ -3,6 +3,7 @@ import type {
   CreateChannelResult,
   InvokeExternalInput,
   StarknetProviderLike,
+  StarknetTransactionReceiptLike,
   TimelineItem,
   VeilMessageMode,
   VeilTransport,
@@ -18,8 +19,18 @@ export interface Strk20WalletMessageTransportConfig {
   readTransport: VeilTransport;
   provider?: StarknetProviderLike;
   waitForConfirmation?: boolean;
+  /**
+   * Ceiling, in milliseconds, on how long to wait for the submitted
+   * transaction to confirm before giving up and returning the optimistic
+   * pending item instead. Paymaster-relayed hashes can take a while to
+   * become visible to an RPC; an unbounded `waitForTransaction` would strand
+   * the UI in "sending" with no feedback. Default: 60s.
+   */
+  confirmationTimeoutMs?: number;
   onTransactionSubmitted?: (transactionHash: string, item: TimelineItem) => void;
 }
+
+const DEFAULT_CONFIRMATION_TIMEOUT_MS = 60_000;
 
 /**
  * Wallet-owned STRK20 transport for VEIL private messages.
@@ -36,6 +47,7 @@ export class Strk20WalletMessageTransport implements VeilTransport {
   readonly #readTransport: VeilTransport;
   readonly #provider: StarknetProviderLike | undefined;
   readonly #waitForConfirmation: boolean;
+  readonly #confirmationTimeoutMs: number;
   readonly #onTransactionSubmitted:
     | ((transactionHash: string, item: TimelineItem) => void)
     | undefined;
@@ -52,6 +64,7 @@ export class Strk20WalletMessageTransport implements VeilTransport {
     this.#readTransport = config.readTransport;
     this.#provider = config.provider;
     this.#waitForConfirmation = config.waitForConfirmation ?? true;
+    this.#confirmationTimeoutMs = config.confirmationTimeoutMs ?? DEFAULT_CONFIRMATION_TIMEOUT_MS;
     this.#onTransactionSubmitted = config.onTransactionSubmitted;
   }
 
@@ -122,7 +135,13 @@ export class Strk20WalletMessageTransport implements VeilTransport {
       return optimistic;
     }
 
-    const receipt = await this.#provider.waitForTransaction(transactionHash);
+    const receipt = await this.#raceConfirmation(transactionHash);
+    if (receipt === "timed-out") {
+      // The tx was submitted and is real — we simply couldn't confirm it in
+      // time. Hand back the pending item rather than stranding the UI or
+      // claiming failure; the explorer link is the fallback for the user.
+      return optimistic;
+    }
     if (!isAcceptedReceipt(receipt)) {
       throw Object.assign(
         new Error("STRK20 private-message transaction reverted or was rejected."),
@@ -137,6 +156,23 @@ export class Strk20WalletMessageTransport implements VeilTransport {
       status: "confirmed",
       optimistic: false,
     };
+  }
+
+  async #raceConfirmation(
+    transactionHash: string,
+  ): Promise<StarknetTransactionReceiptLike | "timed-out"> {
+    let timer: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<"timed-out">((resolve) => {
+      timer = setTimeout(() => resolve("timed-out"), this.#confirmationTimeoutMs);
+    });
+    try {
+      return await Promise.race([
+        this.#provider!.waitForTransaction!(transactionHash),
+        timeout,
+      ]);
+    } finally {
+      clearTimeout(timer!);
+    }
   }
 
   getEventCount(channelId: string): Promise<number> {

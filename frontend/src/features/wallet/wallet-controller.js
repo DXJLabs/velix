@@ -5,8 +5,6 @@ export function createWalletController({
   document,
   walletAssetConfig,
   expectedChainId,
-  privyAppId,
-  privyEnabled,
   timelineMode,
   privacyRuntime,
   privacyPoolCompatibility,
@@ -23,7 +21,6 @@ export function createWalletController({
   refreshConnectLabels,
   renderHomeStatus,
   showToast,
-  getPrivyBridge,
   connectWallet,
   clearWalletInitTimer,
   resetClientConnection,
@@ -32,9 +29,10 @@ export function createWalletController({
   listStorageKeys,
   removeStorageKeys,
   copyToClipboard,
+  shieldTokens,
 }) {
   function walletAddressValue() {
-    return state.walletAddress || state.privyWallet?.address || "";
+    return state.walletAddress || "";
   }
 
   function renderWallet() {
@@ -53,22 +51,16 @@ export function createWalletController({
       ? pendingSubtitle
       : failed
         ? "Retry wallet connection."
-        : state.privyAccount && !state.privyAccountDeployed
-          ? `Fund ${shortAddress(state.walletAddress)} with Sepolia STRK, then connect again.`
-          : connected
-            ? "This wallet can access encrypted deal channels."
-            : privyEnabled
-              ? "Connect with Privy to unlock VEIL on this device."
-              : "Connect Ready Wallet to unlock VEIL privacy.";
+        : connected
+          ? "This wallet can access encrypted deal channels."
+          : "Connect Ready Wallet to unlock VEIL privacy.";
     const statusText = pending ? "Connecting" : failed ? "Failed" : connected ? "Connected" : "Disconnected";
     const helperText = pending
       ? state.walletInitMessage
       : failed
         ? "Retry"
         : timelineMode === "encrypted-direct"
-          ? state.privyAccount && !state.privyAccountDeployed
-            ? "Account funding needed"
-            : state.helperVerified ? "Verified" : "Check required"
+          ? state.helperVerified ? "Verified" : "Check required"
           : "Demo session";
     const walletTitle = document.querySelector("#wallet-state-title");
     const walletSubtitle = document.querySelector("#wallet-state-subtitle");
@@ -81,14 +73,14 @@ export function createWalletController({
     const walletConnectionStatus = document.querySelector("#wallet-connection-status");
     const walletConnectRow = document.querySelector("[data-wallet-connect-row]");
     const walletSettingsRow = document.querySelector("[data-wallet-settings-row]");
-    const walletAddress = state.walletAddress || state.privyWallet?.address;
+    const walletAddress = state.walletAddress;
     const connectionSummary = pending
       ? state.walletInitMessage
       : failed
         ? "Wallet connection failed"
         : connected
           ? `${state.walletSource} on ${expectedNetworkName()}`
-          : privyEnabled ? "Privy wallet not connected" : "Ready Wallet not connected";
+          : "Ready Wallet not connected";
     const connectionStatus = pending ? "Connecting" : failed ? "Failed" : connected ? "Active" : "Disconnected";
     if (walletTitle) walletTitle.textContent = title;
     if (walletSubtitle) walletSubtitle.textContent = subtitle;
@@ -157,7 +149,15 @@ export function createWalletController({
         : support === "unsupported"
           ? "Unsupported privacy wallet"
           : "Connect wallet";
-    const registrationLabel = Boolean(model?.capabilities?.strk20WalletApi) ? "Managed by Ready Wallet" : state.walletConnected ? "Unavailable" : "Connect wallet";
+    const registrationLabel = !state.walletConnected
+      ? "Connect wallet"
+      : state.privacyRegistrationStatus === "registered"
+        ? "Registered with the pool"
+        : state.privacyRegistrationStatus === "not-registered"
+          ? "Not yet \u2014 registers on your first private action"
+          : state.privacyRegistrationStatus === "unknown"
+            ? "Checking\u2026"
+            : "Unavailable";
     const signingAvailable = Boolean(model?.capabilities?.signing);
     const walletApiAvailable = Boolean(model?.capabilities?.strk20WalletApi);
     const signingLabel = state.walletConnected
@@ -246,12 +246,8 @@ export function createWalletController({
     state.walletConnected = false;
     state.walletAddress = "";
     state.walletNetwork = expectedChainId;
-    state.walletSource = privyEnabled && privyAppId ? "Privy" : "";
+    state.walletSource = "";
     state.helperVerified = false;
-    state.privyWallet = null;
-    state.privyAccount = null;
-    state.privyProvider = null;
-    state.privyAccountDeployed = false;
     state.walletAssetBalances = createDefaultWalletAssetBalances();
     state.walletAssetSyncKey = "";
     state.walletAssetSyncStatus = "idle";
@@ -272,7 +268,7 @@ export function createWalletController({
     state.privateBalanceStatus = "unavailable";
     state.privateBalances = {};
     setWalletInitializationState("idle", {
-      message: privyEnabled ? "Connect Wallet" : "Connect Ready Wallet",
+      message: "Connect Ready Wallet",
     });
   }
 
@@ -294,20 +290,39 @@ export function createWalletController({
   }
 
   async function logoutWallet(message = "Logged out.") {
-    const bridge = getPrivyBridge();
-    try {
-      if (bridge?.logout) await bridge.logout();
-    } finally {
-      state.privyAuthenticated = false;
-      resetWalletConnection();
-      showToast(message);
-    }
+    resetWalletConnection();
+    showToast(message);
   }
 
   function clearLocalVeilCache() {
     const keys = listStorageKeys("veil:");
     removeStorageKeys(keys);
     showToast(keys.length ? "Local VEIL cache cleared." : "No local VEIL cache.");
+  }
+
+  // Deposits `amount` (raw base units, e.g. wei-equivalent) of the asset
+  // identified by `assetId` into the STRK20 privacy pool. Intentionally does
+  // NOT also send a private transfer — see the comment on
+  // walletService.shieldTokens for why shield and transfer must stay separate
+  // wallet calls. The caller is responsible for amount-entry UI; this is the
+  // action layer only.
+  async function shieldToken(assetId, amount) {
+    const asset = walletAssetConfig.find((entry) => entry.id === assetId);
+    if (!asset?.contractAddress) {
+      showToast(`Unknown asset: ${assetId}.`);
+      return undefined;
+    }
+    try {
+      const { transactionHash } = await shieldTokens({
+        tokenAddress: asset.contractAddress,
+        amount,
+      });
+      showToast(`Shield submitted. Funds mature in ~10 blocks before they're spendable.`);
+      return transactionHash;
+    } catch (error) {
+      showToast(error?.message || "Shield failed. Check your wallet and retry.");
+      return undefined;
+    }
   }
 
   return {
@@ -323,5 +338,6 @@ export function createWalletController({
     refreshWalletConnection,
     logoutWallet,
     clearLocalVeilCache,
+    shieldToken,
   };
 }

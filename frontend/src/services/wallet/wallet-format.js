@@ -10,21 +10,6 @@ export function ensureHex(value) {
   return normalized.startsWith("0x") ? normalized : `0x${normalized}`;
 }
 
-export function splitPrivySignature(signature) {
-  if (Array.isArray(signature) && signature.length >= 2) {
-    return [ensureHex(signature[0]), ensureHex(signature[1])];
-  }
-
-  const raw = typeof signature === "string"
-    ? signature
-    : signature?.signature || signature?.rawSignature || signature?.raw_signature || "";
-  const hex = ensureHex(raw).slice(2);
-  if (hex.length < 128) {
-    throw new Error("Privy signature is not a 64-byte Stark signature.");
-  }
-  return [`0x${hex.slice(0, 64)}`, `0x${hex.slice(64, 128)}`];
-}
-
 export function feltToBigInt(value) {
   if (typeof value === "bigint") return value;
   if (typeof value === "number") return BigInt(value);

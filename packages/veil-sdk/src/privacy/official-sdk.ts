@@ -4,7 +4,6 @@ import {
   SetupRequirement,
   createEmptyRegistry,
   createPrivateTransfers,
-  type PoolCapabilityMode,
   type PrivateRegistry,
   type PrivateTransfersInterface,
   type PrivateTransfersUser,
@@ -43,7 +42,6 @@ export interface OfficialPrivacySdkConfig extends OfficialPrivacySdkCompatibilit
   proverUrl: string;
   discoveryUrl: string;
   screeningCapable: boolean;
-  poolMode?: PoolCapabilityMode;
   requestTimeoutMs?: number;
   ohttp?: ProofProviderConfig["ohttp"];
 }
@@ -75,7 +73,6 @@ export function createOfficialPrivacySdkContext(config: OfficialPrivacySdkConfig
     provingProvider,
     discoveryProvider,
     poolContractAddress: config.poolAddress,
-    ...(config.poolMode === undefined ? {} : { poolMode: config.poolMode }),
   });
   const namespace = createPrivacyNamespace({
     chainId: String(config.chainId),

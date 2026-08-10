@@ -33,7 +33,6 @@ export function appShellMarkup() {
       ${bottomNavMarkup()}
     </div>
     ${reviewModalsMarkup()}
-    <div id="privy-auth-root"></div>
   `;
 }
 

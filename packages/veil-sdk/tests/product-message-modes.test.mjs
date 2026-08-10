@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
-import { createRuntimeConfig, normalizeTimelineMode } from "../../../src/app/runtime-config.js";
-import { encryptionRegistrationErrorMessage } from "../../../src/app/events/click-events.js";
-import { createDealStorage } from "../../../src/services/storage/deal-storage.js";
+import { createRuntimeConfig, normalizeTimelineMode } from "../../../frontend/src/app/runtime-config.js";
+import { encryptionRegistrationErrorMessage } from "../../../frontend/src/app/events/click-events.js";
+import { createDealStorage } from "../../../frontend/src/services/storage/deal-storage.js";
 import { assert, sdk } from "./production-messaging.helpers.mjs";
 
 const {
@@ -26,12 +26,12 @@ describe("production-safe VEIL message modes", () => {
     assert.equal(message.includes("invoke_transaction"), false);
   });
 
-  it("defaults production messaging to encrypted-direct", () => {
-    assert.equal(normalizeTimelineMode("", { MODE: "production" }), "encrypted-direct");
-    assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production" }), "encrypted-direct");
+  it("defaults production messaging to strk20-shielded", () => {
+    assert.equal(normalizeTimelineMode("", { MODE: "production" }), "strk20-shielded");
+    assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production" }), "strk20-shielded");
     assert.equal(normalizeTimelineMode("privacy-pool", { MODE: "production" }), "strk20-shielded");
     const config = createRuntimeConfig({ MODE: "production", DEV: false }, "");
-    assert.equal(config.timelineMode, "encrypted-direct");
+    assert.equal(config.timelineMode, "strk20-shielded");
   });
 
   it("accepts a registry only when its explicit Sepolia chain matches runtime", () => {

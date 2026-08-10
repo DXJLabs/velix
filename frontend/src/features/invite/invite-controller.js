@@ -801,6 +801,7 @@ export function createInviteController({
       primaryAction.setAttribute("aria-disabled", "true");
       primaryAction.removeAttribute("data-new-deal-action");
       primaryAction.innerHTML = '<i data-lucide="lock" class="size-5"></i><span>Deal Creation Unavailable</span>';
+      primaryAction.title = "Deal creation is locked until the recipient is verified as a Pool Participant and channel discovery and invite delivery pass two-party E2E verification.";
     }
     if (inviteFormPanel) inviteFormPanel.hidden = true;
     if (showInviteForm) {

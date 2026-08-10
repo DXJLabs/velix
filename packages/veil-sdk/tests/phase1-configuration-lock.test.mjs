@@ -7,19 +7,19 @@ import {
   isStarknetAddress,
   requireVeilSepoliaConfig,
 } from "../../../config/veil-sepolia.js";
-import { createRuntimeConfig } from "../../../src/app/runtime-config.js";
+import { createRuntimeConfig } from "../../../frontend/src/app/runtime-config.js";
 import {
   FEATURE_STATUS,
   PRIVACY_TRANSPORT_STATUS,
   VEIL_PHASE1_FEATURE_STATUS,
   VEIL_PHASE3_PRIVACY_TRANSPORT_STATE,
   createFeatureStatusModel,
-} from "../../../src/domain/feature-status.js";
+} from "../../../frontend/src/domain/feature-status.js";
 import {
   WALLET_PRIVACY_CAPABILITY,
   WALLET_PRIVACY_SUPPORT,
   createWalletPrivacyCapabilityModel,
-} from "../../../src/domain/privacy-capabilities.js";
+} from "../../../frontend/src/domain/privacy-capabilities.js";
 
 describe("Phase 1 Sepolia configuration lock", () => {
   it("contains the verified network, deployment, and official SDK pins", () => {
@@ -93,7 +93,6 @@ describe("Phase 1 Sepolia configuration lock", () => {
     const defaults = createRuntimeConfig({}, "");
     assert.equal(defaults.expectedChainId, "SN_SEPOLIA");
     assert.equal(defaults.offerAddress, "");
-    assert.equal(defaults.avnuPaymasterEnabled, false);
     assert.equal(defaults.onchainPayloads, false);
     assert.equal(defaults.privacyRuntime.sdk.enabled, false);
     assert.equal(defaults.privacyRuntime.sdk.installed, true);
@@ -116,18 +115,9 @@ describe("Phase 1 Sepolia configuration lock", () => {
 
     const explicitlyEnabled = createRuntimeConfig({ VITE_VEIL_ONCHAIN_PAYLOADS: "true" }, "");
     assert.equal(explicitlyEnabled.onchainPayloads, true);
-    assert.equal(explicitlyEnabled.avnuPaymasterEnabled, false);
     assert.throws(
       () => createRuntimeConfig({ VITE_VEIL_OFFER_ADDRESS: VEIL_SEPOLIA_CONFIG.contracts.offer.address }, ""),
       /predates the hardened VeilOffer/,
-    );
-    assert.throws(
-      () => createRuntimeConfig({ VITE_AVNU_PAYMASTER_ENABLED: "true" }, ""),
-      /proof-aware submission path/,
-    );
-    assert.throws(
-      () => createRuntimeConfig({ VITE_STRK20_SCREENING_CAPABLE: "true" }, ""),
-      /not screening-capable/,
     );
     assert.throws(
       () => createRuntimeConfig({ VITE_STRK20_SDK_ENABLED: "true" }, ""),

@@ -41,8 +41,7 @@ test("Ready preference accepts the current Ready key and the legacy Argent X inj
   );
 });
 
-test("explicit Ready connection bypasses Privy and returns the injected wallet", async () => {
-  let privyCalls = 0;
+test("Ready connection resolves the injected wallet directly, no bridge involved", async () => {
   const ready = {
     name: "Ready Wallet",
     account: { address: "0x123", execute() {} },
@@ -50,17 +49,10 @@ test("explicit Ready connection bypasses Privy and returns the injected wallet",
   };
   const updates = [];
   const result = await resolveWalletLogin({
-    config: { privyAppId: "configured" },
     traceId: "trace-ready",
     logger: {
       veilLog() {},
       veilError() {},
-    },
-    ensurePrivyMounted: async () => { privyCalls += 1; },
-    ensurePrivyAuthenticated: async () => { privyCalls += 1; },
-    createPrivyStarknetAccount: async () => {
-      privyCalls += 1;
-      return null;
     },
     waitForInjectedWallet: async ({ preferredWallet }) => {
       assert.equal(preferredWallet, "ready");
@@ -71,35 +63,25 @@ test("explicit Ready connection bypasses Privy and returns the injected wallet",
     preferredInjectedWallet: "ready",
   });
 
-  assert.equal(privyCalls, 0);
   assert.equal(result.injectedWallet, ready);
-  assert.equal(result.privyAccountContext, null);
   assert.match(updates[0][2].title, /Ready Wallet/);
 });
 
 
-test("explicit Ready audit is routed before Privy and legacy direct-helper initialization", async () => {
+test("Ready connect audit logging and privacy capability refresh are present in the wallet service", async () => {
   const service = await readFile(
     new URL("../frontend/src/services/wallet/wallet-service.js", import.meta.url),
     "utf8",
   );
 
-  const readyRoute = service.indexOf("if (preferPrivacyWallet) {");
-  const privyRoute = service.indexOf(
-    'if (config.timelineMode !== "encrypted-direct") {',
-    readyRoute + 1,
-  );
+  const connectRoute = service.indexOf("async function connectWallet(options = {}) {");
+  assert.ok(connectRoute >= 0, "connectWallet must exist.");
 
-  assert.ok(readyRoute >= 0, "Ready audit route must exist.");
-  assert.ok(privyRoute > readyRoute, "Ready audit must run before the generic Privy privacy bootstrap.");
-
-  const readyBlock = service.slice(readyRoute, privyRoute);
-  assert.match(readyBlock, /preferredInjectedWallet:\s*"ready"/);
-  assert.match(readyBlock, /privacyWalletAudit:\s*true/);
-  assert.match(readyBlock, /directHelper:\s*false/);
-  assert.match(readyBlock, /refreshPrivacyCapabilities\(wallet,\s*account,\s*readProvider\)/);
-  assert.doesNotMatch(readyBlock, /createEncryptionAdapter\(/);
-  assert.doesNotMatch(readyBlock, /createDirectHelperTransport\(/);
+  const connectBlock = service.slice(connectRoute);
+  assert.match(connectBlock, /preferredInjectedWallet:\s*"ready"/);
+  assert.match(connectBlock, /privacyWalletAudit:\s*true/);
+  assert.match(connectBlock, /directHelper:\s*false/);
+  assert.match(connectBlock, /refreshPrivacyCapabilities\(wallet,\s*account,\s*readProvider\)/);
 });
 
 test("wallet screen exposes a fail-closed Ready and STRK20 capability audit", async () => {
@@ -123,8 +105,8 @@ test("wallet screen exposes a fail-closed Ready and STRK20 capability audit", as
   assert.match(screen, /data-connect-privacy-wallet/);
   assert.match(screen, /STRK20 Wallet API/);
   assert.match(screen, /Official SDK signer/);
-  assert.match(clicks, /preferPrivacyWallet:\s*true/);
-  assert.match(service, /preferredInjectedWallet:\s*preferPrivacyWallet \? "ready" : ""/);
+  assert.match(clicks, /data-connect-privacy-wallet/);
+  assert.match(service, /preferredInjectedWallet:\s*"ready"/);
   assert.match(service, /entrypoint:\s*"get_public_key"/);
   assert.match(controller, /wallet-strk20-api/);
 

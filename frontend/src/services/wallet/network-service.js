@@ -1,4 +1,3 @@
-import { ChainId } from "starkzap-config";
 import { RpcProvider } from "starknet";
 import { networkLabel, normalizeChainId } from "../../app/runtime-config.js";
 
@@ -11,14 +10,8 @@ export function createNetworkService({
 
   async function getStarknetReadProvider() {
     if (starknetReadProvider) return starknetReadProvider;
-    starknetReadProvider = new RpcProvider({ nodeUrl: config.privyStarknetRpcUrl });
+    starknetReadProvider = new RpcProvider({ nodeUrl: config.starknetReadRpcUrl });
     return starknetReadProvider;
-  }
-
-  function getStarkZapChainId() {
-    if (config.expectedChainId === "SN_MAIN") return ChainId.MAINNET;
-    if (config.expectedChainId === "SN_SEPOLIA") return ChainId.SEPOLIA;
-    throw new Error(`Unsupported StarkZap chain id ${config.expectedChainId}.`);
   }
 
   function expectedNetworkName() {
@@ -98,7 +91,6 @@ export function createNetworkService({
 
   return {
     getStarknetReadProvider,
-    getStarkZapChainId,
     expectedNetworkName,
     expectedNetworkStatus,
     resolveWalletChain,

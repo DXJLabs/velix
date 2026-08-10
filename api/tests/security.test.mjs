@@ -3,15 +3,15 @@ import test from "node:test";
 
 import { hash, shortString } from "starknet";
 
-import paymasterHandler from "../paymaster.js";
-import signHandler from "../wallet/sign.js";
+import verifyHandler from "../auth/verify.js";
 import indexerHandler, { validateQuery } from "../indexer/messages.js";
 import {
   ApiError,
+  authenticateWalletSignatureRequest,
   createRequestContext,
   sanitizeForLog,
   sanitizeLogDetails,
-} from "../_lib/privy.js";
+} from "../_lib/auth.js";
 import {
   assertJsonBodyWithinLimit,
   enforceRateLimit,
@@ -81,7 +81,7 @@ test("body and per-instance rate boundaries fail closed", () => {
   );
 });
 
-test("wallet paymaster and signer reject unauthenticated requests without logging secrets", async () => {
+test("wallet auth and session-protected endpoints reject invalid or missing credentials without logging secrets", async () => {
   resetRateLimitsForTest();
   const originalInfo = console.info;
   const originalError = console.error;
@@ -90,31 +90,40 @@ test("wallet paymaster and signer reject unauthenticated requests without loggin
   console.error = (line) => logs.push(String(line));
 
   try {
-    const paymasterResponse = createResponse();
-    await paymasterHandler({
+    const verifyResponse = createResponse();
+    await verifyHandler({
       method: "POST",
       headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.6" },
       body: {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "paymaster_executeTransaction",
+        address: "0x123",
+        challengeToken: "bogus",
+        signature: ["not-a-felt"],
         secret: "never-log-this",
       },
-    }, paymasterResponse);
-    assert.equal(paymasterResponse.statusCode, 401);
-    assert.equal(paymasterResponse.payload.code, "PRIVY_ACCESS_TOKEN_MISSING");
+    }, verifyResponse);
+    assert.equal(verifyResponse.statusCode, 400);
+    assert.equal(verifyResponse.payload.code, "AUTH_VERIFY_SIGNATURE_INVALID");
 
-    const signResponse = createResponse();
-    await signHandler({
+    const missingChallengeResponse = createResponse();
+    await verifyHandler({
       method: "POST",
       headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.7" },
-      body: { walletId: "wallet-secret", hash: "0x123", purpose: "allowed-label" },
-    }, signResponse);
-    assert.equal(signResponse.statusCode, 401);
-    assert.equal(signResponse.payload.code, "PRIVY_ACCESS_TOKEN_MISSING");
+      body: { address: "0x123", signature: ["0x1"], sessionSecretGuess: "wallet-secret" },
+    }, missingChallengeResponse);
+    assert.equal(missingChallengeResponse.statusCode, 400);
+    assert.equal(missingChallengeResponse.payload.code, "AUTH_VERIFY_CHALLENGE_TOKEN_MISSING");
+
+    const unauthenticatedContext = { route: "/api/test", requestId: "test-request" };
+    assert.throws(
+      () => authenticateWalletSignatureRequest(
+        { headers: {} },
+        unauthenticatedContext,
+      ),
+      (error) => error.status === 401 && error.code === "WALLET_SESSION_MISSING",
+    );
 
     const serializedLogs = logs.join("\n");
-    assert.doesNotMatch(serializedLogs, /never-log-this|wallet-secret|0x123|allowed-label/);
+    assert.doesNotMatch(serializedLogs, /never-log-this|not-a-felt|wallet-secret/);
   } finally {
     console.info = originalInfo;
     console.error = originalError;

@@ -53,11 +53,7 @@ export function createWalletInitialization({
       case "failed":
         return "Retry";
       default:
-        return config.privyEnabled && config.privyAppId && !state.privyReady
-          ? "Loading Privy"
-          : config.privyEnabled
-            ? "Connect Wallet"
-            : "Connect Ready Wallet";
+        return "Connect Ready Wallet";
     }
   }
 
@@ -100,9 +96,7 @@ export function createWalletInitialization({
         where: "beginWalletInitialization",
         timeoutMs: WALLET_INIT_TIMEOUT_MS,
         why: "Wallet initialization did not reach ready before the production timeout.",
-        howToFix: config.privyEnabled
-          ? "Check the preceding Privy, StarkZap, AVNU Paymaster, and RPC logs for the first failed step."
-          : "Unlock Ready Wallet, select Starknet Sepolia, approve the request, and confirm the configured RPC is reachable.",
+        howToFix: "Unlock Ready Wallet, select Starknet Sepolia, approve the request, and confirm the configured RPC is reachable.",
       });
       setWalletInitializationState("failed", {
         traceId,

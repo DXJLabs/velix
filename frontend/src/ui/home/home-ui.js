@@ -11,7 +11,7 @@ export function createHomeUi({
     const message = `${state.walletInitError || ""} ${state.walletInitMessage || ""}`.toLowerCase();
     if (!message.trim()) return "Unable to connect";
     if (message.includes("not connected to") || message.includes("different starknet network")) return "Wrong network";
-    if (message.includes("does not expose execute") || message.includes("no privy starknet account") || message.includes("no starknet provider")) {
+    if (message.includes("does not expose execute") || message.includes("does not expose a starknet provider") || message.includes("no starknet provider")) {
       return "Unsupported wallet";
     }
     if (message.includes("helper") || message.includes("rpc") || message.includes("network")) return "Network unavailable";

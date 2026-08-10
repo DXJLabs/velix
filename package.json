@@ -27,9 +27,7 @@
     "test:all": "npm run test:sdk && npm run test:backend && npm run test:app && npm run test:api",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "npm run build:sdk && tsc -p backend/tsconfig.json --noEmit && tsc -p tsconfig.json --noEmit && npm run typecheck:poc",
-    "typecheck:poc": "tsc -p tools/tsconfig.json",
-    "worker:proof": "npm run build:backend && node backend/dist/worker/proof-worker-main.js",
-    "test:real-message-proof": "npm run build:backend && node backend/dist/integration/real-message-proof-e2e.js"
+    "typecheck:poc": "tsc -p tools/tsconfig.json"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.1",
@@ -40,17 +38,16 @@
     "vite": "7.3.5"
   },
   "dependencies": {
-    "@privy-io/node": "0.23.0",
-    "@privy-io/react-auth": "3.32.2",
-    "@starkware-libs/starknet-privacy-sdk": "file:vendor/starkware-libs-starknet-privacy-sdk-0.14.3-rc.2.tgz",
+    "@starknet-io/get-starknet-discovery": "6.0.3",
+    "@starknet-io/get-starknet-wallet-standard": "6.0.3",
+    "@starknet-io/types-js": "0.10.3",
+    "@starkware-libs/starknet-privacy-sdk": "file:vendor/starkware-libs-starknet-privacy-sdk-0.14.3-rc.4.tgz",
     "ethers": "6.15.0",
     "lucide": "1.24.0",
     "pg": "8.22.0",
     "react": "19.2.7",
-    "react-dom": "19.2.7",
-    "starknet": "9.4.2",
+    "starknet": "10.6.7",
     "starknet-proof": "npm:starknet@10.0.0-beta.6",
-    "starkzap": "3.0.0",
     "swr": "2.4.2"
   },
   "overrides": {

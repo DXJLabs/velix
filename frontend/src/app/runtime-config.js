@@ -22,8 +22,6 @@ export const BOB_WALLET_SHORT = "0x04...8fa2";
 export const LOCAL_CHANNELS_KEY = "veil:local:channels:v1";
 export const STARKNET_SEPOLIA_EXPLORER_URL = VEIL_SEPOLIA_CONFIG.explorerUrl;
 export const WALLET_INIT_TIMEOUT_MS = 30_000;
-export const PRIVY_READY_TIMEOUT_MS = 8_000;
-export const PRIVY_AUTH_TIMEOUT_MS = 18_000;
 export const WALLET_INIT_PENDING_STATES = new Set(["connecting", "creating_account", "deploying", "connecting_paymaster"]);
 
 export function normalizeChainId(value) {
@@ -54,7 +52,7 @@ export function normalizeTimelineMode(value, env = {}) {
   const requested = String(value || "").trim();
   void env;
   if (!requested) return STRK20_SHIELDED_MESSAGE_MODE;
-  if (["direct-helper", "direct-helper-dev", "unshield"].includes(requested)) return ENCRYPTED_DIRECT_MESSAGE_MODE;
+  if (["direct-helper", "direct-helper-dev", "unshield"].includes(requested)) return STRK20_SHIELDED_MESSAGE_MODE;
   if (["privacy-pool", "shield"].includes(requested)) return STRK20_SHIELDED_MESSAGE_MODE;
   if ([ENCRYPTED_DIRECT_MESSAGE_MODE, STRK20_SHIELDED_MESSAGE_MODE].includes(requested)) return requested;
   return ENCRYPTED_DIRECT_MESSAGE_MODE;
@@ -267,22 +265,8 @@ export function createRuntimeConfig(
 ) {
   const runtimeParams = new URLSearchParams(search);
   const demoRuntimeMode = runtimeParams.has("demo") || runtimeParams.get("mode") === "demo";
-  const privyEnabled = !demoRuntimeMode && readBooleanEnv(
-    env.VITE_PRIVY_ENABLED,
-    "VITE_PRIVY_ENABLED",
-    false,
-  );
   const expectedChainId = normalizeChainId(env.VITE_STARKNET_CHAIN_ID || "SN_SEPOLIA");
   const networkConfig = requireVeilSepoliaConfig(expectedChainId);
-  const configuredPrivyLoginMethods = (env.VITE_PRIVY_LOGIN_METHODS || "email,google")
-    .split(",")
-    .map((method) => method.trim())
-    .filter(Boolean);
-  const privyAppId = demoRuntimeMode ? "" : env.VITE_PRIVY_APP_ID || "";
-  const privyLoginMethods = [...new Set([
-    ...(privyAppId ? ["email", "google"] : []),
-    ...configuredPrivyLoginMethods,
-  ])];
 
   const privacyPoolAddress = readLockedAddress(
     env.VITE_PRIVACY_POOL_ADDRESS,
@@ -304,7 +288,7 @@ export function createRuntimeConfig(
     reliableRpcUrl(configuredRpcUrl, defaultStarknetRpcUrl(expectedChainId)),
     "VITE_STARKNET_RPC_URL",
   );
-  const configuredPrivyStarknetRpcUrl = env.VITE_PRIVY_STARKNET_RPC_URL || "";
+  const configuredStarknetReadRpcUrl = env.VITE_STARKNET_READ_RPC_URL || "";
   const configuredRegistryChainId = normalizeChainId(env.VITE_VEIL_KEY_REGISTRY_CHAIN_ID || "");
   const encryptionKeyRegistryAddress = readOptionalAddress(
     env.VITE_VEIL_KEY_REGISTRY_ADDRESS,
@@ -319,27 +303,22 @@ export function createRuntimeConfig(
     env.VITE_DEMO_COUNTERPARTY_ADDRESS,
     "VITE_DEMO_COUNTERPARTY_ADDRESS",
   );
-  const privyStarknetRpcUrl = assertRpcNamespace(
-    reliableRpcUrl(configuredPrivyStarknetRpcUrl, rpcUrl),
-    "VITE_PRIVY_STARKNET_RPC_URL",
+  const starknetReadRpcUrl = assertRpcNamespace(
+    reliableRpcUrl(configuredStarknetReadRpcUrl, rpcUrl),
+    "VITE_STARKNET_READ_RPC_URL",
   );
 
   return {
     demoRuntimeMode,
-    privyEnabled,
     debugLogsEnabled: readBooleanEnv(env.VITE_VEIL_DEBUG_LOGS, "VITE_VEIL_DEBUG_LOGS", false),
     timelineMode: demoRuntimeMode
       ? "mock"
       : normalizeTimelineMode(env.VITE_VEIL_MESSAGE_MODE || env.VEIL_MESSAGE_MODE || env.VITE_VEIL_TIMELINE_MODE, env),
-    privyAppId,
     expectedChainId,
     expectedChainIdHex: networkConfig.chainIdHex,
     networkConfig,
     rpcVersion: networkConfig.rpc.version,
     rpcSpecVersion: networkConfig.rpc.specVersion,
-    configuredPrivyLoginMethods,
-    privyLoginMethods,
-    removedPrivyLoginMethods: configuredPrivyLoginMethods.filter((method) => !privyLoginMethods.includes(method)),
     helperAddress,
     offerAddress,
     privacyPoolAddress,
@@ -352,17 +331,10 @@ export function createRuntimeConfig(
       "VITE_VEIL_ONCHAIN_PAYLOADS",
       false,
     ),
-    privyStarknetRpcUrl,
+    starknetReadRpcUrl,
     privacyRuntime,
     featureStatus: VEIL_PHASE1_FEATURE_STATUS,
     veilInviteBaseUrl: env.VITE_VEIL_INVITE_URL || "https://veil.app/invite",
-    walletDeployPaymasterEnabled: readBooleanEnv(
-      env.VITE_AVNU_WALLET_DEPLOY_ENABLED ?? env.VITE_AVNU_PAYMASTER_ENABLED,
-      env.VITE_AVNU_WALLET_DEPLOY_ENABLED !== undefined
-        ? "VITE_AVNU_WALLET_DEPLOY_ENABLED"
-        : "VITE_AVNU_PAYMASTER_ENABLED",
-      false,
-    ),
     privateTransactionPaymasterEnabled: (() => {
       const enabled = readBooleanEnv(
         env.VITE_AVNU_PRIVATE_TX_PAYMASTER_ENABLED,

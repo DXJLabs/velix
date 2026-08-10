@@ -162,3 +162,132 @@ test("official wallet error codes map to typed product failures", async () => {
   });
   await assert.rejects(() => client.balances([]), (error) => error.code === "SENDER_NOT_REGISTERED");
 });
+
+test("wallet message transport confirms normally when the receipt lands before the ceiling", async () => {
+  const client = new Strk20WalletApiClient({
+    wallet: { async request() { return { transaction_hash: "0xabc" }; } },
+    allowedInvokeContracts: [0x555n],
+  });
+  const transport = new WalletMessageTransport({
+    walletApiClient: client,
+    helperAddress: "0x555",
+    readTransport: {},
+    confirmationTimeoutMs: 50,
+    provider: {
+      async waitForTransaction() {
+        return { status: "ACCEPTED_ON_L2", block_number: 42 };
+      },
+    },
+  });
+
+  const item = await transport.invokeExternal({
+    privacyPoolAddress: "0x666",
+    helperAddress: "0x555",
+    calldata: ["0x1"],
+    mode: "strk20-shielded",
+    canonicalMessage: {
+      messageReference: "veil-message:test",
+      messageLocator: "0x3",
+      payloadCommitment: "0x4",
+      helperCalldata: ["0x1"],
+    },
+    item: {
+      eventId: "0",
+      channelId: "room-test",
+      eventType: 1,
+      encryptedPayload: "0x1",
+      payloadHash: "0x2",
+      timestamp: 1,
+    },
+  });
+
+  assert.equal(item.status, "confirmed");
+  assert.equal(item.optimistic, false);
+  assert.equal(item.blockNumber, 42);
+});
+
+test("wallet message transport gives up waiting at the confirmation ceiling and returns the pending item, never hangs or throws", async () => {
+  const client = new Strk20WalletApiClient({
+    wallet: { async request() { return { transaction_hash: "0xabc" }; } },
+    allowedInvokeContracts: [0x555n],
+  });
+  const transport = new WalletMessageTransport({
+    walletApiClient: client,
+    helperAddress: "0x555",
+    readTransport: {},
+    confirmationTimeoutMs: 30,
+    provider: {
+      // Simulates an RPC that never sees the paymaster-relayed hash.
+      waitForTransaction: () => new Promise(() => {}),
+    },
+  });
+
+  const startedAt = Date.now();
+  const item = await transport.invokeExternal({
+    privacyPoolAddress: "0x666",
+    helperAddress: "0x555",
+    calldata: ["0x1"],
+    mode: "strk20-shielded",
+    canonicalMessage: {
+      messageReference: "veil-message:test",
+      messageLocator: "0x3",
+      payloadCommitment: "0x4",
+      helperCalldata: ["0x1"],
+    },
+    item: {
+      eventId: "0",
+      channelId: "room-test",
+      eventType: 1,
+      encryptedPayload: "0x1",
+      payloadHash: "0x2",
+      timestamp: 1,
+    },
+  });
+
+  assert.ok(Date.now() - startedAt < 2_000, "must not hang past the confirmation ceiling");
+  assert.equal(item.transactionHash, "0xabc");
+  assert.equal(item.status, "pending");
+  assert.equal(item.optimistic, true);
+});
+
+test("wallet message transport still surfaces a real revert when it arrives before the ceiling", async () => {
+  const client = new Strk20WalletApiClient({
+    wallet: { async request() { return { transaction_hash: "0xabc" }; } },
+    allowedInvokeContracts: [0x555n],
+  });
+  const transport = new WalletMessageTransport({
+    walletApiClient: client,
+    helperAddress: "0x555",
+    readTransport: {},
+    confirmationTimeoutMs: 5_000,
+    provider: {
+      async waitForTransaction() {
+        return { status: "REVERTED" };
+      },
+    },
+  });
+
+  await assert.rejects(
+    () => transport.invokeExternal({
+      privacyPoolAddress: "0x666",
+      helperAddress: "0x555",
+      calldata: ["0x1"],
+      mode: "strk20-shielded",
+      canonicalMessage: {
+        messageReference: "veil-message:test",
+        messageLocator: "0x3",
+        payloadCommitment: "0x4",
+        helperCalldata: ["0x1"],
+      },
+      item: {
+        eventId: "0",
+        channelId: "room-test",
+        eventType: 1,
+        encryptedPayload: "0x1",
+        payloadHash: "0x2",
+        timestamp: 1,
+      },
+    }),
+    (error) => error.code === "TRANSACTION_REVERTED",
+  );
+});

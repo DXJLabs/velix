@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { ApiError } from "./privy.js";
+import { ApiError } from "./auth.js";
 
 const RATE_LIMIT_STORE = Symbol.for("veil.api.rate-limit.v1");
 const DEFAULT_BODY_LIMIT_BYTES = 8 * 1024;

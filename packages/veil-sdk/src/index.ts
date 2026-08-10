@@ -209,26 +209,6 @@ export {
   type EncryptedViewingKeyVault,
 } from "./privacy/viewing-key-vault";
 export {
-  FailClosedRegistrationDiscoveryProvider,
-  RegistrationDiscoveryAccessError,
-  generateLocalViewingKey,
-  prepareOfficialRegistrationProof,
-  type PreparedOfficialRegistrationProof,
-  type PrepareOfficialRegistrationProofInput,
-  type RegistrationTransfersFactory,
-  type RegistrationTransfersFactoryInput,
-  type RegistrationTransfersLike,
-} from "./privacy/registration-proof";
-export {
-  assertSuccessfulRegistrationReceipt,
-  submitOfficialRegistration,
-  type OfficialRegistrationSubmissionResult,
-  type ReadyRegistrationSubmissionAccount,
-  type RegistrationSubmissionProvider,
-  type RegistrationSubmissionReceipt,
-  type SubmitOfficialRegistrationInput,
-} from "./privacy/registration-submission";
-export {
   createReadyPrivateTransfersUser,
   hasReadyProofSigner,
   type ReadyProofSignerAccount,

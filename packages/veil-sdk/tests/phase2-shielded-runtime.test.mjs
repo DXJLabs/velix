@@ -1,5 +1,5 @@
 import { describe, it } from "node:test";
-import { createRuntimeConfig, normalizeTimelineMode } from "../../../src/app/runtime-config.js";
+import { createRuntimeConfig, normalizeTimelineMode } from "../../../frontend/src/app/runtime-config.js";
 import { assert, sdk } from "./production-messaging.helpers.mjs";
 
 const {
@@ -343,9 +343,9 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
     assert.equal(submitted.mode, "encrypted-direct");
   });
 
-  it("normalizes production runtime to encrypted-direct by default", () => {
-    assert.equal(normalizeTimelineMode("", {}), "encrypted-direct");
-    assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production", DEV: false }), "encrypted-direct");
+  it("normalizes production runtime to strk20-shielded by default", () => {
+    assert.equal(normalizeTimelineMode("", {}), "strk20-shielded");
+    assert.equal(normalizeTimelineMode("direct-helper", { MODE: "production", DEV: false }), "strk20-shielded");
     assert.equal(normalizeTimelineMode("privacy-pool", { MODE: "development", DEV: true }), "strk20-shielded");
 
     const productionConfig = createRuntimeConfig(
@@ -357,6 +357,6 @@ describe("VEIL Phase 2 shielded runtime bootstrap", () => {
       },
       "",
     );
-    assert.equal(productionConfig.timelineMode, "encrypted-direct");
+    assert.equal(productionConfig.timelineMode, "strk20-shielded");
   });
 });

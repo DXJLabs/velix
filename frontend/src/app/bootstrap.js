@@ -1,7 +1,5 @@
 import {
   createRuntimeConfig,
-  PRIVY_AUTH_TIMEOUT_MS,
-  PRIVY_READY_TIMEOUT_MS,
   WALLET_INIT_TIMEOUT_MS,
 } from "./runtime-config.js";
 import { getAppDom, setElementText, setLucideIcon } from "./dom.js";
@@ -24,12 +22,10 @@ import {
 } from "../services/veil-client-service.js";
 import { createDealStorage } from "../services/storage/deal-storage.js";
 import { readJsonStorage, writeJsonStorage } from "../services/storage-service.js";
-import { createPrivyBridgeAdapter, getPrivyBridge } from "../services/wallet/privy-bridge.js";
-import { createPrivyWalletApi } from "../services/wallet/privy-wallet-api.js";
 import { createNetworkService } from "../services/wallet/network-service.js";
 import { createRecipientDiscoveryService } from "../services/recipient-discovery-service.js";
-import { createStarkZapAdapter } from "../services/wallet/starkzap-adapter.js";
 import { createWalletAssetsService } from "../services/wallet/wallet-assets.js";
+import { createWalletAuthService } from "../services/wallet/wallet-auth-service.js";
 import { createWalletInitialization } from "../features/wallet/wallet-initialization.js";
 import { createWalletService } from "../services/wallet/wallet-service.js";
 import { shortAddress } from "../services/wallet/wallet-format.js";
@@ -38,15 +34,11 @@ import { createHomeUi } from "../ui/home/home-ui.js";
 import { createChainMetaUi } from "../ui/timeline/chain-meta-ui.js";
 import { createToastUi } from "../ui/toast-ui.js";
 import { createConnectLabelsUi } from "../ui/wallet/connect-labels-ui.js";
-import { mountPrivyBridge } from "../ui/wallet/privy-auth-root.js";
 import { demoTxHash } from "../utils/hash.js";
 import { transactionExplorerUrl } from "../utils/transactions.js";
 
 export function bootstrapVeilApp({
-  env = {
-    ...import.meta.env,
-    VITE_PRIVY_APP_ID: import.meta.env.VITE_PRIVY_APP_ID,
-  },
+  env = { ...import.meta.env },
   documentRef = document,
   windowRef = window,
 } = {}) {
@@ -78,14 +70,12 @@ export function bootstrapVeilApp({
     setLucideIcon,
     transactionExplorerUrl,
     shortAddress,
-    getPrivyBridge,
     createDefaultWalletAssetBalances: () => createDefaultWalletAssetBalances(config.walletAssetConfig),
     showToast: toastUi.showToast,
     hideToastIfLoading: toastUi.hideToastIfLoading,
     settlementProofMeta: (channel = store.currentChannel()) => registry.createSettlementProofMeta(channel),
     resetClientConnection: () => {
       directTransport = undefined;
-      starkZapAdapter?.resetStarkZap();
       veilClient = veilClientFactory.createClient();
     },
   };
@@ -148,52 +138,6 @@ export function bootstrapVeilApp({
     walletInitLabel: walletInitialization.walletInitLabel,
   });
   Object.assign(api, homeUi, connectLabelsUi);
-
-  const privyBridgeAdapter = createPrivyBridgeAdapter({
-    config,
-    logger,
-    walletInitTimeoutMs: WALLET_INIT_TIMEOUT_MS,
-    privyReadyTimeoutMs: PRIVY_READY_TIMEOUT_MS,
-    privyAuthTimeoutMs: PRIVY_AUTH_TIMEOUT_MS,
-    updateWalletInitialization: walletInitialization.updateWalletInitialization,
-    windowRef,
-  });
-  let privyMountPromise;
-  const mountPrivy = () => {
-    if (!config.privyEnabled || !config.privyAppId) {
-      return Promise.resolve({
-        configured: Boolean(config.privyAppId),
-        enabled: false,
-      });
-    }
-    if (!privyMountPromise) {
-      privyMountPromise = mountPrivyBridge({
-        config,
-        privyAuthRoot: dom.privyAuthRoot,
-        logger,
-        windowRef,
-        onStateChange: (bridgeState) => {
-          store.state.privyReady = Boolean(bridgeState.ready);
-          store.state.privyAuthenticated = Boolean(bridgeState.authenticated);
-          api.refreshConnectLabels?.();
-          api.renderHomeStatus?.();
-        },
-      }).catch((error) => {
-        privyMountPromise = undefined;
-        throw error;
-      });
-    }
-    return privyMountPromise;
-  };
-  const privyWalletApi = createPrivyWalletApi({ state: store.state, logger });
-  const starkZapAdapter = createStarkZapAdapter({
-    config,
-    state: store.state,
-    logger,
-    fetchPrivyStarknetWallet: privyWalletApi.fetchPrivyStarknetWallet,
-    updateWalletInitialization: walletInitialization.updateWalletInitialization,
-    getStarkZapChainId: networkService.getStarkZapChainId,
-  });
 
   const registry = createFeatureRegistry({
     api,
@@ -279,10 +223,6 @@ export function bootstrapVeilApp({
       directTransport = nextTransport;
     },
     currentChannelId: () => store.state.channelId,
-    ensurePrivyMounted: mountPrivy,
-    ensurePrivyAuthenticated: privyBridgeAdapter.ensurePrivyAuthenticated,
-    fetchPrivyStarknetWallet: privyWalletApi.fetchPrivyStarknetWallet,
-    createPrivyStarknetAccount: starkZapAdapter.createPrivyStarknetAccount,
     getStarknetReadProvider: networkService.getStarknetReadProvider,
     ensureExpectedNetwork: networkService.ensureExpectedNetwork,
     verifyHelperDeployment,
@@ -292,21 +232,25 @@ export function bootstrapVeilApp({
     failWalletInitialization: walletInitialization.failWalletInitialization,
     handleTransactionSubmitted: (...args) => registry.transactionModalController.handleTransactionSubmitted(...args),
   });
+  const walletAuthService = createWalletAuthService({ logger });
   const connectWallet = async (options = {}) => {
     const goToInbox = options.goToInbox ?? store.state.screen === "unlock";
-    const connectionOptions = config.privyEnabled
-      ? options
-      : {
-          ...options,
-          preferPrivacyWallet: true,
-        };
-    const connected = await walletService.connectWallet(connectionOptions);
+    const connected = await walletService.connectWallet(options);
     if (connected) {
       registry.walletController.renderWallet();
       api.refreshConnectLabels();
       if (goToInbox) {
-        api.showScreen(options.successScreen || (config.privyEnabled ? "conversations" : "wallet"));
+        api.showScreen(options.successScreen || "wallet");
       }
+      // Best-effort: the durable-prover backend this authenticates isn't
+      // wired into any UI flow yet, so a sign-in failure here must never
+      // undo an otherwise-successful wallet connection.
+      walletAuthService.signIn(store.state.readyWallet, store.state.walletAddress).catch((error) => {
+        logger.veilLog("warn", "wallet.auth.session.failed", {
+          where: "connectWallet",
+          errorName: error?.name,
+        });
+      });
     }
     return connected;
   };
@@ -340,12 +284,13 @@ export function bootstrapVeilApp({
     refreshWalletAssets,
     verifyHelperDeployment,
     submitService,
-    mountPrivy,
     networkService,
+    walletAuthService,
     dom,
     store,
     logger,
     registerEncryptionKey: () => walletService.registerEncryptionKey(),
+    shieldTokens: (options) => walletService.shieldTokens(options),
   }));
 
   const router = createRouter({

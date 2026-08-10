@@ -240,8 +240,6 @@ export function createFeatureRegistry({
     document: dom.document,
     walletAssetConfig: config.walletAssetConfig,
     expectedChainId: config.expectedChainId,
-    privyAppId: config.privyAppId,
-    privyEnabled: config.privyEnabled,
     timelineMode: config.timelineMode,
     privacyRuntime: config.privacyRuntime,
     privacyPoolCompatibility: config.networkConfig.privacyPool.compatibility,
@@ -258,7 +256,6 @@ export function createFeatureRegistry({
     refreshConnectLabels: call(api, "refreshConnectLabels"),
     renderHomeStatus: call(api, "renderHomeStatus"),
     showToast: call(api, "showToast"),
-    getPrivyBridge: api.getPrivyBridge,
     connectWallet: call(api, "connectWallet"),
     clearWalletInitTimer: walletInitialization.clearWalletInitTimer,
     resetClientConnection: call(api, "resetClientConnection"),
@@ -267,6 +264,7 @@ export function createFeatureRegistry({
     listStorageKeys,
     removeStorageKeys,
     copyToClipboard: (value) => navigator.clipboard.writeText(value),
+    shieldTokens: api.shieldTokens,
   });
 
   const settlementController = createSettlementController({

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { ApiError } from "../../_lib/privy.js";
+import { ApiError } from "../../_lib/auth.js";
 
 const CURSOR_VERSION = 1;
 const MAX_CURSOR_LENGTH = 2_048;

@@ -8,7 +8,7 @@ import {
   createRequestContext,
   logEvent,
   sendError,
-} from "../_lib/privy.js";
+} from "../_lib/auth.js";
 import {
   assertNoRequestBody,
   enforceRateLimit,

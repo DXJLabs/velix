@@ -34,7 +34,7 @@ test("production bootstrap data never invokes the demo factory", () => {
   assert.deepEqual(data.initialRewardHistory, []);
   assert.deepEqual(data.confirmedTimelineMeta(), {
     status: "local",
-    mode: "encrypted-direct",
+    mode: "strk20-shielded",
   });
 });
 
@@ -61,7 +61,6 @@ test("production store starts without demo channels, rewards, or accepted deal s
     config: {
       demoRuntimeMode: false,
       expectedChainId: "SN_SEPOLIA",
-      privyAppId: "",
       walletAssetConfig: [],
     },
     channels: [],

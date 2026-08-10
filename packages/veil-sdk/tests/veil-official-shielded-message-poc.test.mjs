@@ -943,7 +943,7 @@ test("workflow keeps the official InvokeExternal path and has no direct fallback
   const [source, workflow] = await Promise.all([
     readFile("tools/veil-official-shielded-message-poc.ts", "utf8"),
     readFile(
-      ".github/workflows/40-privacy-shielded-message-proof.yml",
+      ".github/workflows/5.1-privacy-shielded-message-proof.yml",
       "utf8",
     ),
   ]);

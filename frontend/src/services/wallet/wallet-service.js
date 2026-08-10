@@ -3,6 +3,7 @@ import {
   Strk20WalletApiClient,
   Strk20WalletMessageTransport,
   detectStrk20WalletCapabilities,
+  strk20DepositAction,
 } from "../veil-client-service.js";
 import { networkLabel } from "../../app/runtime-config.js";
 import { createWalletPrivacyCapabilityModel } from "../../domain/privacy-capabilities.js";
@@ -21,10 +22,6 @@ export function createWalletService({
   getDirectTransport,
   setDirectTransport,
   currentChannelId,
-  ensurePrivyMounted = async () => {},
-  ensurePrivyAuthenticated,
-  fetchPrivyStarknetWallet,
-  createPrivyStarknetAccount,
   getStarknetReadProvider,
   ensureExpectedNetwork,
   verifyHelperDeployment,
@@ -70,9 +67,7 @@ export function createWalletService({
     state.officialPrivacySignerStatus =
       typeof account?.signer?.signTransaction === "function"
         ? "ready"
-        : state.walletSource === "Privy"
-          ? "not-integrated"
-          : "unavailable";
+        : "unavailable";
     state.walletPrivacyCapabilities = createWalletPrivacyCapabilityModel({
       accountConnected: true,
       signing: Boolean(account?.execute || wallet?.request),
@@ -179,268 +174,179 @@ export function createWalletService({
   }
 
   function getWallet() {
-    return state.privyAccount
-      || windowRef.veilDemoWallet
+    return windowRef.veilDemoWallet
       || getInjectedWallet(windowRef)
       || null;
   }
 
   async function connectWallet(options = {}) {
     const goToInbox = options.goToInbox ?? state.screen === "unlock";
-    const preferPrivacyWallet = options.preferPrivacyWallet === true;
-    const traceId = logger.createTraceId(preferPrivacyWallet ? "ready-connect" : "wallet-connect");
-    logger.tracePrivyStarkZap(traceId, "connect.start", {
+    const traceId = logger.createTraceId("ready-connect");
+    logger.traceWalletConnect(traceId, "connect.start", {
       where: "connectWallet",
-      timelineMode: config.timelineMode,
+      privacyWalletAudit: true,
       goToInbox,
       screen: state.screen,
-      privyAppIdConfigured: Boolean(config.privyAppId),
     });
     beginWalletInitialization(traceId);
 
     try {
-    if (preferPrivacyWallet) {
-      const {
-        injectedWalletEntry,
-        injectedWallet,
-      } = await resolveWalletLogin({
-        config,
-        traceId,
-        logger,
-        ensurePrivyMounted,
-        ensurePrivyAuthenticated,
-        createPrivyStarknetAccount,
-        waitForInjectedWallet,
-        updateWalletInitialization,
-        windowRef,
-        preferredInjectedWallet: "ready",
-      });
-
-      const wallet = injectedWallet;
-      if (!wallet) {
-        return failWalletInitialization(new Error("Ready Wallet extension was not detected."), traceId, {
-          where: "connectWallet",
-          howToFix: "Install or unlock Ready Wallet, select Starknet Sepolia, and retry.",
-        });
-      }
-
-      if (!wallet.account && typeof wallet.enable === "function") await wallet.enable();
-      const account = wallet.account || wallet;
-      const walletProvider = wallet.provider || wallet.account?.provider;
-      const readProvider = await getStarknetReadProvider().catch((error) => {
-        logger.veilError("wallet.rpc.provider.failed", error, {
-          where: "connectWallet",
-          howToFix: "Set VITE_PRIVY_STARKNET_RPC_URL or VITE_STARKNET_RPC_URL to a reachable Starknet Sepolia RPC.",
-        });
-        return walletProvider;
-      });
-
-      if (typeof wallet.request !== "function") {
-        return failWalletInitialization(new Error("Ready Wallet does not expose the Starknet Wallet API request transport."), traceId, {
-          where: "connectWallet",
-          howToFix: "Update Ready Wallet, unlock it, approve the connection, and retry.",
-        });
-      }
-      if (!walletProvider) {
-        return failWalletInitialization(new Error("Ready Wallet did not expose a Starknet provider."), traceId, {
-          where: "connectWallet",
-          howToFix: "Unlock Ready Wallet, switch to Starknet Sepolia, and reconnect.",
-        });
-      }
-
-      const isExpectedNetwork = await ensureExpectedNetwork(wallet, walletProvider);
-      if (!isExpectedNetwork) {
-        return failWalletInitialization(new Error(`Ready Wallet is not connected to ${networkLabel(config.expectedChainId)}.`), traceId, {
-          where: "connectWallet",
-          howToFix: `Switch Ready Wallet to ${networkLabel(config.expectedChainId)} and retry.`,
-        });
-      }
-
-      state.privyAccount = null;
-      state.privyProvider = null;
-      state.privyWallet = null;
-      state.readyWallet = wallet;
-      state.readyAccount = account;
-      state.readyProvider = walletProvider;
-      state.readyReadProvider = readProvider;
-      state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
-      await refreshPrivacyCapabilities(wallet, account, readProvider);
-      const messaging = await activateMessagingTransport({ wallet, account, readProvider });
-      if (!messaging.shielded) {
-        return failWalletInitialization(new Error("Ready Wallet does not expose the STRK20 custom invoke capability required for private messages."), traceId, {
-          where: "connectWallet",
-          howToFix: "Use a Ready Wallet build that supports STRK20 Wallet API invoke actions.",
-        });
-      }
-      if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
-        return failWalletInitialization(new Error("VeilChannelHelper verification failed on the configured Sepolia RPC."), traceId, {
-          where: "connectWallet",
-          howToFix: "Confirm the locked VEIL helper address and Starknet Sepolia RPC.",
-        });
-      }
-
-      state.walletConnected = true;
-      state.walletAddress = account.address || wallet.selectedAddress || "";
-      state.walletNetwork = config.expectedChainId;
-      completeWalletInitialization(traceId);
-      logger.tracePrivyStarkZap(traceId, "connect.success", {
-        where: "connectWallet",
-        walletSource: state.walletSource,
-        walletAddress: state.walletAddress,
-        directHelper: false,
-        shieldedMessaging: true,
-        network: state.walletNetwork,
-      });
-      return true;
-    }
-
-    if (config.timelineMode !== "encrypted-direct") {
-      if (config.privyAppId) {
-        try {
-          await ensurePrivyMounted();
-          const bridge = await ensurePrivyAuthenticated(traceId);
-          if (!bridge) {
-            return failWalletInitialization(new Error("Privy authentication did not complete."), traceId, {
-              where: "connectWallet",
-              howToFix: "Check earlier trace steps for privy_ready.timeout or authenticated.timeout.",
-            });
-          }
-          updateWalletInitialization("creating_account", traceId, {
-            message: "Creating Starknet Account",
-          });
-          await fetchPrivyStarknetWallet(bridge, traceId);
-        } catch (error) {
-          logger.veilError("wallet.privy.setup.failed", error, {
-            traceId,
-            where: "connectWallet",
-            howToFix: "Check Privy app credentials, token verification env vars, and /api/wallet/starknet logs.",
-          });
-          return failWalletInitialization(error, traceId, {
-            where: "connectWallet",
-            howToFix: "Check Privy app credentials, token verification env vars, and /api/wallet/starknet logs.",
-          });
-        }
-      }
-      state.walletConnected = true;
-      state.walletNetwork = config.expectedChainId;
-      completeWalletInitialization(traceId);
-      return true;
-    }
-
-    if (!config.helperAddress) {
-      return failWalletInitialization(new Error("Wallet helper address is not configured."), traceId, {
-        where: "connectWallet",
-        howToFix: "Set VITE_VEIL_CHANNEL_HELPER_ADDRESS to the deployed helper contract for the selected Starknet network.",
-      });
-    }
-
     const {
       injectedWalletEntry,
       injectedWallet,
-      privyAccountContext,
     } = await resolveWalletLogin({
       config,
       traceId,
       logger,
-      ensurePrivyMounted,
-      ensurePrivyAuthenticated,
-      createPrivyStarknetAccount,
       waitForInjectedWallet,
       updateWalletInitialization,
       windowRef,
-      preferredInjectedWallet: preferPrivacyWallet ? "ready" : "",
+      preferredInjectedWallet: "ready",
     });
 
-    const wallet = privyAccountContext?.account || injectedWallet || getWallet();
+    const wallet = injectedWallet;
     if (!wallet) {
-      return failWalletInitialization(new Error("No supported wallet login is configured."), traceId, {
+      return failWalletInitialization(new Error("Ready Wallet extension was not detected."), traceId, {
         where: "connectWallet",
-        howToFix: config.privyAppId
-          ? "Check the Privy App ID, allowed origin, OAuth settings, or connect Argent/Braavos on desktop."
-          : "Set the public Privy App ID or install/connect Argent or Braavos on desktop.",
+        howToFix: "Install or unlock Ready Wallet, select Starknet Sepolia, and retry.",
       });
     }
 
     if (!wallet.account && typeof wallet.enable === "function") await wallet.enable();
-
     const account = wallet.account || wallet;
-    if (injectedWallet) {
-      state.privyAccount = null;
-      state.privyProvider = null;
-      state.privyWallet = null;
-      state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
-    } else if (privyAccountContext) {
-      state.walletSource = "Privy";
-    }
-    const walletProvider = privyAccountContext?.provider || state.privyProvider || wallet.provider || wallet.account?.provider;
+    const walletProvider = wallet.provider || wallet.account?.provider;
     const readProvider = await getStarknetReadProvider().catch((error) => {
       logger.veilError("wallet.rpc.provider.failed", error, {
         where: "connectWallet",
-        howToFix: "Set VITE_PRIVY_STARKNET_RPC_URL or VITE_STARKNET_RPC_URL to a reachable Starknet RPC for the selected chain.",
+        howToFix: "Set VITE_STARKNET_READ_RPC_URL or VITE_STARKNET_RPC_URL to a reachable Starknet Sepolia RPC.",
       });
       return walletProvider;
     });
-    if (!account?.execute) {
-      return failWalletInitialization(new Error("Selected wallet account does not expose execute()."), traceId, {
+
+    if (typeof wallet.request !== "function") {
+      return failWalletInitialization(new Error("Ready Wallet does not expose the Starknet Wallet API request transport."), traceId, {
         where: "connectWallet",
-        howToFix: "Check StarkZap onboard result account shape or connect a Starknet wallet that supports account.execute().",
+        howToFix: "Update Ready Wallet, unlock it, approve the connection, and retry.",
       });
     }
     if (!walletProvider) {
-      return failWalletInitialization(new Error("No Starknet provider was available from Privy/StarkZap or injected wallet."), traceId, {
+      return failWalletInitialization(new Error("Ready Wallet did not expose a Starknet provider."), traceId, {
         where: "connectWallet",
-        howToFix: "Check sdk.onboard() result and VITE_PRIVY_STARKNET_RPC_URL.",
+        howToFix: "Unlock Ready Wallet, switch to Starknet Sepolia, and reconnect.",
       });
     }
 
     const isExpectedNetwork = await ensureExpectedNetwork(wallet, walletProvider);
     if (!isExpectedNetwork) {
-      return failWalletInitialization(new Error(`Wallet/provider is not connected to ${networkLabel(config.expectedChainId)}.`), traceId, {
+      return failWalletInitialization(new Error(`Ready Wallet is not connected to ${networkLabel(config.expectedChainId)}.`), traceId, {
         where: "connectWallet",
-        howToFix: `Switch wallet/provider to ${networkLabel(config.expectedChainId)} or update VITE_STARKNET_CHAIN_ID.`,
+        howToFix: `Switch Ready Wallet to ${networkLabel(config.expectedChainId)} and retry.`,
       });
     }
 
-    if (state.walletSource === "Ready") {
-      state.readyWallet = injectedWallet || wallet;
-      state.readyAccount = account;
-      state.readyProvider = walletProvider;
-      state.readyReadProvider = readProvider;
-    }
+    state.readyWallet = wallet;
+    state.readyAccount = account;
+    state.readyProvider = walletProvider;
+    state.readyReadProvider = readProvider;
+    state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
     await refreshPrivacyCapabilities(wallet, account, readProvider);
-
     const messaging = await activateMessagingTransport({ wallet, account, readProvider });
-    if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
-      return failWalletInitialization(new Error("Helper contract verification failed on the configured RPC/network."), traceId, {
+    if (!messaging.shielded) {
+      return failWalletInitialization(new Error("Ready Wallet does not expose the STRK20 custom invoke capability required for private messages."), traceId, {
         where: "connectWallet",
-        howToFix: "Confirm VITE_VEIL_CHANNEL_HELPER_ADDRESS is deployed on VITE_PRIVY_STARKNET_RPC_URL / VITE_STARKNET_RPC_URL.",
+        howToFix: "Use a Ready Wallet build that supports STRK20 Wallet API invoke actions.",
+      });
+    }
+    if (!(await verifyHelperDeployment({ veilClient: getVeilClient(), channelId: currentChannelId() }))) {
+      return failWalletInitialization(new Error("VeilChannelHelper verification failed on the configured Sepolia RPC."), traceId, {
+        where: "connectWallet",
+        howToFix: "Confirm the locked VEIL helper address and Starknet Sepolia RPC.",
       });
     }
 
     state.walletConnected = true;
-    state.walletAddress = account.address || state.privyWallet?.address || state.walletAddress;
-    if (injectedWallet) state.walletSource = getWalletSourceLabel(injectedWallet, injectedWalletEntry?.key);
+    state.walletAddress = account.address || wallet.selectedAddress || "";
+    state.walletNetwork = config.expectedChainId;
     completeWalletInitialization(traceId);
-    logger.tracePrivyStarkZap(traceId, "connect.success", {
+    logger.traceWalletConnect(traceId, "connect.success", {
       where: "connectWallet",
       walletSource: state.walletSource,
       walletAddress: state.walletAddress,
-      directHelper: !messaging.shielded,
-      shieldedMessaging: messaging.shielded,
+      directHelper: false,
+      shieldedMessaging: true,
       network: state.walletNetwork,
     });
     return true;
     } catch (error) {
       return failWalletInitialization(userFacingWalletError(error), traceId, {
         where: "connectWallet",
-        howToFix: "Check the displayed wallet error, Privy allowed origin/OAuth settings, Starknet network, and browser wallet approval.",
+        howToFix: "Check the displayed wallet error and Starknet network/browser wallet approval.",
       });
+    }
+  }
+
+  // Shield: move a public ERC-20 balance into the STRK20 privacy pool.
+  //
+  // This is deliberately its OWN wallet call, never bundled with a transfer.
+  // A deposit is a public leg that names the depositor on-chain — bundling it
+  // with a subsequent private transfer would let an observer correlate the
+  // two ends of the transfer, defeating the point of shielding. Unlinkability
+  // comes from shielding earlier, as a separate transaction; see
+  // STRK20_INTEGRATION_PLAN.md and buildPrivateTipActions-style guidance.
+  //
+  // The wallet holds the keys, finds/creates the note, proves, and submits —
+  // this app never touches a viewing key or proof. Freshly shielded funds are
+  // not immediately spendable (~10 blocks); callers should reflect that in
+  // the UI rather than immediately offering a private transfer.
+  async function shieldTokens({ tokenAddress, amount }) {
+    if (typeof tokenAddress !== "string" || !tokenAddress) {
+      throw new Error("shieldTokens requires a tokenAddress.");
+    }
+    if (typeof amount !== "bigint" || amount <= 0n) {
+      throw new Error("shieldTokens requires a positive bigint amount.");
+    }
+    const wallet = getWallet();
+    if (!wallet) {
+      throw Object.assign(new Error("Connect Ready Wallet before shielding funds."), {
+        code: "WALLET_NOT_CONNECTED",
+      });
+    }
+    const detected = await detectWalletCapabilities(wallet);
+    if (!detected.supported) {
+      throw Object.assign(new Error("This wallet does not support the STRK20 Wallet API."), {
+        code: "PRIVACY_WALLET_UNSUPPORTED",
+      });
+    }
+    const traceId = logger.createTraceId("shield-tokens");
+    logger.traceWalletConnect(traceId, "shield.start", {
+      where: "shieldTokens",
+    });
+    const client = new Strk20WalletApiClient({
+      wallet,
+      allowedInvokeContracts: [config.helperAddress, config.offerAddress].filter(Boolean),
+      ...(detected.apiVersion ? { apiVersion: detected.apiVersion } : {}),
+    });
+    try {
+      const transactionHash = await client.invoke([
+        strk20DepositAction(tokenAddress, amount),
+      ]);
+      logger.traceWalletConnect(traceId, "shield.success", {
+        where: "shieldTokens",
+      });
+      return { transactionHash };
+    } catch (error) {
+      logger.veilError("wallet.shield.failed", error, {
+        where: "shieldTokens",
+        howToFix: "Confirm the token allowance, Sepolia network, and Ready Wallet approval, then retry.",
+      });
+      throw error;
     }
   }
 
   return {
     connectWallet,
     getWallet,
+    shieldTokens,
     async registerEncryptionKey() {
       if (!encryptionKeyRegistry || !encryptionRegistrationAccount) {
         throw Object.assign(new Error("Encryption key registry is not configured."), {

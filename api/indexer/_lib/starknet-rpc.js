@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { hash } from "starknet";
 
-import { ApiError } from "../../_lib/privy.js";
+import { ApiError } from "../../_lib/auth.js";
 
 export const FELT_MODULUS = 2n ** 251n + 17n * 2n ** 192n + 1n;
 

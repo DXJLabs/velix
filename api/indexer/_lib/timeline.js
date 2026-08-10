@@ -1,6 +1,6 @@
 import { hash, shortString } from "starknet";
 
-import { ApiError } from "../../_lib/privy.js";
+import { ApiError } from "../../_lib/auth.js";
 import { normalizeFelt } from "./starknet-rpc.js";
 
 const MAX_PAYLOAD_CHUNKS = 64;

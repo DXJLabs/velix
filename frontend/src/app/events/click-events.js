@@ -276,7 +276,6 @@ export function bindClickEvents({ documentRef = document, state, dom, api }) {
     if (event.target.closest("[data-connect-privacy-wallet]")) {
       void startWalletConnection(api, {
         goToInbox: false,
-        preferPrivacyWallet: true,
       });
       return;
     }

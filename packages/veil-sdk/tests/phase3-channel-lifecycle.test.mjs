@@ -1,5 +1,5 @@
 import { describe, it } from "node:test";
-import { createRuntimeConfig } from "../../../src/app/runtime-config.js";
+import { createRuntimeConfig } from "../../../frontend/src/app/runtime-config.js";
 import { assert, sdk } from "./production-messaging.helpers.mjs";
 
 const {
@@ -290,7 +290,7 @@ describe("VEIL Phase 3 channel lifecycle", () => {
     );
   });
 
-  it("production runtime config defaults to encrypted direct", () => {
+  it("production runtime config defaults to strk20 shielded", () => {
     const config = createRuntimeConfig(
       {
         MODE: "production",
@@ -301,7 +301,7 @@ describe("VEIL Phase 3 channel lifecycle", () => {
       "",
     );
 
-    assert.equal(config.timelineMode, "encrypted-direct");
+    assert.equal(config.timelineMode, "strk20-shielded");
     assert.equal(config.expectedChainId, "SN_SEPOLIA");
     assert.notEqual(config.privacyPoolAddress, "mock-privacy-pool");
     assert.notEqual(config.helperAddress, "mock-veil-helper");

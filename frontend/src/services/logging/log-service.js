@@ -27,8 +27,8 @@ export function createVeilLogger({ debugLogsEnabled, dev }) {
     });
   }
 
-  function tracePrivyStarkZap(traceId, step, details = {}) {
-    veilLog("info", `trace.privy_starkzap.${step}`, {
+  function traceWalletConnect(traceId, step, details = {}) {
+    veilLog("info", `trace.wallet_connect.${step}`, {
       traceId,
       step,
       ...details,
@@ -38,7 +38,7 @@ export function createVeilLogger({ debugLogsEnabled, dev }) {
   return {
     veilLog,
     veilError,
-    tracePrivyStarkZap,
+    traceWalletConnect,
     createTraceId,
     readResponsePayload,
   };

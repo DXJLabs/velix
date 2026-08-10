@@ -15,7 +15,6 @@ export function getAppDom(documentRef = document) {
     offerReviewModal: documentRef.querySelector("#offer-review-modal"),
     paymentReviewModal: documentRef.querySelector("#payment-review-modal"),
     escrowReviewModal: documentRef.querySelector("#escrow-review-modal"),
-    privyAuthRoot: documentRef.querySelector("#privy-auth-root"),
   };
 }
 

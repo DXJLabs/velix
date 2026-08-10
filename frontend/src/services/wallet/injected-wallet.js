@@ -1,3 +1,25 @@
+import { createStore } from "@starknet-io/get-starknet-discovery";
+
+let walletStore;
+
+function getWalletStore() {
+  if (!walletStore) {
+    // This app only targets native Starknet wallets (Ready, Argent, Braavos).
+    // Skip the default EIP-1193/MetaMask virtual-wallet bridge so discovery
+    // doesn't pull in an unused Ethereum-wallet adapter chain.
+    walletStore = createStore({ eip1193Adapters: [] });
+  }
+  return walletStore;
+}
+
+function unwrapInjectedWallet(walletStandardWallet) {
+  // @starknet-io/get-starknet-discovery wraps every raw injected wallet in a
+  // StarknetInjectedWallet (wallet-standard shape). The legacy `.request()` /
+  // `.enable()` / `.account` transport the rest of this app (and the SDK's
+  // Strk20WalletApiClient) expects lives on the public `.injected` property.
+  return walletStandardWallet?.injected || walletStandardWallet;
+}
+
 export function getWalletSourceLabel(wallet, key = "") {
   const name = wallet?.name || wallet?.id || wallet?.metadata?.name || "";
   const label = `${key} ${name}`;
@@ -49,6 +71,38 @@ export function getInjectedStarknetWalletEntry(windowRef = window, options = {})
     ? { preferredWallet: options }
     : options;
   const preferredWallet = String(normalizedOptions.preferredWallet || "").trim().toLowerCase();
+
+  const store = getWalletStore();
+  if (typeof windowRef !== "undefined" && windowRef === globalThis.window) {
+    // The store discovers wallets from the real global `window` via its own
+    // listeners; force a rescan so newly-injected wallets show up immediately
+    // (extensions can inject after this module first loads).
+    store._refreshInjectedWallets?.();
+  }
+  const discoveredWallets = store.getWallets();
+
+  // Test doubles and non-browser windowRefs don't go through the global
+  // discovery store (it only listens on `globalThis.window`), so fall back to
+  // scanning the provided windowRef directly for legacy injected objects.
+  const scannedWallets = windowRef === globalThis.window ? [] : scanWindowForLegacyWallets(windowRef);
+
+  const entries = [...discoveredWallets, ...scannedWallets]
+    .map((wallet) => {
+      const injected = unwrapInjectedWallet(wallet);
+      const key = injected?.id ? `starknet_${injected.id}` : wallet?.name || "";
+      return { key, wallet: injected };
+    })
+    .filter((entry) => isInjectedStarknetWallet(entry.wallet));
+
+  const preferredEntries = preferredWallet
+    ? entries.filter((entry) => walletMatchesPreference(entry, preferredWallet))
+    : entries;
+
+  return preferredEntries
+    .sort((first, second) => walletPriority(first) - walletPriority(second))[0] || null;
+}
+
+function scanWindowForLegacyWallets(windowRef) {
   const keys = [
     "starknet_ready",
     "starknet_readyX",
@@ -61,16 +115,10 @@ export function getInjectedStarknetWalletEntry(windowRef = window, options = {})
   const discoveredKeys = Object.getOwnPropertyNames(windowRef)
     .filter((key) => /^starknet/i.test(key) && !keys.includes(key));
 
-  const entries = [...keys, ...discoveredKeys]
-    .map((key) => ({ key, wallet: getWindowValue(windowRef, key) }))
-    .filter((entry) => isInjectedStarknetWallet(entry.wallet));
-
-  const preferredEntries = preferredWallet
-    ? entries.filter((entry) => walletMatchesPreference(entry, preferredWallet))
-    : entries;
-
-  return preferredEntries
-    .sort((first, second) => walletPriority(first) - walletPriority(second))[0] || null;
+  return [...keys, ...discoveredKeys]
+    .map((key) => getWindowValue(windowRef, key))
+    .filter(Boolean)
+    .map((wallet) => ({ name: wallet.name || wallet.id, injected: wallet }));
 }
 
 function getWindowValue(windowRef, key) {
