@@ -233,7 +233,6 @@ function createRepeatTransfers(input: {
     provingProvider: input.provingProvider,
     discoveryProvider,
     poolContractAddress: config.poolAddress,
-    poolMode: "compatibility",
   });
   let builder: PrivateTransfersBuilder = transfers.build({
     registry: input.state.registry,

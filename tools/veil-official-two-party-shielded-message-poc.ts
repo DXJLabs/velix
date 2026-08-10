@@ -426,7 +426,6 @@ function createTwoPartyTransfers(
     provingProvider,
     discoveryProvider,
     poolContractAddress: input.config.poolAddress,
-    poolMode: "compatibility",
   });
   let builder: PrivateTransfersBuilder = transfers.build({
     registry: replayState.registry,

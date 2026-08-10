@@ -904,7 +904,6 @@ export async function executeOfficialRegisterProof(
     provingProvider: options.provingProvider,
     discoveryProvider: options.discoveryProvider,
     poolContractAddress: options.poolAddress,
-    poolMode: "compatibility",
   });
 
   return transfers
